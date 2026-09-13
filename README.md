@@ -32,8 +32,36 @@ STM32 + FreeRTOS 분산 ECU · CAN FD Backbone · LIN Subnetwork · Motor/Steeri
 | [깃허브](https://github.com/officialboyy) | [깃허브](https://github.com/daehoon0917) | [깃허브](https://github.com/Kwondoryeong) | [깃허브](https://github.com/gnim370717-bot) | [깃허브](https://github.com/Kimoyeon) | [깃허브](https://github.com/suuply) | [깃허브](https://github.com/jwk29134)
 ***
 
-# 1. 프로젝트 개요
+### 협업 규칙
+1. 개발환경(버전, 경로 등) 동일
+2. 오류 수정 안 된 코드 절대 Commit/Push 금지
+3. Chat GPT 코드 복붙 금지
+4. 다른 사람이 짠 코드 맘대로 수정 금지
+5. conflict 발생시 - 충돌 난 코드 작업한 사람 불러서 같이 충돌 잡고 merge 할 것
+6. syntax 에러 등 코드 오류 이외의 문제 발생 시 → 반드시 질문-및-이슈 채널에 적어놓을 것 (추후 트러블슈팅 내용에 포함시켜야함) 중요
 
+### 코드 컨벤션
+1. 스네이크 표기법으로 변수명, 함수명 작성
+예시) int input_num = 10;
+int send_message(){};
+
+### 깃 컨벤션
+1. 커밋메시지
+- 기능 개발 시 - [feat] 기능명(영문) - 예시) [feat] login, 설명란에 개발한 기능 간략 설명 추가
+- 수정 시 - [fix] 기능명(영문) - 예시) [fix] chat, 설명란에 수정 내용 추가
+
+2. 본인이 작업한 코드 간단하게 설명하는 주석 반드시 달기
+
+- 예시
+```
+// 회원정보 조회
+void show_userdata(auto user){
+    // 회원명 출력
+    cout << user.name << endl;
+}
+```
+
+# 1. 프로젝트 개요
 
 ---
 
@@ -50,3 +78,6 @@ STM32 + FreeRTOS 분산 ECU · CAN FD Backbone · LIN Subnetwork · Motor/Steeri
 ---
 
 # 5. 개발 문서
+
+---
+
