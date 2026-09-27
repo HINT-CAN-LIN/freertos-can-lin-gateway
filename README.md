@@ -6,7 +6,7 @@
 
 STM32 기반 분산 ECU · FreeRTOS Gateway · CAN 500 kbps Backbone · LIN 19.2 kbps Subnetwork · Virtual Motor / Door / Light
 
-![Team](https://img.shields.io/badge/TEAM-7_MEMBERS-334155?style=flat-square)
+![Team](https://img.shields.io/badge/TEAM-8_MEMBERS-334155?style=flat-square)
 ![RTOS](https://img.shields.io/badge/GATEWAY_RTOS-FreeRTOS-0A7A3F?style=flat-square)
 ![CAN](https://img.shields.io/badge/BACKBONE-CAN_500kbps-0F766E?style=flat-square)
 ![LIN](https://img.shields.io/badge/LOCAL_BUS-LIN_19.2kbps-0891B2?style=flat-square)
@@ -24,12 +24,12 @@ STM32 기반 분산 ECU · FreeRTOS Gateway · CAN 500 kbps Backbone · LIN 19.2
 > **MCU 실행 환경:** Gateway ECU는 STM32 + FreeRTOS 기반으로 설계   
 
 ***
-# :black_circle: TEAM '77CAN터키'
-7월에 만난 7명이 CAN 통신 프로젝트를 통해 함께 성장할 터전을 만들고, 실력을 키운다.
-| 박준호 | 성대훈 | 권도형 | 김민서 | 김호연 | 박예준 | 전우관 |
-|--------|--------|--------|--------|--------|--------|--------|
-| <img src="https://github.githubassets.com/images/icons/emoji/unicode/1f468-1f4bb.png?v8" width="100"/> | <img src="https://github.com/user-attachments/assets/23e22012-ae25-477c-8db2-0442cf3f67cc" width="100"/> | <img src="https://github.com/user-attachments/assets/67315a0e-d258-4b18-9ec0-ddc84fac7f37" width="100"/> | <img src="https://github.githubassets.com/images/icons/emoji/unicode/1f469-1f4bb.png?v8" width="100"/> | <img src="https://github.com/user-attachments/assets/3534a4f8-a71d-464e-a9cb-9b8a2ebc3532" width="100"/> | <img src="https://github.com/user-attachments/assets/3534a4f8-a71d-464e-a9cb-9b8a2ebc3532" width="100"/> | <img src="https://github.com/user-attachments/assets/3534a4f8-a71d-464e-a9cb-9b8a2ebc3532" width="100"/> |
-| [깃허브](https://github.com/officialboyy) | [깃허브](https://github.com/daehoon0917) | [깃허브](https://github.com/Kwondoryeong) | [깃허브](https://github.com/gnim370717-bot) | [깃허브](https://github.com/Kimoyeon) | [깃허브](https://github.com/suuply) | [깃허브](https://github.com/jwk29134)
+# :black_circle: TEAM '8차선'
+8명이 각자의 차선에서 달려, 막힘없는 하나의 차량 통신망을 완성한다.
+| 박준호 | 성대훈 | 권도형 | 김민서 | 김호연 | 박예준 | 전우관 | 배선민 | 
+|--------|--------|--------|--------|--------|--------|--------|--------|
+| <img src="https://github.com/user-attachments/assets/3534a4f8-a71d-464e-a9cb-9b8a2ebc3532" width="100"/>| <img src="https://github.com/user-attachments/assets/23e22012-ae25-477c-8db2-0442cf3f67cc" width="100"/> | <img src="https://github.com/user-attachments/assets/67315a0e-d258-4b18-9ec0-ddc84fac7f37" width="100"/> | <img width="100" alt="여자개발자" src="https://github.com/user-attachments/assets/993bc336-a9dd-4661-9e19-dbb20245be7d" /> | <img src="https://github.com/user-attachments/assets/3534a4f8-a71d-464e-a9cb-9b8a2ebc3532" width="100"/> | <img src="https://github.com/user-attachments/assets/3534a4f8-a71d-464e-a9cb-9b8a2ebc3532" width="100"/> | <img src="https://github.com/user-attachments/assets/3534a4f8-a71d-464e-a9cb-9b8a2ebc3532" width="100"/> | <img src="https://github.com/user-attachments/assets/3534a4f8-a71d-464e-a9cb-9b8a2ebc3532" width="100"/> | <img src="https://github.com/user-attachments/assets/3534a4f8-a71d-464e-a9cb-9b8a2ebc3532" width="100"/> |
+| [깃허브](https://github.com/officialboyy) | [깃허브](https://github.com/daehoon0917) | [깃허브](https://github.com/Kwondoryeong) | [깃허브](https://github.com/gnim370717-bot) | [깃허브](https://github.com/Kimoyeon) | [깃허브](https://github.com/suuply) | [깃허브](https://github.com/jwk29134) | [깃허브](https://github.com/sunmaan22)
 ***
 
 # 1. 프로젝트 개요
