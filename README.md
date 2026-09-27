@@ -479,31 +479,31 @@ void door_lock_set_command(door_command_t command)
 ### Commit Message
 
 ```text
-[feat] 기능 추가
-[fix] 버그 수정
-[docs] 문서 수정
-[test] 테스트 추가 및 수정
-[refactor] 코드 구조 개선
-[chore] 설정 및 기타 작업
+[feat][20260927][성대훈] 기능 추가
+[fix][20260927][박준호] 버그 수정
+[docs][20260927][박예준] 문서 수정
+[test][20260927][전우관] 테스트 추가 및 수정
+[refactor][20260927][배선민] 코드 구조 개선
+[chore][20260927][김호연] 설정 및 기타 작업
 ```
 
 예시:
 
 ```text
-[feat] door lock control
-[feat] lin slave response
-[feat] can-lin routing
+[feat][20260927][김민서] door lock control
+[feat][20260927][권도형] lin slave response
+[feat][20260927][성대훈] can-lin routing
 
-[fix] vcu timeout detection
-[fix] can rx queue overflow
+[fix][20260927][성대훈] vcu timeout detection
+[fix][20260927][성대훈] can rx queue overflow
 
-[docs] update system architecture
-[docs] update can matrix
+[docs][20260927][성대훈] update system architecture
+[docs][20260927][성대훈] update can matrix
 
-[test] add door offline scenario
-[test] add vcu timeout scenario
+[test][20260927][성대훈] add door offline scenario
+[test][20260927][성대훈] add vcu timeout scenario
 
-[refactor] split fault manager
+[refactor][20260927][김민서] split fault manager
 ```
 
 --- 
