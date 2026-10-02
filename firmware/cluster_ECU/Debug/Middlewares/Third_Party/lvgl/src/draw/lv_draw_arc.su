@@ -1,0 +1,5 @@
+../Middlewares/Third_Party/lvgl/include/lvgl/stdlib/lv_string.h:73:20:lv_memzero	16	static
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_arc.c:36:6:lv_draw_arc_dsc_init	24	static
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_arc.c:47:21:lv_draw_task_get_arc_dsc	16	static
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_arc.c:54:6:lv_draw_arc	112	static
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_arc.c:88:6:lv_draw_arc_get_area	56	static

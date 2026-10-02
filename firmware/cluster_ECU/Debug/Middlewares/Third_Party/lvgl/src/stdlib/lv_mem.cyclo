@@ -1,0 +1,10 @@
+../Middlewares/Third_Party/lvgl/include/lvgl/stdlib/lv_string.h:73:20:lv_memzero	1
+../Middlewares/Third_Party/lvgl/src/stdlib/lv_mem.c:59:8:lv_malloc	3
+../Middlewares/Third_Party/lvgl/src/stdlib/lv_mem.c:89:8:lv_malloc_zeroed	3
+../Middlewares/Third_Party/lvgl/src/stdlib/lv_mem.c:116:8:lv_calloc	3
+../Middlewares/Third_Party/lvgl/src/stdlib/lv_mem.c:126:8:lv_zalloc	1
+../Middlewares/Third_Party/lvgl/src/stdlib/lv_mem.c:131:6:lv_free	3
+../Middlewares/Third_Party/lvgl/src/stdlib/lv_mem.c:140:8:lv_reallocf	2
+../Middlewares/Third_Party/lvgl/src/stdlib/lv_mem.c:149:8:lv_realloc	4
+../Middlewares/Third_Party/lvgl/src/stdlib/lv_mem.c:171:13:lv_mem_test	2
+../Middlewares/Third_Party/lvgl/src/stdlib/lv_mem.c:181:6:lv_mem_monitor	2

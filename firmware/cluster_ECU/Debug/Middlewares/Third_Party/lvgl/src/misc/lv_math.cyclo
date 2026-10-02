@@ -1,0 +1,12 @@
+../Middlewares/Third_Party/lvgl/src/misc/lv_math.c:53:31:lv_trigo_sin	10
+../Middlewares/Third_Party/lvgl/src/misc/lv_math.c:111:16:do_cubic_bezier	1
+../Middlewares/Third_Party/lvgl/src/misc/lv_math.c:127:9:lv_cubic_bezier	20
+../Middlewares/Third_Party/lvgl/src/misc/lv_math.c:213:28:lv_sqrt	4
+../Middlewares/Third_Party/lvgl/src/misc/lv_math.c:239:31:lv_sqrt32	15
+../Middlewares/Third_Party/lvgl/src/misc/lv_math.c:321:10:lv_atan2	17
+../Middlewares/Third_Party/lvgl/src/misc/lv_math.c:398:9:lv_pow	8
+../Middlewares/Third_Party/lvgl/src/misc/lv_math.c:421:9:lv_map	10
+../Middlewares/Third_Party/lvgl/src/misc/lv_math.c:444:6:lv_rand_set_seed	1
+../Middlewares/Third_Party/lvgl/src/misc/lv_math.c:449:10:lv_rand	2
+../Middlewares/Third_Party/lvgl/src/misc/lv_math.c:463:31:lv_trigo_cos	1
+../Middlewares/Third_Party/lvgl/src/misc/lv_math.c:468:9:lv_bezier3	1

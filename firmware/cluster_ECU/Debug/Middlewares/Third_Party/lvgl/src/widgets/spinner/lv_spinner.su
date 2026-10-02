@@ -1,0 +1,8 @@
+../Middlewares/Third_Party/lvgl/src/widgets/spinner/lv_spinner.c:79:12:lv_spinner_create	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/spinner/lv_spinner.c:86:6:lv_spinner_set_anim_params	128	static
+../Middlewares/Third_Party/lvgl/src/widgets/spinner/lv_spinner.c:110:6:lv_spinner_set_anim_duration	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/spinner/lv_spinner.c:118:6:lv_spinner_set_arc_sweep	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/spinner/lv_spinner.c:126:10:lv_spinner_get_anim_duration	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/spinner/lv_spinner.c:133:10:lv_spinner_get_arc_sweep	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/spinner/lv_spinner.c:144:13:lv_spinner_constructor	16	static
+../Middlewares/Third_Party/lvgl/src/widgets/spinner/lv_spinner.c:155:13:arc_anim_angles	40	static

@@ -1,0 +1,11 @@
+../Middlewares/Third_Party/lvgl/src/stdlib/builtin/lv_sprintf_builtin.c:127:20:_out_buffer	24	static
+../Middlewares/Third_Party/lvgl/src/stdlib/builtin/lv_sprintf_builtin.c:135:20:_out_null	24	static
+../Middlewares/Third_Party/lvgl/src/stdlib/builtin/lv_sprintf_builtin.c:145:20:_is_digit	16	static
+../Middlewares/Third_Party/lvgl/src/stdlib/builtin/lv_sprintf_builtin.c:151:21:_atoi	24	static
+../Middlewares/Third_Party/lvgl/src/stdlib/builtin/lv_sprintf_builtin.c:161:15:_out_rev	40	static
+../Middlewares/Third_Party/lvgl/src/stdlib/builtin/lv_sprintf_builtin.c:190:15:_ntoa_format	40	static
+../Middlewares/Third_Party/lvgl/src/stdlib/builtin/lv_sprintf_builtin.c:244:15:_ntoa_long	96	static
+../Middlewares/Third_Party/lvgl/src/stdlib/builtin/lv_sprintf_builtin.c:269:15:_ntoa_long_long	96	static
+../Middlewares/Third_Party/lvgl/src/stdlib/builtin/lv_sprintf_builtin.c:543:12:lv_vsnprintf_inner	176	static
+../Middlewares/Third_Party/lvgl/src/stdlib/builtin/lv_sprintf_builtin.c:860:5:lv_snprintf	32	static
+../Middlewares/Third_Party/lvgl/src/stdlib/builtin/lv_sprintf_builtin.c:872:5:lv_vsnprintf	32	static

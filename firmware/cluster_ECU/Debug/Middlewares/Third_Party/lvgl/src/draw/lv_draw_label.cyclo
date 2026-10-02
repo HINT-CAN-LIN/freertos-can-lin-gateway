@@ -1,0 +1,16 @@
+../Middlewares/Third_Party/lvgl/include/lvgl/stdlib/lv_string.h:73:20:lv_memzero	1
+../Middlewares/Third_Party/lvgl/src/draw/../misc/lv_bidi_private.h:102:20:lv_bidi_calculate_align_internal	3
+../Middlewares/Third_Party/lvgl/src/draw/../misc/lv_text_private.h:184:20:lv_text_is_hanging_space	4
+../Middlewares/Third_Party/lvgl/src/draw/../misc/lv_text_private.h:249:20:lv_text_is_marker	15
+../Middlewares/Third_Party/lvgl/src/draw/../font/lv_font_private.h:61:23:lv_font_get_line_height_internal	2
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_label.c:58:6:lv_draw_letter_dsc_init	2
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_label.c:72:6:lv_draw_label_dsc_init	2
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_label.c:89:23:lv_draw_task_get_label_dsc	3
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_label.c:96:6:lv_draw_glyph_dsc_init	2
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_label.c:103:28:lv_draw_label	13
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_label.c:147:28:lv_draw_character	8
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_label.c:192:28:lv_draw_letter	7
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_label.c:230:6:lv_draw_label_iterate_characters	60
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_label.c:613:16:hex_char_to_num	6
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_label.c:620:6:lv_draw_unit_draw_letter	6
+../Middlewares/Third_Party/lvgl/src/draw/lv_draw_label.c:632:6:lv_draw_unit_draw_letter_internal	24

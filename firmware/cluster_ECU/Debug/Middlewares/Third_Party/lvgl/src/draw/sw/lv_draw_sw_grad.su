@@ -1,0 +1,4 @@
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_grad.c:90:33:allocate_item	40	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_grad.c:143:26:lv_draw_sw_grad_get	48	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_grad.c:163:28:lv_draw_sw_grad_color_calculate	72	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_grad.c:216:6:lv_draw_sw_grad_cleanup	16	static

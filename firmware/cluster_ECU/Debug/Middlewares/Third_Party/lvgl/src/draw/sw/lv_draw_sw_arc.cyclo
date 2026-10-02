@@ -1,0 +1,5 @@
+../Middlewares/Third_Party/lvgl/include/lvgl/stdlib/lv_string.h:73:20:lv_memzero	1
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_arc.c:52:6:lv_draw_sw_arc	38
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_arc.c:260:13:add_circle	3
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_arc.c:280:13:get_rounded_area	3
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_arc.c:315:26:allocate_circle_mask	5

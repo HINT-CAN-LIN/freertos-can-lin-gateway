@@ -1,0 +1,5 @@
+../Middlewares/Third_Party/lvgl/src/widgets/list/lv_list.c:67:12:lv_list_create	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/list/lv_list.c:77:12:lv_list_add_text	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/list/lv_list.c:90:12:lv_list_add_button	40	static
+../Middlewares/Third_Party/lvgl/src/widgets/list/lv_list.c:117:14:lv_list_get_button_text	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/list/lv_list.c:136:6:lv_list_set_button_text	32	static

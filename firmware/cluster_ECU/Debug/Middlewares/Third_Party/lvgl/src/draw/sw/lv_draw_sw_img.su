@@ -1,0 +1,13 @@
+../Middlewares/Third_Party/lvgl/include/lvgl/draw/lv_color.h:318:20:lv_color_is_in_range	24	static
+../Middlewares/Third_Party/lvgl/include/lvgl/draw/lv_color.h:333:26:lv_color16_to_color	24	static
+../Middlewares/Third_Party/lvgl/include/lvgl/draw/lv_color.h:456:46:lv_color_swap_16	16	static
+../Middlewares/Third_Party/lvgl/include/lvgl/stdlib/lv_string.h:73:20:lv_memzero	16	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_img.c:101:6:lv_draw_sw_layer	160	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_img.c:198:6:lv_draw_sw_image	32	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_img.c:213:13:img_draw_core	128	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_img.c:308:13:radius_only	200	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_img.c:390:13:recolor_only	176	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_img.c:459:13:transform_and_recolor	216	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_img.c:606:13:colorkey_and_recolor	176	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_img.c:808:13:recolor	192	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_img.c:991:13:apply_mask	216	static

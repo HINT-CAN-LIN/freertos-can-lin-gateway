@@ -1,0 +1,10 @@
+../Core/Src/cluster_ui.c:27:13:flush	40	static
+../Core/Src/cluster_ui.c:36:18:label	32	static
+../Core/Src/cluster_ui.c:47:18:panel	32	static
+../Core/Src/cluster_ui.c:60:19:cluster_ui_init	40	static
+../Core/Src/cluster_ui.c:109:6:cluster_ui_set_state	16	static
+../Core/Src/cluster_ui.c:114:20:fresh_name	16	static
+../Core/Src/cluster_ui.c:118:13:refresh_state	80	static
+../Core/Src/cluster_ui.c:194:6:cluster_ui_receive_frame	40	static
+../Core/Src/cluster_ui.c:199:6:cluster_ui_mark_rx_gap	4	static
+../Core/Src/cluster_ui.c:201:19:cluster_ui_process	128	static

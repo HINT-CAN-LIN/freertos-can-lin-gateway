@@ -1,0 +1,17 @@
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:152:20:get_entry	1
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:160:20:set_second_chance	2
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:170:20:has_second_chance	1
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:175:15:alloc_new_entry	9
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:224:15:alloc_cb	1
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:229:13:init_cnt_cb	5
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:237:13:destroy_cb	3
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:256:27:get_cb	7
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:287:27:add_cb	6
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:311:13:remove_cb	6
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:338:13:drop_cb	7
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:367:13:drop_all_cb	5
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:401:27:get_possible_victim	6
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:428:27:get_victim_cb	5
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:462:36:reserve_cond_cb	4
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:483:20:cache_iter_create_cb	1
+../Middlewares/Third_Party/lvgl/src/misc/cache/class/lv_cache_sc_da.c:489:20:cache_iter_next_cb	4

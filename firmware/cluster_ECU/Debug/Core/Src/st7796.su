@@ -1,0 +1,6 @@
+../Core/Src/st7796.c:12:26:write_bytes	16	static
+../Core/Src/st7796.c:17:26:write_byte	24	static
+../Core/Src/st7796.c:26:13:delay_ms	24	static
+../Core/Src/st7796.c:36:19:st7796_init	16	static
+../Core/Src/st7796.c:138:19:st7796_fill	40	static
+../Core/Src/st7796.c:163:19:st7796_blit	64	static

@@ -1,0 +1,5 @@
+../Middlewares/Third_Party/lvgl/include/lvgl/stdlib/lv_string.h:73:20:lv_memzero	1
+../Middlewares/Third_Party/lvgl/src/draw/sw/../../font/lv_font_private.h:70:20:lv_font_has_static_bitmap_internal	2
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_letter.c:67:6:lv_draw_sw_letter	3
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_letter.c:95:6:lv_draw_sw_label	2
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_letter.c:117:35:draw_letter_cb	12

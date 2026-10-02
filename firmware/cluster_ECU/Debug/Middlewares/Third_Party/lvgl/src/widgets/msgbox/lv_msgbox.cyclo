@@ -1,0 +1,16 @@
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/../../core/lv_obj_style_internal_gen.h:70:23:lv_obj_get_style_height_internal	2
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:104:12:lv_msgbox_create	7
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:140:12:lv_msgbox_add_title	6
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:168:12:lv_msgbox_add_header_button	6
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:192:12:lv_msgbox_add_text	3
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:206:12:lv_msgbox_add_text_fmt	3
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:223:12:lv_msgbox_add_footer_button	8
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:254:12:lv_msgbox_add_close_button	2
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:263:12:lv_msgbox_get_header	2
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:270:12:lv_msgbox_get_footer	2
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:277:12:lv_msgbox_get_content	2
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:284:12:lv_msgbox_get_title	2
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:291:6:lv_msgbox_close	3
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:299:6:lv_msgbox_close_async	3
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:311:13:msgbox_close_click_event_cb	5
+../Middlewares/Third_Party/lvgl/src/widgets/msgbox/lv_msgbox.c:324:13:msgbox_size_changed_event_cb	4

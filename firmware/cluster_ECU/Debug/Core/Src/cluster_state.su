@@ -1,0 +1,11 @@
+../Core/Src/cluster_state.c:4:17:le16	16	static
+../Core/Src/cluster_state.c:5:26:received	24	static
+../Core/Src/cluster_state.c:6:18:cluster_sample_freshness	24	static
+../Core/Src/cluster_state.c:11:13:cluster_system_name	16	static
+../Core/Src/cluster_state.c:16:13:cluster_fault_name	16	static
+../Core/Src/cluster_state.c:22:13:cluster_node_name	16	static
+../Core/Src/cluster_state.c:27:6:cluster_receive_frame	48	static
+../Core/Src/cluster_state.c:91:9:cluster_active_fault_count	32	static
+../Core/Src/cluster_state.c:98:9:cluster_major_fault	24	static
+../Core/Src/cluster_state.c:112:13:cluster_window_name	16	static
+../Core/Src/cluster_state.c:119:6:cluster_demo_update	64	static

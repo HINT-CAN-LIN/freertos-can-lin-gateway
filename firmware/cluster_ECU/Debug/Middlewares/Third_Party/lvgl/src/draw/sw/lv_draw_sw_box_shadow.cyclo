@@ -1,0 +1,4 @@
+../Middlewares/Third_Party/lvgl/include/lvgl/stdlib/lv_string.h:73:20:lv_memzero	1
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_box_shadow.c:53:6:lv_draw_sw_box_shadow	94
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_box_shadow.c:587:35:shadow_draw_corner_buf	13
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_box_shadow.c:674:35:shadow_blur_corner	15

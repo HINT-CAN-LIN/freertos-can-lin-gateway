@@ -1,0 +1,16 @@
+../Middlewares/Third_Party/lvgl/src/widgets/switch/../../core/lv_obj_style_internal_gen.h:340:23:lv_obj_get_style_pad_top_internal	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/../../core/lv_obj_style_internal_gen.h:353:23:lv_obj_get_style_pad_bottom_internal	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/../../core/lv_obj_style_internal_gen.h:366:23:lv_obj_get_style_pad_left_internal	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/../../core/lv_obj_style_internal_gen.h:379:23:lv_obj_get_style_pad_right_internal	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/../../core/lv_obj_style_internal_gen.h:1666:24:lv_obj_get_style_anim_duration_internal	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/../../core/lv_obj_style_internal_gen.h:1720:29:lv_obj_get_style_base_dir_internal	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/lv_switch.c:85:12:lv_switch_create	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/lv_switch.c:97:6:lv_switch_set_orientation	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/lv_switch.c:110:25:lv_switch_get_orientation	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/lv_switch.c:122:13:lv_switch_constructor	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/lv_switch.c:139:13:lv_switch_destructor	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/lv_switch.c:147:13:lv_switch_event	64	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/lv_switch.c:189:13:draw_main	448	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/lv_switch.c:289:13:lv_switch_anim_exec_cb	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/lv_switch.c:299:13:lv_switch_anim_completed	24	static
+../Middlewares/Third_Party/lvgl/src/widgets/switch/lv_switch.c:310:13:lv_switch_trigger_anim	136	static
