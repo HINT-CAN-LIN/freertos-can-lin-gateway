@@ -9,7 +9,8 @@ CAN1.BS2=CAN_BS2_2TQ
 CAN1.CalculateBaudRate=500000
 CAN1.CalculateTimeBit=2000
 CAN1.CalculateTimeQuantum=142.85714285714286
-CAN1.IPParameters=CalculateTimeQuantum,CalculateTimeBit,CalculateBaudRate,Prescaler,BS1,BS2,ABOM,NART
+CAN1.IPParameters=CalculateTimeQuantum,CalculateTimeBit,CalculateBaudRate,Prescaler,BS1,BS2,ABOM,NART,Mode
+CAN1.Mode=CAN_MODE_SILENT_LOOPBACK
 CAN1.NART=ENABLE
 CAN1.Prescaler=6
 Dma.Request0=SPI2_TX
@@ -27,7 +28,7 @@ Dma.SPI2_TX.0.RequestParameters=Instance,Direction,PeriphInc,MemInc,PeriphDataAl
 FREERTOS.configCHECK_FOR_STACK_OVERFLOW=2
 FREERTOS.FootprintOK=true
 FREERTOS.IPParameters=Tasks01,configUSE_NEWLIB_REENTRANT,FootprintOK,configCHECK_FOR_STACK_OVERFLOW
-FREERTOS.Tasks01=defaultTask,24,2048,StartDefaultTask,Default,NULL,Dynamic,NULL,NULL
+FREERTOS.Tasks01=defaultTask,24,2048,StartDefaultTask,Default,NULL,Dynamic,NULL,NULL;canTask,32,512,StartCanTask,Default,NULL,Dynamic,NULL,NULL
 FREERTOS.configUSE_NEWLIB_REENTRANT=1
 File.Version=6
 GPIO.groupedBy=Group By Peripherals
@@ -271,3 +272,8 @@ VP_SYS_VS_tim6.Signal=SYS_VS_tim6
 board=NUCLEO-F446RE
 boardIOC=true
 
+
+PA11.GPIOParameters=GPIO_PuPd
+PA11.GPIO_PuPd=GPIO_PULLUP
+PA12.GPIOParameters=GPIO_PuPd
+PA12.GPIO_PuPd=GPIO_PULLUP

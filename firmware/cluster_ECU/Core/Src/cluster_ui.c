@@ -1,6 +1,8 @@
 #include "cluster_ui.h"
+#include "cluster_can.h"
 #include "st7796.h"
 #include "lvgl/lvgl.h"
+#include "cmsis_os.h"
 
 /* 19,200 bytes, rather than a 307,200-byte full framebuffer. */
 static uint32_t draw_buffer[480 * 20 * 2 / sizeof(uint32_t)];
@@ -9,7 +11,17 @@ static lv_obj_t *uptime_label;
 static lv_obj_t *speed_label, *mode_label, *lights_label, *door_label, *window_label;
 static lv_obj_t *rpm_label, *motor_label, *link_label;
 static lv_obj_t *fault_label, *fault_detail_label, *health_label;
-static ClusterState state;
+static ClusterState state; /* UI-owned rendering snapshot. */
+static ClusterState input_state; /* Producer-owned, mutex-protected. */
+static osMutexId_t state_mutex;
+volatile bool cluster_snapshot_test_passed;
+static bool copy_input(ClusterState *snapshot)
+{
+  if (osMutexAcquire(state_mutex, osWaitForever) != osOK) return false;
+  *snapshot=input_state;
+  osMutexRelease(state_mutex);
+  return true;
+}
 static ClusterState shown;
 static ClusterFreshness shown_vehicle, shown_body, shown_motor, shown_gateway;
 volatile uint32_t cluster_demo_active_faults;
@@ -59,6 +71,20 @@ static lv_obj_t *panel(lv_obj_t *parent, int x, int y, int w, int h)
 
 HAL_StatusTypeDef cluster_ui_init(void)
 {
+  const osMutexAttr_t attr = {.name="clusterState", .attr_bits=osMutexPrioInherit};
+  state_mutex = osMutexNew(&attr);
+  if (state_mutex == NULL) return HAL_ERROR;
+  /* Exercise snapshot isolation before releasing the producer task. */
+  ClusterState probe={0}, copied={0};
+  probe.vehicle.speed_dkmh=1234;
+  cluster_ui_set_state(&probe);
+  probe.vehicle.speed_dkmh=0;
+  cluster_snapshot_test_passed=copy_input(&copied) && copied.vehicle.speed_dkmh==1234;
+  copied.vehicle.speed_dkmh=0;
+  cluster_snapshot_test_passed=cluster_snapshot_test_passed &&
+    copy_input(&copied) && copied.vehicle.speed_dkmh==1234;
+  cluster_ui_set_state(&probe);
+  if (!cluster_snapshot_test_passed) return HAL_ERROR;
   cluster_model_test_passed = cluster_state_self_test();
   if (!cluster_model_test_passed) return HAL_ERROR;
   display_status = st7796_init();
@@ -75,7 +101,7 @@ HAL_StatusTypeDef cluster_ui_init(void)
   lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
   lv_obj_set_scrollable(screen, false);
   label(screen, "CLUSTER ECU", 16, 12, &lv_font_montserrat_20, 0xFFFFFF);
-  label(screen, CLUSTER_TEST_INPUT ? "TEST MODE" : "CAN RX", 365, 17, &lv_font_montserrat_14, 0xFFCC66);
+  label(screen, CLUSTER_CAN_LOOPBACK ? "CAN LOOP" : CLUSTER_TEST_INPUT ? "TEST MODE" : "CAN RX", 365, 17, &lv_font_montserrat_14, 0xFFCC66);
   lv_obj_t *vehicle = panel(screen, 12, 48, 224, 196);
   label(vehicle, "VEHICLE / MOTOR", 12, 10, &lv_font_montserrat_14, 0x9BAAC0);
   speed_label = label(vehicle, "--", 12, 32, &lv_font_montserrat_48, 0xFFFFFF);
@@ -103,12 +129,15 @@ HAL_StatusTypeDef cluster_ui_init(void)
   lv_refr_now(display);
   start_ms = HAL_GetTick();
   last_demo_ms = start_ms - 200U;
-  return HAL_OK;
+  return display_status; /* The first LVGL flush can also fail. */
 }
 
 void cluster_ui_set_state(const ClusterState *next)
 {
-  if (next != NULL) state = *next;
+  if (next != NULL && osMutexAcquire(state_mutex, osWaitForever) == osOK) {
+    input_state = *next;
+    osMutexRelease(state_mutex);
+  }
 }
 
 static const char *fresh_name(ClusterFreshness f)
@@ -123,9 +152,7 @@ static void refresh_state(uint32_t now)
   ClusterFreshness m=cluster_sample_freshness(state.motor.time,now);
   ClusterFreshness g=cluster_sample_freshness(state.gateway.time,now);
   if (state.gateway.time.valid && g!=CLUSTER_FRESH) state.fault.gap_seen=true;
-  bool event_newer=state.fault.time.valid && (uint32_t)(now-state.fault.time.received_ms)<=
-    (uint32_t)(now-state.vehicle.time.received_ms);
-  uint8_t system_value=v!=CLUSTER_FRESH?255:event_newer?state.fault.system:state.vehicle.network;
+  uint8_t system_value=cluster_display_system(&state,now);
   bool changed=c!=shown_vcu || system_value!=shown_system || !shown_valid || v!=shown_vehicle || b!=shown_body || m!=shown_motor || g!=shown_gateway;
   /* Compare values, not receive timestamps, to avoid redrawing unchanged labels. */
   changed=changed || state.vehicle.speed_dkmh!=shown.vehicle.speed_dkmh ||
@@ -136,7 +163,8 @@ static void refresh_state(uint32_t now)
     state.body.lights_consistent!=shown.body.lights_consistent ||
     state.motor.mode!=shown.motor.mode || state.motor.sequence_ok!=shown.motor.sequence_ok ||
     state.gateway.queue_usage!=shown.gateway.queue_usage || state.gateway.sequence_ok!=shown.gateway.sequence_ok ||
-    state.fault.time.received_ms!=shown.fault.time.received_ms || state.fault.gap_seen!=shown.fault.gap_seen;
+    state.fault.time.received_ms!=shown.fault.time.received_ms ||
+    cluster_fault_display_changed(&state.fault,&shown.fault);
   if (!changed) return;
   if (v==CLUSTER_FRESH && state.vehicle.speed_dkmh<=2500)
     lv_label_set_text_fmt(speed_label,"%u.%u",state.vehicle.speed_dkmh/10,state.vehicle.speed_dkmh%10);
@@ -194,27 +222,66 @@ static void refresh_state(uint32_t now)
 bool cluster_ui_receive_frame(uint32_t id, const uint8_t *data, uint8_t dlc,
                               bool extended, bool remote, uint32_t received_ms)
 {
-  return cluster_receive_frame(&state,id,data,dlc,extended,remote,received_ms);
+  if (osMutexAcquire(state_mutex, osWaitForever) != osOK) return false;
+  bool accepted = cluster_receive_frame(&input_state,id,data,dlc,extended,remote,received_ms);
+  osMutexRelease(state_mutex);
+  return accepted;
 }
-void cluster_ui_mark_rx_gap(void) { state.fault.gap_seen=true; }
+void cluster_ui_mark_rx_gap(void)
+{
+  if (osMutexAcquire(state_mutex, osWaitForever) == osOK) {
+    input_state.fault.gap_seen=true;
+    osMutexRelease(state_mutex);
+  }
+}
+
+/* CAN task owns test input and freshness bookkeeping, never LVGL. */
+void cluster_ui_update_input(void)
+{
+  if (osMutexAcquire(state_mutex, osWaitForever) != osOK) return;
+  uint32_t now=HAL_GetTick();
+  if (CLUSTER_TEST_INPUT && !CLUSTER_CAN_LOOPBACK && now-last_demo_ms >= 100U) {
+    last_demo_ms=now;
+    cluster_demo_update(&input_state,now,now-start_ms);
+  }
+  if (input_state.gateway.time.valid &&
+      cluster_sample_freshness(input_state.gateway.time,now)!=CLUSTER_FRESH)
+    input_state.fault.gap_seen=true;
+  osMutexRelease(state_mutex);
+}
+
+static const char *can_health_name(const ClusterCanDiagnostics *d)
+{
+  if (!d->initialized) return "WAIT";
+  if (d->init_status!=HAL_OK) return "INIT ERROR";
+  if (!d->live) return "TEST";
+  if (d->current_errors & HAL_CAN_ERROR_BOF) return "BUS OFF";
+  if (d->current_errors & HAL_CAN_ERROR_EPV) return "PASSIVE";
+  if (d->current_errors & HAL_CAN_ERROR_EWG) return "WARNING";
+  if (d->rx_drops) return "OK/LOSS HIST";
+  return d->error_history ? "OK/ERR HIST" : CLUSTER_CAN_LOOPBACK ? "LOOP" : "OK";
+}
 
 HAL_StatusTypeDef cluster_ui_process(void)
 {
   if (display_status != HAL_OK) return display_status;
+  if (!copy_input(&state)) return HAL_ERROR;
+  /* A producer may preempt us during copy_input: acquire now AFTER snapshot. */
   uint32_t now = HAL_GetTick();
   uint32_t elapsed = now - start_ms;
   cluster_demo_phase_ms = elapsed % CLUSTER_DEMO_CYCLE_MS;
-  /* Only the data producer is simulated. Real reception can replace this block. */
-  if (CLUSTER_TEST_INPUT && now - last_demo_ms >= 100U) {
-    last_demo_ms = now;
-    ClusterState next = state;
-    if (cluster_demo_update(&next, now, elapsed)) cluster_ui_set_state(&next);
-  }
+  /* No state lock is held during LVGL rendering or blocking SPI. */
   refresh_state(now);
   uint32_t second = elapsed / 1000U;
-  if (second != last_second) {
+  ClusterCanDiagnostics diagnostics;
+  cluster_can_get_diagnostics(&diagnostics);
+  const char *can_health=can_health_name(&diagnostics);
+  static const char *last_can_health;
+  if (second != last_second || can_health!=last_can_health) {
+    last_can_health=can_health;
     last_second = second;
-    lv_label_set_text_fmt(uptime_label, "UI UPTIME: %lu s", (unsigned long)second);
+    lv_label_set_text_fmt(uptime_label, "UP:%lus CAN:%s RXQ:%lu/64",
+      (unsigned long)second,can_health,(unsigned long)diagnostics.queue_count);
   }
   lv_timer_handler();
   return display_status;

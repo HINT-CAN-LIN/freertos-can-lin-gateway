@@ -1,5 +1,6 @@
 #include "cluster_state.h"
 #include <stddef.h>
+#include <string.h>
 
 static uint16_t le16(const uint8_t *p) { return (uint16_t)(p[0] | ((uint16_t)p[1] << 8)); }
 static ClusterSampleTime received(uint32_t now) { ClusterSampleTime t = {now, true}; return t; }
@@ -8,6 +9,28 @@ ClusterFreshness cluster_sample_freshness(ClusterSampleTime t, uint32_t now)
   if (!t.valid || (uint32_t)(now - t.received_ms) >= CLUSTER_OFFLINE_MS) return CLUSTER_OFFLINE;
   return (uint32_t)(now - t.received_ms) >= CLUSTER_STALE_MS ? CLUSTER_STALE : CLUSTER_FRESH;
 }
+uint8_t cluster_display_system(const ClusterState *s, uint32_t now)
+{
+  bool vehicle_fresh=cluster_sample_freshness(s->vehicle.time,now)==CLUSTER_FRESH;
+  bool event_fresh=cluster_sample_freshness(s->fault.time,now)==CLUSTER_FRESH;
+  /* Reuse existing display freshness, without defining event replay/recovery.
+   * Equal receive timestamps favor the Fault event; cyclic status takes over
+   * when newer. Never gate a fresh Fault on an absent/stale Vehicle frame. */
+  if (event_fresh && (!vehicle_fresh ||
+      (uint32_t)(now-s->fault.time.received_ms) <=
+      (uint32_t)(now-s->vehicle.time.received_ms))) return s->fault.system;
+  return vehicle_fresh ? s->vehicle.network : 255;
+}
+
+bool cluster_fault_display_changed(const ClusterFaultState *a, const ClusterFaultState *b)
+{
+  /* Compare explicit fields: struct padding and timestamps are not identity. */
+  return memcmp(a->active_nodes,b->active_nodes,sizeof(a->active_nodes))!=0 ||
+    a->last_code!=b->last_code || a->last_node!=b->last_node ||
+    a->cleared!=b->cleared || a->system!=b->system ||
+    a->events_seen!=b->events_seen || a->gap_seen!=b->gap_seen;
+}
+
 const char *cluster_system_name(uint8_t v)
 {
   static const char *names[] = {"NORMAL", "DEGRADED", "OFFLINE", "FAIL_SAFE"};
@@ -116,7 +139,12 @@ const char *cluster_window_name(uint8_t v)
   return v <= 6 ? names[v] : v == 255 ? "INVALID" : "UNDEFINED";
 }
 
-bool cluster_demo_update(ClusterState *s, uint32_t now, uint32_t elapsed)
+static void demo_frame(ClusterState *s, uint32_t id, uint8_t *d, uint32_t now, ClusterDemoEmit emit)
+{
+  if (!emit || emit(id,d)) cluster_receive_frame(s,id,d,8,false,false,now);
+}
+
+bool cluster_demo_generate(ClusterState *s, uint32_t now, uint32_t elapsed, ClusterDemoEmit emit)
 {
   if (!s) return false;
   uint32_t phase = elapsed % CLUSTER_DEMO_CYCLE_MS;
@@ -128,28 +156,33 @@ bool cluster_demo_update(ClusterState *s, uint32_t now, uint32_t elapsed)
   uint16_t torque = phase < 4000 ? 0 : 1234;
   d[0]=torque; d[1]=torque>>8;
   d[2]=(phase<4000 ? 0 : 2) | (((s->vcu.alive+1)&15)<<4);
-  cluster_receive_frame(s,0x100,d,8,false,false,now);
+  demo_frame(s,0x100,d,now,emit);
   d[0]=speed; d[1]=speed>>8; d[2]=rpm; d[3]=rpm>>8;
   d[4]=(phase<4000 ? 0 : 2) | (system<<4);
-  cluster_receive_frame(s,0x120,d,8,false,false,now);
+  demo_frame(s,0x120,d,now,emit);
   d[0]=0; d[1]=phase >= 9000 && phase < 16000 ? 255 : phase >= 4000 ? 3 : 1;
   d[2]=phase >= 6000 ? 0x09 : 0; d[3]=phase >= 17000 ? 255 : phase >= 16000 ? 6 : (phase/2000)%6;
   if (d[1]<=3 && d[1]>=2) d[0]|=2;
-  cluster_receive_frame(s,0x200,d,8,false,false,now);
+  demo_frame(s,0x200,d,now,emit);
   d[0]=rpm; d[1]=rpm>>8; d[2]=0; d[3]=0;
   d[4]=(system==3 ? 3 : phase<4000 ? 1 : 2) | (((s->motor.alive+1)&15)<<2);
-  cluster_receive_frame(s,0x110,d,8,false,false,now);
+  demo_frame(s,0x110,d,now,emit);
   d[0]=(s->gateway.alive+1)&15; d[1]=phase>=12000 ? 85 : 12;
-  cluster_receive_frame(s,0x300,d,8,false,false,now);
+  demo_frame(s,0x300,d,now,emit);
   /* Edge transitions are keyed to current active table, not periodic Fault frames. */
   bool door = phase>=9000 && phase<16000, vcu = phase>=12000 && phase<15000;
   if (!!(s->fault.active_nodes[2] & (1U<<5)) != door) {
     d[0]=2; d[1]=5 | ((!door)<<4) | (system<<5);
-    cluster_receive_frame(s,0x310,d,8,false,false,now);
+    demo_frame(s,0x310,d,now,emit);
   }
   if (!!(s->fault.active_nodes[1] & (1U<<1)) != vcu) {
     d[0]=1; d[1]=1 | ((!vcu)<<4) | (system<<5);
-    cluster_receive_frame(s,0x310,d,8,false,false,now);
+    demo_frame(s,0x310,d,now,emit);
   }
   return true;
+}
+
+bool cluster_demo_update(ClusterState *s, uint32_t now, uint32_t elapsed)
+{
+  return cluster_demo_generate(s,now,elapsed,NULL);
 }

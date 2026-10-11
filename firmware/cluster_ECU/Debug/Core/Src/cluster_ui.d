@@ -29,8 +29,8 @@ Core/Src/cluster_ui.o: ../Core/Src/cluster_ui.c ../Core/Inc/cluster_ui.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/cluster_state.h ../Core/Inc/st7796.h \
- ../Middlewares/Third_Party/lvgl/include/lvgl/lvgl.h \
+ ../Core/Inc/cluster_state.h ../Core/Inc/cluster_can.h \
+ ../Core/Inc/st7796.h ../Middlewares/Third_Party/lvgl/include/lvgl/lvgl.h \
  ../Middlewares/Third_Party/lvgl/include/lvgl/lv_version.h \
  ../Middlewares/Third_Party/lvgl/include/lvgl/3d/lv_3dmath.h \
  ../Middlewares/Third_Party/lvgl/include/lvgl/config/lv_conf_internal.h \
@@ -243,7 +243,18 @@ Core/Src/cluster_ui.o: ../Core/Src/cluster_ui.c ../Core/Inc/cluster_ui.h \
  ../Middlewares/Third_Party/lvgl/include/lvgl/api_map/lv_api_map_v9_2.h \
  ../Middlewares/Third_Party/lvgl/include/lvgl/api_map/lv_api_map_v9_3.h \
  ../Middlewares/Third_Party/lvgl/include/lvgl/api_map/lv_api_map_v9_4.h \
- ../Middlewares/Third_Party/lvgl/include/lvgl/api_map/lv_api_map_v9_5.h
+ ../Middlewares/Third_Party/lvgl/include/lvgl/api_map/lv_api_map_v9_5.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h \
+ ../Core/Inc/FreeRTOSConfig.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/portmacro.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/list.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h
 ../Core/Inc/cluster_ui.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
 ../Core/Inc/stm32f4xx_hal_conf.h:
@@ -276,6 +287,7 @@ Core/Src/cluster_ui.o: ../Core/Src/cluster_ui.c ../Core/Inc/cluster_ui.h \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
 ../Core/Inc/cluster_state.h:
+../Core/Inc/cluster_can.h:
 ../Core/Inc/st7796.h:
 ../Middlewares/Third_Party/lvgl/include/lvgl/lvgl.h:
 ../Middlewares/Third_Party/lvgl/include/lvgl/lv_version.h:
@@ -491,3 +503,14 @@ Core/Src/cluster_ui.o: ../Core/Src/cluster_ui.c ../Core/Inc/cluster_ui.h \
 ../Middlewares/Third_Party/lvgl/include/lvgl/api_map/lv_api_map_v9_3.h:
 ../Middlewares/Third_Party/lvgl/include/lvgl/api_map/lv_api_map_v9_4.h:
 ../Middlewares/Third_Party/lvgl/include/lvgl/api_map/lv_api_map_v9_5.h:
+../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:
+../Core/Inc/FreeRTOSConfig.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h:
+../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/portmacro.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/task.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/list.h:
+../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h:

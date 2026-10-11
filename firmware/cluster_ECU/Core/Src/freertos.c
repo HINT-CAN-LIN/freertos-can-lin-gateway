@@ -47,8 +47,10 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-static volatile HAL_StatusTypeDef ui_status = HAL_OK;
+volatile HAL_StatusTypeDef cluster_ui_status = HAL_OK;
 volatile uint32_t ui_stack_free_words;
+volatile uint32_t can_stack_free_words;
+
 volatile uint32_t cluster_heap_free_bytes;
 volatile TaskHandle_t stack_overflow_task;
 
@@ -61,12 +63,18 @@ const osThreadAttr_t defaultTask_attributes = {
   .priority = (osPriority_t) osPriorityNormal,
 };
 
+osThreadId_t canTaskHandle;
+const osThreadAttr_t canTask_attributes = {
+  .name="canTask", .stack_size=512 * 4, .priority=osPriorityAboveNormal
+};
+
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
+void StartCanTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -100,8 +108,11 @@ void MX_FREERTOS_Init(void) {
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
+  /* creation of canTask */
+  canTaskHandle = osThreadNew(StartCanTask, NULL, &canTask_attributes);
+
   /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
+  if (defaultTaskHandle == NULL || canTaskHandle == NULL) Error_Handler();
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -122,19 +133,19 @@ void StartDefaultTask(void *argument)
   /* USER CODE BEGIN StartDefaultTask */
 
   (void)argument;
-  ui_status = cluster_ui_init();
+  cluster_ui_status = cluster_ui_init();
   extern volatile HAL_StatusTypeDef cluster_can_status;
-  if (ui_status == HAL_OK) cluster_can_status = cluster_can_init(!CLUSTER_TEST_INPUT);
+  if (cluster_ui_status == HAL_OK && (osThreadFlagsSet(canTaskHandle, 1U) & osFlagsError))
+    cluster_ui_status = HAL_ERROR;
   uint32_t last_led = HAL_GetTick();
   for (;;) {
-    if (ui_status == HAL_OK) {
-      cluster_can_process();
-      ui_status = cluster_ui_process();
+    if (cluster_ui_status == HAL_OK) {
+      cluster_ui_status = cluster_ui_process();
     }
     cluster_heap_free_bytes = xPortGetFreeHeapSize();
     ui_stack_free_words = uxTaskGetStackHighWaterMark(NULL);
     uint32_t now = HAL_GetTick();
-    if (now - last_led >= (ui_status == HAL_OK && cluster_can_status == HAL_OK ? 500U : 100U)) {
+    if (now - last_led >= (cluster_ui_status == HAL_OK && cluster_can_status == HAL_OK && cluster_can_current_errors==0 ? 500U : 100U)) {
       last_led = now;
       HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
     }
@@ -144,7 +155,32 @@ void StartDefaultTask(void *argument)
 }
 
 /* Private application code --------------------------------------------------*/
+void StartCanTask(void *argument)
+{
+  /* USER CODE BEGIN StartCanTask */
+  (void)argument;
+  /* Avoid CAN startup before the first full-screen paint completes. */
+  if (osThreadFlagsWait(1U, osFlagsWaitAny, osWaitForever) & osFlagsError)
+    Error_Handler();
+  extern volatile HAL_StatusTypeDef cluster_can_status;
+  cluster_can_status=cluster_can_init(CLUSTER_CAN_LOOPBACK || !CLUSTER_TEST_INPUT);
+  uint32_t wake=osKernelGetTickCount();
+  for (;;) {
+    if (cluster_can_status == HAL_OK) {
+      cluster_can_process();
+      cluster_ui_update_input();
+    }
+    can_stack_free_words=uxTaskGetStackHighWaterMark(NULL);
+    wake += 5U; /* FreeRTOS tick is 1 ms. */
+    if ((int32_t)(wake-osKernelGetTickCount()) <= 0)
+      wake=osKernelGetTickCount()+5U;
+    osDelayUntil(wake);
+  }
+  /* USER CODE END StartCanTask */
+}
+
 /* USER CODE BEGIN Application */
+
 void vApplicationStackOverflowHook(TaskHandle_t task, char *name)
 {
   (void)name;

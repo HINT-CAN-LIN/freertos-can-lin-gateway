@@ -8,7 +8,8 @@
 #define CLUSTER_STALE_MS 1000U
 #define CLUSTER_OFFLINE_MS 3000U
 #define CLUSTER_DEMO_CYCLE_MS 24000U
-/* 1: LCD demo, CAN disabled. 0: actual CAN RX, no application TX. */
+/* Loopback test only. For external RX set BOTH switches to 0 and IOC to Normal. */
+#define CLUSTER_CAN_LOOPBACK 1
 #define CLUSTER_TEST_INPUT 1
 
 typedef enum { CLUSTER_FRESH, CLUSTER_STALE, CLUSTER_OFFLINE } ClusterFreshness;
@@ -61,11 +62,16 @@ ClusterFreshness cluster_sample_freshness(ClusterSampleTime sample, uint32_t now
 /* Task-context only. Standard 11-bit DATA, DLC=8; ISR must queue first. */
 bool cluster_receive_frame(ClusterState *state, uint32_t id, const uint8_t *data,
                            uint8_t dlc, bool extended, bool remote, uint32_t now_ms);
+/* Display-only selection; does not expire or clear active Fault entries. */
+uint8_t cluster_display_system(const ClusterState *state, uint32_t now_ms);
+bool cluster_fault_display_changed(const ClusterFaultState *a, const ClusterFaultState *b);
 uint8_t cluster_active_fault_count(const ClusterState *state);
 uint8_t cluster_major_fault(const ClusterState *state, uint8_t *node);
 const char *cluster_system_name(uint8_t value);
 const char *cluster_fault_name(uint8_t code);
 const char *cluster_node_name(uint8_t node);
+typedef bool (*ClusterDemoEmit)(uint32_t id, const uint8_t *data);
+bool cluster_demo_generate(ClusterState *state, uint32_t now_ms, uint32_t elapsed_ms, ClusterDemoEmit emit);
 bool cluster_demo_update(ClusterState *state, uint32_t now_ms, uint32_t elapsed_ms);
 const char *cluster_window_name(uint8_t value);
 bool cluster_state_self_test(void);

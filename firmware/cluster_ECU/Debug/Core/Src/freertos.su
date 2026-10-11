@@ -1,3 +1,4 @@
-../Core/Src/freertos.c:78:6:MX_FREERTOS_Init	8	static
-../Core/Src/freertos.c:120:6:StartDefaultTask	24	static
-../Core/Src/freertos.c:148:6:vApplicationStackOverflowHook	24	static,ignoring_inline_asm
+../Core/Src/freertos.c:86:6:MX_FREERTOS_Init	8	static
+../Core/Src/freertos.c:131:6:StartDefaultTask	24	static
+../Core/Src/freertos.c:158:6:StartCanTask	24	static
+../Core/Src/freertos.c:184:6:vApplicationStackOverflowHook	24	static,ignoring_inline_asm

@@ -80,6 +80,30 @@ bool cluster_state_self_test(void)
   CHECK(cluster_sample_freshness(t,979)==CLUSTER_STALE);
   CHECK(cluster_sample_freshness(t,2979)==CLUSTER_OFFLINE);
   t.valid=false; CHECK(cluster_sample_freshness(t,0)==CLUSTER_OFFLINE);
+  /* Representative state is independent of Vehicle numeric freshness. */
+  memset(&s,0,sizeof(s));
+  s.fault.time=(ClusterSampleTime){100,true}; s.fault.system=3;
+  CHECK(cluster_display_system(&s,101)==3); /* Vehicle never received. */
+  s.vehicle.time=(ClusterSampleTime){1,true}; s.vehicle.network=0;
+  s.fault.time.received_ms=1100;
+  CHECK(cluster_display_system(&s,1101)==3); /* Vehicle stale, Fault fresh. */
+  s.vehicle.time.received_ms=1102;
+  CHECK(cluster_display_system(&s,1103)==0); /* Newer cyclic state wins. */
+  s.fault.time.received_ms=1102;
+  CHECK(cluster_display_system(&s,1103)==3); /* Equal stamp: event wins. */
+  s.fault.system=0; s.fault.cleared=1;
+  CHECK(cluster_display_system(&s,1103)==0); /* CLEARED is not max severity. */
+  CHECK(cluster_display_system(&s,2102)==255); /* Both source ages stale. */
+  s.vehicle.time.valid=false;
+  s.fault.time.received_ms=UINT32_MAX-1; s.fault.system=2;
+  CHECK(cluster_display_system(&s,1)==2); /* Tick wrap. */
+  ClusterFaultState before=s.fault;
+  s.fault.active_nodes[2]=1U<<5;
+  CHECK(cluster_fault_display_changed(&s.fault,&before));
+  before=s.fault; CHECK(!cluster_fault_display_changed(&s.fault,&before));
+  s.fault.cleared=0; CHECK(cluster_fault_display_changed(&s.fault,&before));
+  before=s.fault; s.fault.last_node=7;
+  CHECK(cluster_fault_display_changed(&s.fault,&before));
   memset(&s,0,sizeof(s));
   CHECK(cluster_demo_update(&s,100,13000) && cluster_active_fault_count(&s)==2);
   CHECK(cluster_demo_update(&s,200,15500) && cluster_active_fault_count(&s)==1);
