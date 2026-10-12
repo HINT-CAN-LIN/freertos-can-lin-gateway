@@ -1,0 +1,53 @@
+"""기존 Mock transport의 수신을 GUI 스레드에서 분리한다."""
+from threading import Event
+from PySide6.QtCore import QThread, Signal
+from ..interfaces import MockCanInterface
+from .demo import make_demo_frame
+
+# GUI 데모 표시/취소 설정이며 CAN/LIN 주기 또는 Fault Timeout이 아니다.
+DEMO_INTERVAL_SECONDS = 0.1
+RECEIVE_POLL_SECONDS = 0.05
+CLOSE_WAIT_MS = 1000
+
+
+class ReceiveWorker(QThread):
+    failed = Signal(str)
+
+    def __init__(self, buffer, interface_factory=MockCanInterface, parent=None):
+        # 수신 프레임마다 Qt signal을 보내지 않아 이벤트 큐 누적을 제한한다.
+        super().__init__(parent)
+        self._buffer = buffer
+        self._interface_factory = interface_factory
+        self._stop_event = Event()
+
+    def request_stop(self):
+        # start 직후에도 취소 요청을 보존하며 GUI 스레드에서 recv하지 않는다.
+        self._stop_event.set()
+
+    def run(self):
+        # transport 생성부터 해제까지 worker가 소유한다.
+        transport = None
+        try:
+            if self._stop_event.is_set():
+                return
+            transport = self._interface_factory()
+            if not isinstance(transport, MockCanInterface):
+                raise TypeError("GUI MVP accepts MockCanInterface only")
+            index = 0
+            while not self._stop_event.is_set():
+                transport.inject(make_demo_frame(index))
+                frame = transport.recv(timeout=RECEIVE_POLL_SECONDS)
+                if frame is not None:
+                    self._buffer.append(frame)
+                index += 1
+                if self._stop_event.wait(DEMO_INTERVAL_SECONDS):
+                    break
+        except Exception as exc:
+            # 원인과 예외 종류를 UI에 전달하고 반복 재시도로 숨기지 않는다.
+            self.failed.emit(f"Receive failed ({type(exc).__name__}): {exc}")
+        finally:
+            if transport is not None:
+                try:
+                    transport.shutdown()
+                except Exception as exc:
+                    self.failed.emit(f"Shutdown failed ({type(exc).__name__}): {exc}")

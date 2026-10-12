@@ -3,7 +3,8 @@
 Classic CAN raw 프레임을 수신·표시·기록·송신하는 독립 Python 패키지입니다.
 Gateway CAN ID, message별 DLC, Signal bit layout/scale/enum은 정의하지 않습니다.
 Phase 1 Raw CAN 기능 위에 명시적으로 지정한 DBC의 Decode/Encode와 PC 관찰용 State Cache를 제공합니다.
-LIN, GUI/PySide6, ECU Health/Fault 정책, Fault Injection, KPI, 주기 송신, CAN FD는 미구현입니다.
+Phase 3B는 PySide6 Mock 전용 Raw CAN GUI를 제공합니다.
+LIN, GUI의 DBC Decode/Logging/송신, ECU Health/Fault 정책, Fault Injection, KPI, 주기 송신, CAN FD는 미구현입니다.
 CAN FD 수신 시 명시적 오류로 중단하며 Classic CAN으로 변환하거나 조용히 버리지 않습니다.
 
 ## 설계 근거 및 경계
@@ -139,6 +140,7 @@ src/pc_diagnostic/
   state_cache.py  최근 RX observation과 thread-safe snapshot
   decode_service.py   Codec → Cache 공통 처리
   cli.py          monitor / log / send / decode / encode
+  gui/            선택적 PySide6 Mock 창, worker, 유한 표시 버퍼, TEST ONLY demo
 tests/            기존 Phase 1 + DBC/State/통합 검증
 tests/fixtures/test_only.dbc  TEST ONLY synthetic DBC
 ```
@@ -254,3 +256,94 @@ snapshot = service.cache.snapshot()
 - DBC Loader는 수신 thread를 시작하기 전에 설정합니다. 동시 reload는 지원하지 않습니다.
   DBC 변경 시 새 DecodeService/Cache를 만들거나 수신을 멈추고 기존 Cache를 `clear()`합니다.
 - CLI 프로세스 종료 시 Cache는 소멸합니다. 저장/과거 이력/재연결·시간 동기화 정책은 향후 범위입니다.
+
+
+## Phase 3B — Windows Mock GUI
+
+CLI는 그대로 유지하며 GUI는 Raw CAN 관찰만 제공합니다. GUI에서 실제 CAN 연결이나
+송신을 선택할 수 없습니다. 창 상단의 **Mock / DEMO / TEST ONLY** 표시는 실제 ECU 응답이
+아님을 뜻합니다. Hardware **NOT VERIFIED**.
+
+Repository 루트에서 GUI 선택 의존성 설치 및 실행:
+
+```powershell
+.\tools\diagnostic_GUI\.venv\Scripts\python.exe -m pip install -e './tools/diagnostic_GUI[gui,test]'
+.\tools\diagnostic_GUI\.venv\Scripts\can-diag-gui.exe
+# 동일한 GUI를 모듈로 실행
+.\tools\diagnostic_GUI\.venv\Scripts\python.exe -m pc_diagnostic.gui
+```
+
+설치 후 탐색기에서 `tools/diagnostic_GUI/.venv/Scripts/can-diag-gui.exe`를 더블클릭해
+콘솔 명령 없이 Windows 창을 열 수 있습니다. 이것은 가상환경의 GUI 실행 진입점이며,
+Python이 포함된 배포용 standalone EXE/installer는 아닙니다. CLI만 설치하면 PySide6가
+필요하지 않습니다. GUI는 cantools/python-can 없이도 기존 Mock과 RawCanFrame을 사용합니다.
+
+PySide6가 없거나 import할 수 없으면 콘솔 실행은 stderr에 원인과 설치 안내를 표시합니다.
+콘솔 없는 Windows 실행은 Qt 없이 `user32.MessageBoxW` 오류창을 한 번 표시합니다.
+`tools/diagnostic_GUI` 폴더의 활성 환경에서 `pip install -e '.[gui]'`로 설치하라는 안내를
+제공하며 import 예외의 내부 경로/원문은 노출하지 않습니다. 안내 함수 자체가 실패해도
+추가 재시도 없이 종료 코드 1로 끝납니다. 정상 GUI의 실행 경로는 유지했습니다.
+
+- **Start**: 새 Mock 수신 worker 시작. 실행 중 중복 Start를 차단합니다.
+- **Stop**: 비동기 취소 후 transport 해제. 종료가 완료되면 재시작할 수 있습니다.
+- **Clear**: 표시 행, 수신 계수, 버퍼 제외 계수 초기화. 수신 중에는 새 프레임이 다시 표시됩니다.
+- 상태: Disconnected / Running / Stopped / Error. 오류 영역에 예외 종류와 원인을 표시합니다.
+- Timestamp / Channel / CAN ID / DLC / DATA는 실제 수신 RawCanFrame에서 읽습니다.
+  STD/EXT/RTR/ERROR 속성을 구분하며 ID 숫자와 DLC를 변환하지 않습니다.
+- 데모는 기존 `tests/fixtures/test_only.dbc` 및 `test_dbc_codec.py`의 합성 예제를 재사용합니다.
+  새 공식 ID/Signal/Enum을 정의하지 않습니다. 데모 timestamp는 PC에서 생성한 시간이며
+  채널은 `DEMO/TEST ONLY`입니다. GUI는 DBC를 로드하지 않고 Signal을 해석하지 않습니다.
+
+구조: `MockCanInterface.recv → 기존 RawCanFrame → ReceiveWorker → FrameBuffer → Qt timer/slot → MainWindow`.
+Qt 오류/종료 signal만 사용하며 프레임마다 signal을 발행하지 않습니다. 수신은 QThread에서,
+화면 갱신은 메인 스레드에서 수행합니다. 기존 CLI capture loop는 변경하지 않았고 GUI는
+취소 이벤트를 확인하는 별도 수신 pump로 동일 recv 계약을 사용합니다.
+
+버퍼 512개, 화면 500행, 최대 100개 batch/50 ms 갱신, DEMO 생성 간격 0.1초,
+recv polling 0.05초, 창 종료 대기 1000 ms는 **GUI 내부 자원/취소 설정**입니다.
+CAN/LIN 주기나 Fault Timeout을 정의하지 않습니다. 버퍼가 가득 차면 가장 오래된 표시
+대기 프레임을 제외하고 제외 수를 보여줍니다. 수신 카운터는 Clear 이후 전체 수신 수이며
+보이는 행 수와 다릅니다. 화면 행 제한은 과거 표시를 제거하며 캡처 파일을 기록하지 않습니다.
+Stop 후 남은 버퍼는 제한 batch로 비웁니다. 종료 지연 시 창을 유지해 Error를 표시하며
+worker를 강제 terminate하지 않습니다. 오류 후 Start로 새 Mock을 시작할 수 있습니다.
+
+검증 명령은 패키지 폴더에서 실행합니다:
+
+```powershell
+cd tools/diagnostic_GUI
+New-Item -ItemType Directory -Force .test-tmp | Out-Null
+$gui_test_temp = '.test-tmp/run-' + [guid]::NewGuid().ToString('N')
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp $gui_test_temp
+# 실제 Windows 창을 열어 자동 smoke 및 widget 렌더 증거 저장 (offscreen과 별도)
+.\.venv\Scripts\python.exe tests/gui_native_smoke.py --screenshot .test-tmp/gui-native.png
+```
+
+`test_gui_app.py`는 설치된 Qt를 삭제하지 않고 import 실패/콘솔 부재/Windows API 오류를
+모의합니다. 반복 Start/Stop 테스트는 이전 표시 행이 남아 있어도 매회 새로운 수신 계수
+증가와 독립 Mock의 생성·해제를 확인합니다. 테스트 결함 검출은 무수신 주입으로 확인했고,
+native smoke는 실제 Windows 창 검증이라는 별도 목적을 갖습니다.
+
+`test_gui.py`는 Qt offscreen + 기존 Mock을 사용합니다. GUI extra가 없으면 Qt 테스트는
+skip하고 기존 CLI 테스트와 Qt 독립 버퍼 테스트를 실행합니다. native smoke는 Windows
+Qt 플랫폼을 요구하고 창 노출, 반복 Start/Stop, Clear, 활성 worker 종료/해제를 확인합니다.
+별도로 사람이 창과 버튼을 확인한 결과는 `VERIFICATION.md`에 구분해 기록합니다.
+
+이번 Windows 검증 버전은 Python 3.14.6 / PySide6 6.10.3 / python-can 4.6.1 /
+cantools 44.2.1 / pytest 9.1.1입니다. 기존 Python >=3.10 조건과 기존 의존성 범위는
+유지했습니다. GUI extra `PySide6>=6.10,<7`은 이번 구현의 호환성 범위이며 팀의 승인된
+고정 버전이 아닙니다. 팀 README/CONTRIBUTING/핸드북/설정에서 고정 버전은 확인되지
+않았습니다. 팀 버전 합의와 Python 3.10~3.13 검증은 **검토 필요 / NOT VERIFIED**입니다.
+
+미구현: GUI DBC Decode/State Cache 화면, GUI 파일 Logging, Filter, Replay, 실제 CAN
+backend, 운전자 입력/송신, Health/Fault 판정, Fault Injection, standalone 배포.
+기존 CLI의 monitor/log/send/decode/encode는 유지하며 실제 버스 시험은 이번 작업에
+포함하지 않습니다. 생산용 Interface 변경은 **상대 담당자 리뷰 필요**입니다.
+
+Thread lifecycle 참고: [Qt QThread 공식 문서](https://doc.qt.io/qtforpython-6.10/PySide6/QtCore/QThread.html),
+[Qt 객체와 스레드](https://doc.qt.io/qtforpython-6.10/overviews/qtdoc-threads-qobject.html).
+
+
+P2/P3 수정 검증 결과: 기존 CLI 140개 + GUI/버퍼/안내 30개, 전체 **170 passed**.
+실제 Windows pythonw 오류 안내창과 정상 GUI 진입점을 별도로 확인했습니다.
+현재 설치/팀 승인 상태와 검증 상세는 `VERIFICATION.md`의 최신 절을 참조하세요.
+Windows API 근거: [Microsoft MessageBoxW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messageboxw).

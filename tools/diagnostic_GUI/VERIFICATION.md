@@ -1,5 +1,226 @@
 # PC Diagnostic 검증 기록
 
+## HINT-48 Phase 3B — P2/P3 수정 (2026-10-12, Asia/Seoul)
+
+판정: **PASS — 재현된 P2/P3 수정 및 요청된 소프트웨어 검증 완료**.
+실제 팀 담당자 코드 리뷰 완료 또는 팀 고정 버전 승인을 뜻하지 않습니다.
+아래 기존 Phase 3B/Phase 1/2 기록은 각각 당시 결과로 보존했습니다.
+
+### 최소 변경 및 결함 검출
+
+- 수정: `src/pc_diagnostic/gui/app.py`, `tests/test_gui.py`, README, VERIFICATION.
+- 신규: `tests/test_gui_app.py` (Qt 설치 없이 실행 가능한 오류 안내 테스트 7개).
+- 기존 미커밋 GUI 13개를 초기화/삭제하지 않았습니다. 기존 변경 13개 중 위 4개만
+  이번 작업에서 변경했고 나머지 9개는 해시 동일. 최종 Git 후보는 14개 (신규 11 / 수정 3).
+- P2: 콘솔은 고정된 PySide6 원인/설치 안내를 stderr로 출력합니다. 콘솔 부재 또는
+  출력 실패 시 Qt를 import하지 않는 Windows MessageBoxW 함수로 안내합니다.
+  ctypes 인수/반환 타입을 명시하고 API 반환 0은 실패로 처리합니다.
+  안내 자체 실패는 False를 반환하고 main은 재시도 없이 종료 코드 1로 끝납니다.
+  원래 ImportError 원문/내부 경로는 사용자 메시지에 넣지 않습니다.
+- P2 검출 근거: production 수정 전 새 7개 테스트가 모두 실패했고, 콘솔 없는 경로의
+  Windows 안내 호출 누락을 검출했습니다. 수정 후 7개 및 보완 반복 테스트 합계 8개 통과.
+- P3: 각 Start 전 수신 수를 기록하고 새 수신 수 증가를 기다립니다. 매회 새 Mock 생성,
+  shutdown 1회, 송신 없음 및 종료 thread 정리를 검증합니다. 이전 표시 행은 유지합니다.
+- P3 검출 근거: 이전 리뷰에서는 3회 반복 테스트가 Mock 생성 1회로 PASS했습니다.
+  보완 후 두 번째 실행의 recv를 무수신으로 메모리에서만 바꾸자 기존 행이 있어도
+  `Qt condition timed out`으로 예상대로 실패했습니다. 주입은 process 종료 전 복원했습니다.
+  실제 기능/테스트 소스를 결함 주입 상태로 저장하지 않았습니다.
+- timeout 테스트의 1ms 설정은 close 거부/Error 검증까지만 적용하고, release 전에 원래
+  정리 대기값으로 복원합니다. 초기 전체 실행의 169 PASS / 1 FAIL은 이 설정이 worker_finished
+  정리까지 제한한 결과입니다. close timeout assertion은 유지하며 테스트를 삭제/약화하지 않았습니다.
+- 기존 GUI/통신 모델/worker/buffer/Public Interface, CLI 소스 및 Phase 1/2 테스트는 변경 없음.
+
+### 실제 재검증 결과
+
+| 검증 | 결과 |
+| --- | --- |
+| P2 새 테스트 + P3 반복 테스트 | **8 passed in 0.55s** |
+| GUI/버퍼/안내 테스트 최종 | **30 passed in 2.43s** (기존 23 + 신규 7) |
+| 기존 CLI/Phase 1~2 별도 회귀 | **140 passed in 0.74s**, 기존 Phase 1 63개 포함 |
+| 전체 pytest 최종 | **170 passed in 2.85s** |
+| P3 무수신 결함 검출 | PASS, 두 번째 Mock 생성 후 신규 수신 0/이전 행 존재 상태에서 예상 실패 |
+| 실제 Windows Native Smoke | PASS, Start/Stop 3회, Clear 전 12개 수신, active close, Mock 4개 해제/송신 없음 |
+| 실제 정상 GUI main 진입점 | PASS, Windows 플랫폼, Mock 3개 수신 후 정상 종료 코드 0 |
+| 실제 콘솔 없는 pythonw 오류창 | PASS, Qt import만 process 내 모의 실패, stdout/stderr=None 확인 |
+| 오류창 사람 수동 확인 | PASS, 사용자 답변 “원인·설치 안내 확인 후 OK 클릭” |
+| 오류창 닫힌 뒤 결과 | 종료 코드 1, native_notice_returned=true |
+| CLI 설치 진입점 | PASS, --help / monitor / log(JSONL·CSV) / send(Mock) / decode / encode |
+| GUI 모듈 --help 및 CLI 병행 | PASS |
+| pip check | No broken requirements found |
+| 실제 CANable/ECU/물리 CAN/LIN | **NOT VERIFIED — 수행하지 않음** |
+| 팀 담당자 코드 리뷰 | **NOT VERIFIED** |
+
+GUI 자동 테스트는 Qt offscreen과 기존 Mock을 사용합니다. 실제 Windows 창은 native
+smoke 및 정상 main 진입점에서 별도 검증했고 오류창은 사람 확인을 받았습니다.
+오류창 검증에서도 설치된 PySide6를 삭제하지 않았고 `.venv`를 손상시키지 않았습니다.
+
+패키지 폴더에서 pytest cache를 비활성화하고 새 GUID basetemp를 사용했습니다:
+
+```powershell
+$fix_test_root = '.test-tmp/p2p3-' + [guid]::NewGuid().ToString('N')
+New-Item -ItemType Directory -Path $fix_test_root | Out-Null
+.\.venv\Scripts\python.exe -m pytest tests/test_gui_app.py tests/test_gui.py::test_start_stop_repeat_and_no_duplicate_worker -q -p no:cacheprovider --basetemp ($fix_test_root + '/targeted')
+.\.venv\Scripts\python.exe -m pytest tests/test_gui.py tests/test_gui_buffer.py tests/test_gui_app.py -q -p no:cacheprovider --basetemp ($fix_test_root + '/gui')
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --ignore tests/test_gui.py --ignore tests/test_gui_buffer.py --ignore tests/test_gui_app.py --basetemp ($fix_test_root + '/cli')
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp ($fix_test_root + '/all')
+.\.venv\Scripts\python.exe tests/gui_native_smoke.py --screenshot ($fix_test_root + '/native.png')
+.\.venv\Scripts\python.exe -m pc_diagnostic.gui --help
+.\.venv\Scripts\can-diag.exe --help
+.\.venv\Scripts\python.exe -m pip check
+```
+
+### 환경 및 협업 상태
+
+- Python 3.14.6 / PySide6 6.10.3 / python-can 4.6.1 / cantools 44.2.1 / pytest 9.1.1 그대로 유지.
+  패키지 재설치/버전 변경 및 pyproject 변경 없음.
+- 팀 고정 라이브러리 버전은 여전히 **미확정 / 검토 필요**. 현재 버전을 승인된 값으로 주장하지 않습니다.
+- Windows API 근거: [MessageBoxW 공식 문서](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messageboxw).
+- snake_case, 함수 책임 분리, 플랫폼 함수 분리 및 주요 흐름 한국어 주석 적용.
+- 공식 CAN/LIN DBC/Matrix/Signal/Enum/Timeout/ECU 제어 변경 없음. 향후 변경은 상대 담당자 리뷰 필요.
+- Branch/HEAD 유지: `PC-Diagnostic-Test` / `cde2ebfb511696c058b97b0d998d9d420ccdbf31`.
+- D: 원본 25개 및 다른 worktree의 기존 리뷰 문서를 보존합니다. 리뷰 문서 SHA-256:
+  `751ecd803fc1866cc12a51ba2df4a93a64bd41f2cc441456eb9ea49b3178b975`.
+- Git add/Commit/Push/PR/Merge/Reset/Rebase/Force Push 및 이력 재작성 미실행.
+- 후속 Commit 후보: `[feat][YYYYMMDD][권도형] add PySide6 GUI and mock CAN monitor`.
+  날짜는 실제 Commit일로 작성해야 하며 Commit/Push 승인은 별도로 필요합니다.
+
+Jira 기록용 후속 내용 (외부 등록 미실행): P2 native 의존성 안내 및 P3 새 수신 검증 수정,
+위 재현/최종 결과로 검증 완료. 추가 Trouble Shooting: close timeout 테스트의 1ms 설정이
+native thread 정리 단계까지 전파되던 문제를 검증 구간에만 제한했습니다. 팀 버전 합의와
+담당자 코드 리뷰는 여전히 미완료입니다.
+
+---
+
+## HINT-48 Phase 3B — PySide6 Mock GUI (2026-10-12, Asia/Seoul)
+
+판정: **PASS — Windows Mock GUI MVP 구현/검증 완료 후보**.
+팀 고정 버전 합의와 담당자 코드 리뷰 완료를 의미하지 않습니다.
+이 절 아래 Phase 1/2 내용은 원본 개발 환경의 과거 검증 기록으로 보존했습니다.
+
+### 기준 및 보호 확인
+
+- Worktree: `C:/CAN_LIN_Gateway/pc-diagnostic-test-worktree`.
+- Branch: `PC-Diagnostic-Test`; 시작/최종 HEAD: `cde2ebfb511696c058b97b0d998d9d420ccdbf31`.
+- 작업 시작 tracked 파일 370개, working tree clean 확인.
+- AGENTS.md와 팀 README/CONTRIBUTING, 핸드북 §11 (PDF 29~30쪽) 확인.
+  핸드북의 GUI/진단 로직 분리 및 smoke/manual evidence 원칙을 적용했습니다.
+  통신 Interface 변경이 없어 Matrix/DBC의 새로운 정의를 조사/확정하지 않았습니다.
+- 기존 Phase 1/2 Python 소스 13개, 테스트 8개 및 TEST ONLY DBC는 Git 기준 변경 없음.
+- D: 원본 업로드 대상 25개 SHA-256은 이전 보존 기준과 모두 동일합니다.
+- 다른 worktree 리뷰 문서는 미추적 상태 그대로 보존했습니다.
+  SHA-256: `751ecd803fc1866cc12a51ba2df4a93a64bd41f2cc441456eb9ea49b3178b975`.
+- 공통 CAN/LIN DBC/Matrix/Excel/ECU 소스/팀 설정 변경 없음.
+- Git add/Commit/Push/PR/Merge/Reset/Rebase/Force Push: **미실행**. staged 항목 없음.
+
+### 실행 환경 및 결과
+
+Windows / Python **3.14.6**, PySide6 **6.10.3**, python-can **4.6.1**,
+cantools **44.2.1**, pytest **9.1.1**. 독립 worktree `.venv`에 GUI extra를 editable 설치했습니다.
+기존 Python >=3.10 및 기존 can/dbc/test 의존성 범위를 변경하지 않았습니다.
+
+| 검증 | 실제 결과 / 근거 |
+| --- | --- |
+| editable GUI 설치 및 import | PASS, can-diag-gui.exe 생성 및 실제 창 실행 |
+| pip check | PASS, No broken requirements found |
+| 전체 pytest | **163 passed in 2.93s**: 기존 140 + 신규 GUI/버퍼 23 |
+| 기존 Phase 1/2 별도 회귀 | **140 passed in 0.54s**; 기존 Phase 1 63개 포함 |
+| Qt offscreen GUI 테스트 | PASS, 신규 Qt 13개 + Qt 독립 버퍼/데모 10개 |
+| GUI module --help | PASS; PySide6 미설치 모의 상황 안내/CLI import 유지 포함 |
+| 기존 설치된 CLI | PASS, --help / monitor / log(JSONL·CSV) / send(Mock) / decode / encode |
+| GUI 수신 중 별도 CLI monitor | PASS, Mock backend로 실행 |
+| native Windows 창 | PASS, `QApplication.platformName() == windows`, 창 exposed/visible 확인 |
+| native Start/Stop | PASS, 3회 반복; Clear 전 수신 13개 |
+| native Clear 및 재시작 | PASS, 행/계수 0 초기화 후 다시 수신 |
+| native 활성 worker 종료 | PASS, Mock transport 4개 모두 해제, sent_frames 모두 비어 있음 |
+| 사람의 수동 확인 | PASS, 사용자 답변: “창과 Start/Stop/Clear 정상 확인” |
+| 실제 CANable/ECU/물리 CAN/LIN | **NOT VERIFIED — 수행하지 않음** |
+| 담당자 코드 리뷰 / 팀 버전 승인 | **NOT VERIFIED / 검토 필요** |
+
+GUI 자동 테스트 범위: 중복 Start, 반복 Stop/Start, Clear 중 수신 계속, Raw 표/계수,
+STD/EXT/RTR/ERROR 및 누락 metadata, 즉시 Stop, close 시 해제, transport 생성/수신/해제
+예외와 Error 복구, close timeout 시 창/worker 보존, 유한 버퍼/행 제한과 제외 수,
+CLI 병행 실행 및 선택적 Qt 의존성 부재 안내.
+Mock/VirtualBus 성공을 Hardware PASS나 ECU 응답으로 해석하지 않습니다.
+
+실행 명령 (패키지 폴더 기준, basetemp는 매 실행 새 GUID 경로):
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install 'PySide6==6.10.3'
+.\.venv\Scripts\python.exe -m pip install -e '.[gui,test]'
+New-Item -ItemType Directory -Force .test-tmp | Out-Null
+$phase3_test_temp = '.test-tmp/phase3b-' + [guid]::NewGuid().ToString('N')
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp $phase3_test_temp
+# Qt offscreen과 별도의 실제 Windows 창 smoke
+.\.venv\Scripts\python.exe tests/gui_native_smoke.py --screenshot .test-tmp/phase3b-native.png
+.\.venv\Scripts\can-diag-gui.exe
+```
+
+Native 자동 smoke는 창을 실제로 열고 QtTest로 버튼을 조작합니다. Qt widget 렌더
+`.test-tmp/phase3b-native.png`를 시각 확인했습니다. 이는 Qt 자체 렌더이며 OS 전체
+스크린샷/Hardware 캡처가 아닙니다. 사람이 직접 수행한 버튼 검증은 별도로 위 표에 기록했습니다.
+가상환경/캐시/egg-info/Temp/이 렌더 증거는 기존 .gitignore에 의해 제외됩니다.
+
+### 구현 및 변경 범위
+
+- 신규 GUI: `src/pc_diagnostic/gui/{__init__,__main__,app,buffer,demo,receiver,window}.py`.
+- 신규 테스트: `tests/test_gui.py`, `tests/test_gui_buffer.py`, `tests/gui_native_smoke.py`.
+- 수정: `pyproject.toml`, `README.md`, `VERIFICATION.md`. 삭제 없음.
+- GUI optional dependency: `PySide6>=6.10,<7`; 독립 `[project.gui-scripts] can-diag-gui`.
+  기존 `can-diag` 진입점과 CLI 소스/기존 테스트는 변경하지 않았습니다.
+- 기존 TEST ONLY fixture 예제 ID/바이트만 재사용, 공식 CAN ID/Signal/Enum 신규 정의 없음.
+  GUI는 DBC를 로드하거나 실제 ECU 제어/송신을 수행하지 않습니다.
+- 기존 RawCanFrame 및 MockCanInterface 계약 재사용. UI와 worker/유한 버퍼 책임 분리.
+  GUI 갱신/취소 상수는 CAN/LIN 타이밍이나 Fault 정책과 무관합니다.
+- Thread lifecycle 근거: [Qt QThread](https://doc.qt.io/qtforpython-6.10/PySide6/QtCore/QThread.html),
+  [Qt 객체와 스레드](https://doc.qt.io/qtforpython-6.10/overviews/qtdoc-threads-qobject.html).
+
+### Trouble Shooting 및 팀 질문 초안 — 외부 등록 미실행
+
+1. **HINT-48 / GUI 버전 기준 확인 요청**
+   - 확인 범위: 팀 README/CONTRIBUTING/핸드북과 현재 requirements/lock/pyproject 검색.
+   - 결과: 라이브러리 종류는 지정되어 있으나 팀 승인 고정 버전/lock은 확인되지 않음.
+   - 검증 환경은 위 버전이며 GUI extra 범위는 로컬 구현 호환성 설정, 팀 확정값 아님.
+   - 질문: 팀 기준 Python/PySide6/python-can/cantools/pytest 버전 및 고정 방법은 무엇인가?
+   - 영향: 재현 가능한 설치 및 다른 담당자 환경 호환성. Python 3.10~3.13 미실행.
+
+2. **HINT-48 / Windows CP949 GUI --help 출력 오류 (이번 작업에서 수정)**
+   - 재현: 기본 CP949 콘솔에서 `python -m pc_diagnostic.gui --help`.
+   - 원인: argparse 설명의 em dash 문자로 UnicodeEncodeError 발생.
+   - 조치: 콘솔 도움말 구분자를 ASCII로 변경. GUI의 한국어 표시는 유지.
+   - 검증: GUI entry point 회귀 테스트 통과. 팀 질문/Issue에 기록할 수 있는 초안이며 등록하지 않음.
+
+3. **HINT-48 / Commit 컨벤션 문서 불일치 확인 요청**
+   - CONTRIBUTING §7은 `Jira Key + 동사`, 팀 README/이번 사용자 지침은
+     `[작업유형][YYYYMMDD][담당자] 변경 내용`을 안내합니다.
+   - 이번 작업은 Commit하지 않았습니다. 후속 Commit은 최신 사용자 지정 팀 형식을 적용하고,
+     실제 실행일/확인된 담당자명을 사용해야 합니다. 공통 문서 정합성은 팀 확인 필요.
+
+첫 GUI pytest 실행은 161 PASS / 2 FAIL이었습니다. 위 CP949 출력 오류와 새 Qt 테스트의
+이미 deleteLater 처리된 C++ 객체 참조가 원인이었습니다. 신규 테스트는 객체 유효성 또는
+정상 thread 종료를 확인하도록 수정했고 최종 163개가 통과했습니다. 기존 테스트 변경/약화 없음.
+
+### 팀 협업 규칙 준수 상태
+
+| 항목 | 상태 | 근거 / 남은 확인 |
+| --- | --- | --- |
+| 1. 팀 버전 조사 및 대조 | NEEDS_FIX | 지정 라이브러리/현 환경 대조 완료; 팀 고정 버전 확인 필요 |
+| 2. snake_case | PASS | Qt 필수 closeEvent/run 및 Qt 클래스/API 명칭은 예외 |
+| 3. 책임 분리/상수 | PASS | 표시 제한/취소 설정에 명명된 상수 사용 |
+| 4. GUI/통신/Application Logic 분리 | PASS | window / receiver / buffer·demo 분리, 기존 transport 재사용 |
+| 5. 한국어 주석 | PASS | 신규 함수와 주요 제어/예외/테스트 흐름 설명 |
+| 6. Public/통신 Interface 승인 | PASS | 타 담당자 Public Interface/공식 CAN/LIN 정의 변경 없음; 향후 상대 담당자 리뷰 필요 |
+| 7. 결함/질문 기록 | PASS | 위 초안 작성; 승인 없는 외부 등록 없음 |
+| 8. 테스트와 코드 리뷰 구분 | PASS | 테스트 PASS, 담당자 코드 리뷰 NOT VERIFIED |
+| 9. Commit 형식 | NOT VERIFIED | Commit 미실행; 최신 지정 형식과 문서 불일치 기록 |
+| 10. 승인 없는 Git 작업 금지 | PASS | add/Commit/Push/PR/Merge 미실행 |
+| 11. cde2ebf 이력 보존 | PASS | 시작/최종 HEAD 동일, reset/rebase 등 미실행 |
+
+미구현: 실제 CAN GUI backend/송신, GUI DBC Decode/Cache/Logging/Filter,
+ECU Health/Fault, Fault Injection, standalone installer. 팀 Definition of Done의
+실제 CAN 검증/담당자 리뷰는 완료하지 않았습니다. 이번 판정은 요청된 Mock GUI MVP 범위입니다.
+
+---
+
 ## DBC / Signal State Cache 확장 (2026-10-11, Asia/Seoul)
 
 목적: Phase 1 위에 향후 GUI/Logger가 공통으로 사용할 DBC Codec과 PC 관찰 데이터 계층 추가.

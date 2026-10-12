@@ -10,12 +10,16 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
+gui = ["PySide6>=6.10,<7"]
 can = ["python-can>=4.6,<5"]
 dbc = ["cantools>=40,<45"]
 test = ["pytest>=8,<10", "python-can>=4.6,<5", "cantools>=40,<45"]
 
 [project.scripts]
 can-diag = "pc_diagnostic.cli:main"
+
+[project.gui-scripts]
+can-diag-gui = "pc_diagnostic.gui.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
