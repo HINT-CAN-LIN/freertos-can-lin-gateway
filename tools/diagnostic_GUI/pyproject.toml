@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gateway-pc-diagnostic"
+version = "0.1.0"
+description = "Raw CAN diagnostics with explicit DBC codec and observation cache"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+can = ["python-can>=4.6,<5"]
+dbc = ["cantools>=40,<45"]
+test = ["pytest>=8,<10", "python-can>=4.6,<5", "cantools>=40,<45"]
+
+[project.scripts]
+can-diag = "pc_diagnostic.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
