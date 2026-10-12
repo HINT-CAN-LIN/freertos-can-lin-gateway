@@ -9,8 +9,8 @@
 #define CLUSTER_OFFLINE_MS 3000U
 #define CLUSTER_DEMO_CYCLE_MS 24000U
 /* Loopback test only. For external RX set BOTH switches to 0 and IOC to Normal. */
-#define CLUSTER_CAN_LOOPBACK 1
-#define CLUSTER_TEST_INPUT 1
+#define CLUSTER_CAN_LOOPBACK 0
+#define CLUSTER_TEST_INPUT 0
 
 typedef enum { CLUSTER_FRESH, CLUSTER_STALE, CLUSTER_OFFLINE } ClusterFreshness;
 typedef struct { uint32_t received_ms; bool valid; } ClusterSampleTime;

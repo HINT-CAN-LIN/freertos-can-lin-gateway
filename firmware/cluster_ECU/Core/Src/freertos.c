@@ -62,10 +62,12 @@ const osThreadAttr_t defaultTask_attributes = {
   .stack_size = 2048 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
-
+/* Definitions for canTask */
 osThreadId_t canTaskHandle;
 const osThreadAttr_t canTask_attributes = {
-  .name="canTask", .stack_size=512 * 4, .priority=osPriorityAboveNormal
+  .name = "canTask",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityAboveNormal,
 };
 
 /* Private function prototypes -----------------------------------------------*/
@@ -77,6 +79,19 @@ void StartDefaultTask(void *argument);
 void StartCanTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
+
+/* Hook prototypes */
+void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName);
+
+/* USER CODE BEGIN 4 */
+void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
+{
+  (void)pcTaskName;
+  stack_overflow_task = xTask;
+  taskDISABLE_INTERRUPTS();
+  for (;;) { }
+}
+/* USER CODE END 4 */
 
 /**
   * @brief  FreeRTOS initialization
@@ -154,7 +169,13 @@ void StartDefaultTask(void *argument)
   /* USER CODE END StartDefaultTask */
 }
 
-/* Private application code --------------------------------------------------*/
+/* USER CODE BEGIN Header_StartCanTask */
+/**
+* @brief Function implementing the canTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartCanTask */
 void StartCanTask(void *argument)
 {
   /* USER CODE BEGIN StartCanTask */
@@ -179,17 +200,9 @@ void StartCanTask(void *argument)
   /* USER CODE END StartCanTask */
 }
 
+/* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
 
-void vApplicationStackOverflowHook(TaskHandle_t task, char *name)
-{
-  (void)name;
-  stack_overflow_task = task;
-  taskDISABLE_INTERRUPTS();
-  for (;;) { }
-}
 
 /* USER CODE END Application */
-
-
 
