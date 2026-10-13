@@ -3,6 +3,7 @@ from PySide6.QtCore import QTimer, Slot
 from PySide6.QtWidgets import (QComboBox, QFileDialog, QGridLayout, QLabel, QLineEdit,
                               QPlainTextEdit, QPushButton, QVBoxLayout, QWidget)
 from .logging_session import LoggingState
+from .connection import MOCK_SOURCE_LABEL
 
 LOG_STATUS_REFRESH_MS = 100
 LOG_ERROR_LINES = 10
@@ -18,7 +19,10 @@ class LoggingView(QWidget):
         self._selecting_path = False
         self._selection_error = ""
         layout = QVBoxLayout(self)
-        banner = QLabel("Mock / DEMO / TEST ONLY — Raw CAN 파일 기록. 실제 ECU/HW/KPI 검증 아님.")
+        self._source_text = MOCK_SOURCE_LABEL
+        self._recorded_source = None
+        self.source_label = QLabel()
+        banner = self.source_label
         banner.setWordWrap(True)
         layout.addWidget(banner)
         policy = QLabel("CAN Receiver Start/Stop와 Logging Start/Stop는 별개입니다. "
@@ -71,6 +75,11 @@ class LoggingView(QWidget):
         self.timer.start()
         self.refresh()
 
+    def set_input_source(self, text):
+        # 완료된 파일은 기록 시작 시의 출처를 유지한다. Source 변경으로 과거 파일을 재분류하지 않는다.
+        self._source_text = text
+        self.refresh()
+
     def set_output_path(self, path):
         # 사용자가 선택한 새 경로만 반영하며 기록 중 경로 변경을 거부한다.
         if self._closed or self.session.snapshot().active:
@@ -110,6 +119,7 @@ class LoggingView(QWidget):
             self.refresh()
             return
         self._selection_error = ""
+        self._recorded_source = self._source_text
         self.session.start(self.path_edit.text(), format=self.format_combo.currentData())
         self.refresh()
 
@@ -126,6 +136,8 @@ class LoggingView(QWidget):
         if self._closed:
             return
         snap = self.session.snapshot()
+        self.source_label.setText(f"Current input: {self._source_text} | File source: {self._recorded_source or 'not started'} "
+                                  "| Hardware/KPI NOT VERIFIED")
         opening = " | opening file; written count is not yet confirmed" if snap.active and not snap.opened and snap.state is LoggingState.RECORDING else ""
         self.state_label.setText("Logging: " + snap.state.value + opening)
         self.file_label.setText(f"Session file: {snap.path or 'not selected'} | Format: {snap.format.upper()} | "

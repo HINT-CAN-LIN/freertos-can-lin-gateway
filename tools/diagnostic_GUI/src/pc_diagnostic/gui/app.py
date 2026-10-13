@@ -44,7 +44,7 @@ def report_dependency_error():
 
 def main(argv=None):
     # 도움말은 Qt 설치 없이도 확인할 수 있도록 import 전에 처리한다.
-    parser = argparse.ArgumentParser(description="PC Diagnostic Tool - Mock / DEMO ONLY")
+    parser = argparse.ArgumentParser(description="PC Diagnostic Tool - Mock / DEMO ONLY or explicit Live CAN RX")
     parser.parse_args(argv)
     try:
         from PySide6.QtWidgets import QApplication
@@ -52,7 +52,7 @@ def main(argv=None):
     except ImportError:
         report_dependency_error()
         return 1
-    # 통신 backend 선택은 제공하지 않으며 실제 CAN 송신은 연결하지 않는다.
+    # 기본 Mock이며 Live는 사용자가 창에서 명시적으로 선택한다. GUI TX는 제공하지 않는다.
     app = QApplication([sys.argv[0]])
     window = MainWindow()
     window.show()

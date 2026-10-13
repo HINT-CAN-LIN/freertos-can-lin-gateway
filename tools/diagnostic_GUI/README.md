@@ -5,7 +5,7 @@ Gateway CAN ID, message별 DLC, Signal bit layout/scale/enum은 정의하지 않
 Phase 1 Raw CAN 기능 위에 명시적으로 지정한 DBC의 Decode/Encode와 PC 관찰용 State Cache를 제공합니다.
 Phase 3B는 Mock Raw GUI, Phase 3C는 명시적 DBC Decode/Cache, Phase 3D-1은 사용자 매핑 Vehicle Status를 제공합니다.
 Phase 3D-2는 명시적 ECU/Fault 관측과 처리된 Raw RX 통계를 제공합니다. Health/Fault 판정은 하지 않습니다.
-Phase 3E는 기존 Raw Logger 계약의 CSV/JSONL 파일 기록 GUI를 제공합니다. 아래 이전 Phase 절은 당시 기록입니다.
+Phase 3E는 Raw Logging GUI, Phase 3F는 명시적 Mock/Live CAN 수신 Source 선택을 제공합니다. 아래 이전 Phase 절은 당시 기록입니다.
 LIN, GUI의 송신, ECU Health/Fault 정책, Fault Injection, KPI, 주기 송신, CAN FD는 미구현입니다.
 CAN FD 수신 시 명시적 오류로 중단하며 Classic CAN으로 변환하거나 조용히 버리지 않습니다.
 
@@ -718,3 +718,108 @@ Logging 및 기존 Raw/Decode/Vehicle/ECU Windows Native Smoke 통과.
 확인된 종료 오류와 후속 질문은 VERIFICATION의 Jira 등록용 초안에 기록했습니다.
 이번 작업에서 Git add/Commit/Push/PR/Merge 미실행.
 향후 Commit 후보: `[feat][YYYYMMDD][권도형] add CAN logging GUI`.
+
+## Phase 3F — Mock / Live CAN Connection GUI
+
+하나의 GUI에서 입력 Source만 선택합니다. 기본은 기존 **Mock / DEMO / TEST ONLY**이며,
+Live는 기존 CLI의 `PythonCanInterface`를 재사용합니다. Live GUI에는 CAN application TX 기능이 없습니다.
+아래 이전 Phase의 “GUI backend 미구현” 설명은 당시 기록입니다.
+
+### 실행과 연결 설정
+
+Repository root에서 기존 `python -m pc_diagnostic.gui` 또는 `can-diag-gui.exe` 실행 방법을 사용합니다.
+필요한 선택적 의존성은 PC Tool 디렉터리의 현재 가상환경에 **사용자 승인 후** 설치하세요.
+Phase 3F 작업에서는 패키지·USB driver·CANable firmware를 설치하거나 변경하지 않았습니다.
+
+- Mode=Mock: 이전 DEMO 생성/Start/Stop/Clear 기능을 유지합니다. 실제 ECU 응답이 아닙니다.
+- Mode=Live: Backend, Channel, Bitrate를 명시적으로 입력한 후 Start합니다.
+- Backend=`slcan`: 실제 장치의 serial port 문자열을 입력합니다. 예: 사용자가 확인한 COM port.
+  `COM7`을 기본 장치로 가정하지 않습니다. 필요하면 `port@baudrate`로 serial baudrate를 지정할 수 있습니다.
+- Backend=`gs_usb`: 사용자가 확인한 0 이상 device index를 입력합니다. 문자열 channel과 구분합니다.
+  이 GUI MVP는 index 선택을 제공하며 CLI의 문자열 channel 지원은 변경하지 않습니다.
+- Bitrate 초기 표시값 `500000`은 분석한 Cluster commit `4633779`의 Classic CAN 설정에 따른
+  **통합 시험 기준**입니다. 실제 장치 탐색이나 팀 Interface 승인 결과가 아닙니다.
+- 설정 선택만으로 Connected가 되지 않습니다. 실제 Worker open 완료 뒤 Connected를 표시하며,
+  무수신은 No Data입니다. Connected는 ECU Online/Healthy 또는 배선 검증 결과가 아닙니다.
+
+SLCAN은 serial firmware와 Windows port/driver 확인 및 `pyserial`이 필요합니다.
+candleLight/gs_usb 계열은 호환 firmware, `gs-usb`, `pyusb`, OS USB backend/driver 준비가 필요합니다.
+어느 backend가 현재 실제 CANable에서 동작하는지는 **미확정**입니다.
+기존 `can` extra만으로 backend별 optional dependency가 모두 설치되는 것은 아닙니다.
+
+승인 후 선택 설치 예시 (이번 작업에서 실행하지 않음):
+
+```powershell
+# tools/diagnostic_GUI 디렉터리의 활성 가상환경에서 장치에 맞는 한 가지 경로 선택
+python -m pip install -e ".[gui,dbc,slcan]"
+python -m pip install -e ".[gui,dbc,gs-usb]"
+```
+
+근거: [python-can 4.6.1 SLCAN](https://python-can.readthedocs.io/en/v4.6.1/interfaces/slcan.html),
+[gs_usb](https://python-can.readthedocs.io/en/v4.6.1/interfaces/gs_usb.html).
+Missing dependency는 설치 명령과 함께 GUI 오류 영역에 표시합니다. 자동 설치/Mock fallback은 없습니다.
+
+### 수신 전용과 공통 파이프라인
+
+`Mock/Live → RawCanFrame → Logging Queue + GUI FrameBuffer → DecodeSession → Cache/Vehicle/ECU/Fault`
+
+Live Worker는 `recv(timeout)`만 사용하며 `inject`, DEMO generator, `send`를 호출하지 않습니다.
+Raw ID/DLC/DATA/STD·EXT/Channel/Timestamp/RX·TX는 기존 Adapter가 반환한 그대로 보존합니다.
+기존 CLI Sender는 변경하지 않았습니다. 애플리케이션 TX 미호출은 **hardware listen-only**가 아닙니다.
+현재 Adapter는 listen-only 설정을 요청하지 않으며, controller ACK/error signaling 등 물리 무송신을 보장하지 않습니다.
+
+프레임별 Qt Signal을 만들지 않고 기존 유한 표시 Buffer와 제한된 batch/timer 갱신을 유지합니다.
+Logger는 표시 drop 이전의 동일 Raw 객체를 독립 Logging Queue에 받습니다.
+CSV/JSONL schema, exclusive-create, no overwrite/append, write/flush/close 및 Drop 계수 계약은 동일합니다.
+로그 파일에 새 Source 필드를 추가하지 않습니다. 파일 출처는 GUI의 기록 시작 Source 표시 및 별도 시험 Evidence로 관리하세요.
+CSV/JSONL의 byte 호환성은 Fake Live 자동 시험으로 확인했고 실제 버스의 무손실 기록 보장은 아닙니다.
+
+### Source 전환·Cache·출처 정책
+
+Mode/Backend/Channel/Bitrate는 연결 중, 수신 중, Stop/Transport 해제 중, 잔여 Buffer 처리 중,
+Logging writer drain 중에는 잠깁니다. 실제 Receiver/Writer 종료와 잔여 표시 처리 완료 후에만 변경할 수 있습니다.
+
+- **같은 Source의 Stop/Start/Clear:** 기존 계약 유지. Stop 후 마지막 성공 Cache 값과 Age를 유지하며,
+  Clear는 Raw 표시 및 ECU/통계 관측 구간을 비웁니다. Logging 중 Clear는 파일 기록을 초기화하지 않습니다.
+- **Source 설정 변경:** 새 관측 Session. Raw/Buffer/계수, Cache, latest attempt, Vehicle/ECU/Fault 매핑과
+  통계를 초기화합니다. 사용자가 명시적으로 로드한 DBC 정의는 유지하지만 매핑은 다시 확인해야 합니다.
+- **DBC Reload:** 기존 새 DBC Session 정책 유지. 수신 및 잔여 처리 중 Reload는 차단됩니다.
+- Monitor/Decode/Cache, Vehicle, ECU/Statistics/Fault, Logging은 현재 Source를 표시합니다.
+  Live에는 DEMO channel 기본 후보를 넣지 않고 실제 Raw에서 관찰한 channel만 추가합니다.
+- 완료된 파일의 **File source**는 기록 시작 Source를 유지하므로 이후 Mode 변경으로 과거 파일을 재분류하지 않습니다.
+- 주입된 시험 backend는 모든 주요 화면에 **Injected backend / TEST ONLY**로 표시합니다.
+  정상 프로그램 실행에는 Fake backend 자동 선택 기능이 없습니다.
+- Age는 backend Timestamp와 동일한 시간 기준에서만 의미가 있습니다. timestamp 미제공은 unknown이며,
+  실제 backend clock/USB timestamp 정확도는 이번 Fake 시험으로 검증하지 않습니다.
+  Age만으로 Fault/Offline을 판정하지 않습니다.
+
+### 오류와 종료
+
+설정 오류, 필수 모듈 미설치, open/receive/shutdown 실패는 원인과 함께 Error로 표시합니다.
+Live 실패 후 자동 Mock 전환·자동 재연결은 없습니다. 정상 해제 후 사용자가 Start로 재시도합니다.
+Stop은 취소 요청이며 Worker가 transport 생성부터 shutdown까지 소유합니다.
+
+Backend open/recv/shutdown 자체가 막히면 강제 QThread terminate하지 않습니다.
+Close는 기존 유한 대기 후 창을 유지하고 오류를 표시합니다. open 중 Stop 요청은 open 완료 직후 확인하여
+recv 전에 해제합니다. 실제 OS/driver의 blocking 호출을 강제 취소하거나 종료 시간을 보장하지 않습니다.
+Live shutdown 실패는 재연결/Source 변경을 차단합니다. Close 중 해제 오류는 첫 Close에서 창을 유지해 안내하고,
+다음 Close로 종료할 수 있지만 해제 성공으로 기록하지 않습니다.
+
+### Fake Live 검증과 남은 범위
+
+`tests/fake_live.py`는 기존 `tests/fixtures/test_only.dbc`와 DEMO raw payload를 재사용합니다.
+Production DBC, CAN ID, Signal/Layout, Timeout/Fault policy는 추가·수정하지 않았습니다.
+자동화는 Fake Live와 offscreen Qt를 사용하며 Native Smoke는 실제 Windows 창에서 Fake Live로 실행합니다.
+
+```powershell
+python -m pytest -q -p no:cacheprovider --basetemp $newWritableTestTemp
+python tests/gui_live_native_smoke.py --output-dir $newExistingEvidenceDirectory
+```
+
+시험에는 매번 새 쓰기 가능 Temp/Evidence 경로를 사용하고 기존 Capture를 덮어쓰지 마세요.
+실제 결과는 VERIFICATION의 Phase 3F 절을 참조하세요.
+
+미구현/미검증: 실제 CANable firmware/driver 연결, 실제 Cluster 외부 CAN/LCD 비교, hardware listen-only,
+자동 재연결, 사용자 매핑 영구 저장, CAN FD, GUI TX/운전자 입력, Fault 판정·전파 검증.
+**Hardware 및 이번 사람 수동 GUI 확인 NOT VERIFIED**, 팀 고정 버전 미확정, 담당자 코드 리뷰 NOT VERIFIED.
+Commit/Push/PR/Merge는 수행하지 않습니다.

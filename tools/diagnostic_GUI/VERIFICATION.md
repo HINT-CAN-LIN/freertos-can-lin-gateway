@@ -1,3 +1,62 @@
+# Phase 3F 검증 — 2026-10-13
+
+기준 HEAD `8390c6f9c21a5e5343db7892d4c978e07fe448fb`, Branch `PC-Diagnostic-Test`.
+이번 절은 실제 재실행 결과이며 아래 이전 Phase 기록과 구분한다.
+실제 CAN 장치를 열거나 송신하지 않았고 Python 패키지/USB driver/firmware 설치도 하지 않았다.
+
+| 검증 | 이번 결과 |
+|---|---|
+| 전체 pytest | **367 passed in 22.13s** — 기존321 + 신규46, skip 없음 |
+| 기존 CLI 별도 회귀 | **140 passed in 0.58s** |
+| CLI/GUI 모듈 도움말 | 기존 명령과 새로운 Mock/Live GUI 설명 정상 |
+| 설치 진입점 | can-diag.exe / can-diag-gui.exe --help 정상 |
+| pip check | No broken requirements found. |
+| Windows Fake Live Native Smoke | windows platform, 실제 창 노출, Decode/Cache/Vehicle/ECU/Fault, STD/EXT 통계, active close 통과 |
+| Fake Live 파일 | JSONL4 / CSV6 프레임; 동일 Raw의 기존 CLI Logger bytes 일치 |
+| Fake Live 해제·TX | transport4개 정확히 해제, application send 호출0 |
+| 기존 Windows Raw/Decode/Vehicle/ECU/Logging Native Smoke | 5종 모두 PASS, Mock TEST ONLY |
+| 기존 Mock Logging Native | JSONL5 / CSV4 프레임, CLI bytes 일치, 기존 파일 보호 및 active close 통과 |
+| 사람 수동 GUI / 실제 CANable·Cluster | **NOT VERIFIED / NOT VERIFIED** |
+| 팀 고정 버전 / 담당자 코드 리뷰 | **미확정 / NOT VERIFIED** |
+
+자동 테스트는 cacheprovider 비활성화와 Worktree의 제외 대상 `.test-tmp/phase3f-*` 신규 경로를 사용했다.
+Native screenshot은 Qt widget 렌더링 결과이며 실제 windows QApplication과 window exposure를 확인했다.
+Fake Native Screenshot에서 Live/Injected backend/TEST ONLY 출처, -10.0/test_unit/Valid와 timestamp/age 표시를 확인했다.
+
+## 검증한 계약과 범위
+
+- 신규46개: Qt 독립 연결 설정/의존성19개 + Fake Live GUI27개.
+- 기존321개 Source/Test 회귀를 유지하며 기존 테스트 파일과 TEST ONLY DBC는 수정하지 않았다.
+- Live에서 Mock generator 호출을 실패로 주입하고 Fake send는 호출 즉시 실패하도록 하여 미생성·미송신을 검증했다.
+- 기존 Raw 객체의 identity와 필드, typed Channel 0/'0', STD/EXT 및 timestamp 보존 확인.
+- Decode 실패 시 Raw 보존, 마지막 성공 Cache 유지, Vehicle Decode Error 표시 확인.
+- 같은 Source Stop/Start/Clear의 기존 정책 보존. Source 변경은 Cache·매핑·통계를 초기화하고 명시적 DBC 정의만 유지.
+- Source/DBC 잠금, open 도중 Stop/Close timeout, 반복 실행마다 새 수신과 새 transport 해제 확인.
+- Receiver 종료 후 writer drain 중에도 Source 잠금을 유지하고 실제 writer 완료 후 UI가 자동 해제함을 검증.
+- 장치 분리·없는 port·ImportError는 Fake 모의. 오류 표시·Logging drain·재시도·Mock fallback 없음 확인.
+- shutdown 실패는 재연결을 차단하며 Close 내부 오류도 첫 Close에서 창을 유지하고 다음 Close로 종료.
+- Live CSV/JSONL은 기존 RawCanLogger 계약을 재사용하며 생성/쓰기/flush/close는 Writer 소유.
+  Queue512, drop-newest, written/unconfirmed, GUI Buffer drop 분리 정책은 변경하지 않음.
+- 테스트 중 발견한 Mock DBC 안내 호환성 실패는 기존 테스트를 변경하지 않고 원래 안내를 보존하여 수정.
+  Fake provenance 안내도 보완. 최종 전체 테스트에서 모두 통과.
+
+## 환경과 미완료 항목
+
+Python3.14.6 / PySide6 6.10.3 / python-can4.6.1 / cantools44.2.1 / pytest9.1.1 기존 환경 사용.
+이는 팀 승인 고정 버전이 아니다. 실제 pyserial(serial), gs_usb, pyusb(usb)는 미설치 상태이며 설치하지 않았다.
+선택적 slcan/gs-usb extra 및 backend 설치 안내를 추가했으나 새 extras 실제 설치는 NOT VERIFIED.
+CANable firmware/backend/COM port/USB driver는 미확정. 500000은 분석한 Cluster 소스의 시험 기준이다.
+
+application CAN TX 미호출과 hardware listen-only를 구분한다. 실제 ACK/error signaling,
+CANable 분리/driver blocking/clock 정확도/처리량/무손실 기록, 실제 디스크·ACL 장애는 NOT VERIFIED.
+Fault/Healthy/Offline 정책, 신규 Signal/Layout, Production 기본 매핑은 구현하지 않았다.
+CAN/LIN Interface 변경은 상대 담당자 리뷰 필요이며 이번 작업에 포함하지 않았다.
+
+담당자 코드 리뷰, 사용자 수동 확인, 실기 CANable/ECU 시험, Integration Merge, Jira Done은 완료로 주장하지 않는다.
+Git add/Commit/Push/PR/Merge/Reset/Rebase는 수행하지 않았다.
+
+---
+
 # HINT-48 Phase 3E — 현재 파일 재확인 (2026-10-13, Asia/Seoul)
 
 동일 재개 요청에 따라 현재 Git diff와 파일을 다시 조사하고 전체 검증을 새로 실행했다.

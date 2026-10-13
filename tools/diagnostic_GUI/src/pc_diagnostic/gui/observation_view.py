@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QGridLay
                               QGroupBox, QHeaderView, QLabel, QPushButton, QScrollArea,
                               QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 from ..dbc_loader import DbcLookupError
-from .demo import make_demo_frame
+from .connection import MOCK_CHANNEL, MOCK_SOURCE_LABEL
 from .ecu_observation import ECU_NAMES, LIN_ECUS, EcuObservationModel, MessageMapping
 from .message_statistics import observation_age
 from .vehicle_view import MAX_CHANNEL_CHOICES, channel_text
@@ -59,12 +59,14 @@ class EcuObservationView(QWidget):
         self.clock = clock
         self.model = EcuObservationModel()
         self._closed = False
+        self._source_text = MOCK_SOURCE_LABEL
+        self._source_is_mock = True
         self._received = self._buffer_dropped = self._pending = self._processed = 0
         layout = QVBoxLayout(self)
         self.source_label = QLabel()
         self.source_label.setWordWrap(True)
         layout.addWidget(self.source_label)
-        policy = QLabel("Mock / DEMO / TEST ONLY — Observed는 CAN RX 관측 사실입니다. "
+        policy = QLabel("Observed는 CAN RX 관측 사실입니다. "
                         "Healthy/Online 또는 개별 LIN ECU 정상 판정이 아닙니다. Age에 판정 기준 없음.")
         policy.setWordWrap(True)
         layout.addWidget(policy)
@@ -138,6 +140,11 @@ class EcuObservationView(QWidget):
         self.remove_button.clicked.connect(self.remove_mapping)
         self.refresh()
 
+    def set_input_source(self, text, *, is_mock):
+        # Fault/ECU/통계는 같은 Source 세션을 사용하며 실제 노드 정상 판정은 하지 않는다.
+        self._source_text, self._source_is_mock = text, is_mock
+        self.refresh()
+
     def definitions(self):
         # 공통 DBC Loader metadata만 조회하며 별도의 parse를 하지 않는다.
         return self.session.loader.get_messages() if self.session.loader.is_loaded else ()
@@ -151,8 +158,8 @@ class EcuObservationView(QWidget):
             self.message_combo.addItem(f"{message.name} [0x{message.frame_id:X} {kind}]", message.name)
         self.channel_combo.clear()
         self.channel_combo.addItem("Select channel")
-        channel = make_demo_frame(0).channel
-        self.channel_combo.addItem(channel_text(channel), channel)
+        if self._source_is_mock:
+            self.channel_combo.addItem(channel_text(MOCK_CHANNEL), MOCK_CHANNEL)
         self.confirm_box.setChecked(False)
         self.update_signals()
 
@@ -269,7 +276,7 @@ class EcuObservationView(QWidget):
         self.apply_button.setEnabled(enabled)
         self.remove_button.setEnabled(enabled)
         dbc = "No DBC" if not loaded else self.session.loader.status.path.name
-        self.source_label.setText(f"Source: Mock / DEMO / TEST ONLY | DBC: {dbc} | Production approval NOT VERIFIED")
+        self.source_label.setText(f"Source: {self._source_text} | DBC: {dbc} | Production approval NOT VERIFIED")
         stats = self.model.statistics
         self.coverage_label.setText(
             f"통계 구간: Clear/DBC Reload 이후 처리된 RX만 / Processed RX: {stats.processed_rx} | Ignored TX: {stats.ignored_tx} | "
@@ -319,7 +326,7 @@ class EcuObservationView(QWidget):
         self.fault_table.setRowCount(0)
         mapping = self.model.fault_mapping
         self.fault_label.setText(
-            f"{source_text(mapping)} | {result.state} | Processed RX: {result.count} | "
+            f"Input: {self._source_text}\n{source_text(mapping)} | {result.state} | Processed RX: {result.count} | "
             f"Last Frame RX: {time_text(result.timestamp)} | Age(s): {time_text(result.age, age=True)}\n{result.detail}")
         if good is None or message is None:
             return

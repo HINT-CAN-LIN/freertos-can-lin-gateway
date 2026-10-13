@@ -3,7 +3,7 @@ from PySide6.QtCore import Slot
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QGridLayout,
                               QHeaderView, QLabel, QPushButton, QTableWidget,
                               QTableWidgetItem, QVBoxLayout, QWidget)
-from .demo import make_demo_frame
+from .connection import MOCK_CHANNEL, MOCK_SOURCE_LABEL
 from .vehicle_status import DISPLAY_ITEMS, SignalMapping, VehicleStatusModel
 
 # 표시 자원 제한이며 CAN Channel 수/통신 규격을 정의하지 않는다.
@@ -27,12 +27,14 @@ class VehicleStatusView(QWidget):
         self._closed = False
         self._session_id = None
         self._channel_count = 0
-        self._demo_channel = make_demo_frame(0).channel
+        self._demo_channel = MOCK_CHANNEL
+        self._source_text = MOCK_SOURCE_LABEL
+        self._source_is_mock = True
         layout = QVBoxLayout(self)
         self.source_label = QLabel()
         self.source_label.setWordWrap(True)
         layout.addWidget(self.source_label)
-        policy = QLabel("Mock / DEMO / TEST ONLY — 실제 차량 측정 아님. 자동 매핑 없음. "
+        policy = QLabel("자동 매핑 없음. Production 의미/물리값 검증은 별도입니다. "
                         "Valid는 마지막 Decode 성공 RX 값 존재만 의미합니다. Age로 Health/Fault를 판정하지 않습니다.")
         policy.setWordWrap(True)
         layout.addWidget(policy)
@@ -74,12 +76,19 @@ class VehicleStatusView(QWidget):
         self.remove_button.clicked.connect(self.remove_mapping)
         self.refresh()
 
+    def set_input_source(self, text, *, is_mock):
+        # Source 전환 시 MainWindow가 Cache/매핑을 초기화하고 이 화면의 출처도 함께 바꾼다.
+        self._source_text, self._source_is_mock = text, is_mock
+        self.refresh()
+
     def reset_selectors(self):
         # 새 DBC 세션에서는 과거 파일의 Signal/사용자 연결을 남기지 않는다.
         self.channel_combo.clear()
         self.channel_combo.addItem("Select channel")
-        self.channel_combo.addItem(channel_text(self._demo_channel), self._demo_channel)
-        self._channel_count = 1
+        self._channel_count = 0
+        if self._source_is_mock:
+            self.channel_combo.addItem(channel_text(self._demo_channel), self._demo_channel)
+            self._channel_count = 1
         self.message_combo.clear()
         self.message_combo.addItem("Select message", None)
         for message in self.model.definitions(self.session):
@@ -193,7 +202,7 @@ class VehicleStatusView(QWidget):
         status = self.session.loader.status
         name = "not selected" if status.path is None else status.path.name
         self.source_label.setText(f"Vehicle Status | DBC={name} | DBC session={self.session.session_id} | "
-                                 "Source=Mock / DEMO / TEST ONLY | user display mapping; Production approval not verified")
+                                 f"Source={self._source_text} | user display mapping; Production approval not verified")
         now = self.clock()
         for row, item in enumerate(DISPLAY_ITEMS):
             observation = self.model.observe(item, self.session, now=now)

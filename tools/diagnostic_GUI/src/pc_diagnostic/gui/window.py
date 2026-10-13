@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QFileDialog, QHBoxLayout, QHea
 from ..dbc_loader import DbcLoadError
 from ..interfaces import MockCanInterface
 from .buffer import FrameBuffer
+from .connection import LIVE_MODE, MOCK_MODE, MOCK_SOURCE_LABEL, open_live_interface
+from .connection_view import ConnectionView
 from .decode_session import DecodeSession
 from .receiver import CLOSE_WAIT_MS, ReceiveWorker
 from .vehicle_view import VehicleStatusView
@@ -59,10 +61,14 @@ def configure_table(table, headers):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, interface_factory=MockCanInterface, *, clock=time):
+    def __init__(self, interface_factory=MockCanInterface, *, clock=time, live_interface_factory=None):
         # Qt widget와 표시 타이머는 메인 스레드에서만 생성한다.
         super().__init__()
         self._interface_factory = interface_factory
+        self._live_interface_factory = live_interface_factory or open_live_interface
+        self._source_text = MOCK_SOURCE_LABEL
+        self._live_release_failed = False
+        self._receiver_error_notice = False
         self._clock = clock
         self.buffer = FrameBuffer()
         self.decode_session = DecodeSession()
@@ -81,9 +87,11 @@ class MainWindow(QMainWindow):
         central = QWidget(self)
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
-        banner = QLabel("Mock · DEMO / TEST ONLY — 실제 ECU 데이터가 아닙니다. Hardware NOT VERIFIED")
-        banner.setWordWrap(True)
-        layout.addWidget(banner)
+        self.banner = QLabel("Mock · DEMO / TEST ONLY — 실제 ECU 데이터가 아닙니다. Hardware NOT VERIFIED")
+        self.banner.setWordWrap(True)
+        layout.addWidget(self.banner)
+        self.connection_view = ConnectionView(self)
+        layout.addWidget(self.connection_view)
         dbc_controls = QHBoxLayout()
         self.dbc_button = QPushButton("Select DBC...")
         self.dbc_label = QLabel("DBC: not selected | Decode disabled")
@@ -154,16 +162,71 @@ class MainWindow(QMainWindow):
         self.age_timer.timeout.connect(self.refresh_cache)
         self.age_timer.timeout.connect(self.vehicle_view.refresh)
         self.age_timer.timeout.connect(self.ecu_view.refresh)
+        # Receiver 종료 뒤 비동기 writer drain 완료도 Source 잠금에 반영한다.
+        self.age_timer.timeout.connect(self.update_controls)
         self.age_timer.start()
         self.start_button.clicked.connect(self.start_monitor)
         self.stop_button.clicked.connect(self.stop_monitor)
         self.clear_button.clicked.connect(self.clear_monitor)
         self.dbc_button.clicked.connect(self.select_dbc)
         self.table.itemSelectionChanged.connect(self.show_selection)
+        self.connection_view.changed.connect(self.input_source_changed)
 
     def receiver_running(self):
         # Stop 요청/오류/종료 중에는 신규 Logging 시작을 허용하지 않는다.
-        return self.worker is not None and self.stop_button.isEnabled() and not self._failed and not self._closing
+        active = self.worker is not None and self.stop_button.isEnabled() and not self._failed and not self._closing
+        # Mock admission 계약은 유지하되 Live 기록은 실제 open 완료 후만 허용한다.
+        return active and (self.connection_view.mode_combo.currentText() == MOCK_MODE or self.worker.ready.is_set())
+
+    def selected_source_text(self):
+        # 주입된 시험 backend는 모든 주요 화면에서 TEST ONLY로 식별한다.
+        text = self.connection_view.source_text()
+        if self.connection_view.mode_combo.currentText() == LIVE_MODE and self._live_interface_factory is not open_live_interface:
+            text += " | Injected backend / TEST ONLY"
+        return text
+
+    def dbc_source_text(self):
+        # 기존 Mock 안내 문구를 유지하면서 Live에서는 실제 선택 출처를 표시한다.
+        return "Mock / DEMO ONLY · TEST ONLY" if self.connection_view.mode_combo.currentText() == MOCK_MODE else self._source_text
+
+    def can_change_source(self):
+        # 잔여 표시 프레임과 파일 writer 해제까지 기다려 Source 혼합을 방지한다.
+        return (not self._closing and not self._selecting_dbc and self.worker is None
+                and self.buffer.pending_count == 0 and not self.logging_session.snapshot().active
+                and not self._live_release_failed)
+
+    @Slot()
+    def input_source_changed(self):
+        # 설정 변경은 새 Source 세션이다. 같은 Source의 Stop/Start/Clear 계약은 그대로 유지한다.
+        if not self.can_change_source():
+            return
+        self._source_text = self.selected_source_text()
+        self.decode_session.reset_observations()
+        self.buffer.clear()
+        self.clear_monitor()
+        is_mock = self.connection_view.mode_combo.currentText() == MOCK_MODE
+        self.vehicle_view.set_input_source(self._source_text, is_mock=is_mock)
+        self.ecu_view.set_input_source(self._source_text, is_mock=is_mock)
+        # refresh 전에 변경된 Source의 channel 선택 정책으로 selectors를 재구성한다.
+        self.vehicle_view.reset_selectors()
+        self.ecu_view.reset_selectors()
+        self.logging_view.set_input_source(self._source_text)
+        if self.decode_session.loader.is_loaded:
+            status = self.decode_session.loader.status
+            self.dbc_label.setText(f"DBC: {status.path.name} | Loaded ({status.message_count} messages) | Decode enabled · {self.dbc_source_text()}")
+        self.banner.setText(f"Input: {self._source_text} | Hardware NOT VERIFIED | 설정 변경 시 과거 관측/매핑 초기화")
+        self.connection_view.set_state("Disconnected")
+        self.status_label.setText("Disconnected")
+        self.update_controls()
+
+    @Slot()
+    def receiver_opened(self):
+        # queued signal 도착 전에 Stop/실패했으면 Connected라고 표시하지 않는다.
+        if self.receiver_running() and self.worker.ready.is_set():
+            state = "Connected (application RX only)" if self.connection_view.mode_combo.currentText() == LIVE_MODE else "Mock running"
+            self.connection_view.set_state(state)
+            self.status_label.setText("Running")
+            self.logging_view.refresh()
 
     def can_change_dbc(self):
         # 정지한 worker의 잔여 프레임까지 기존 DBC로 처리한 뒤 교체한다.
@@ -172,7 +235,9 @@ class MainWindow(QMainWindow):
     def update_controls(self):
         # 파일 선택 nested event loop 및 종료 중에는 신규 동작을 차단한다.
         self.dbc_button.setEnabled(self.can_change_dbc() and not self._selecting_dbc)
-        self.start_button.setEnabled(not self._closing and not self._selecting_dbc and self.worker is None)
+        self.start_button.setEnabled(not self._closing and not self._selecting_dbc and self.worker is None
+                                     and not self._live_release_failed)
+        self.connection_view.set_locked(not self.can_change_source())
         self.dbc_button.setToolTip("Stop 후 Worker와 잔여 버퍼 정리가 완료되어야 DBC를 변경할 수 있습니다.")
 
     @Slot()
@@ -185,7 +250,7 @@ class MainWindow(QMainWindow):
         self._selecting_dbc = True
         self.update_controls()
         try:
-            path, _ = QFileDialog.getOpenFileName(self, "Select DBC (Mock / DEMO ONLY)", "", "DBC files (*.dbc);;All files (*)")
+            path, _ = QFileDialog.getOpenFileName(self, "Select DBC — explicit input source", "", "DBC files (*.dbc);;All files (*)")
             if path and not self._closing:
                 self.load_dbc(path)
         finally:
@@ -206,7 +271,7 @@ class MainWindow(QMainWindow):
             success = False
         else:
             status = self.decode_session.loader.status
-            self.dbc_label.setText(f"DBC: {status.path.name} | Loaded ({status.message_count} messages) | Decode enabled · Mock / DEMO ONLY")
+            self.dbc_label.setText(f"DBC: {status.path.name} | Loaded ({status.message_count} messages) | Decode enabled · {self.dbc_source_text()}")
             success = True
         self.show_selection()
         self.vehicle_view.refresh()
@@ -216,17 +281,25 @@ class MainWindow(QMainWindow):
     @Slot()
     def start_monitor(self):
         # 종료 signal 처리 전까지 worker 참조를 유지해 중복 실행을 차단한다.
-        if self.worker is not None or self._closing or self._selecting_dbc:
+        if self.worker is not None or self._closing or self._selecting_dbc or self._live_release_failed:
             return
+        try:
+            settings = self.connection_view.settings()
+        except ValueError as exc:
+            self.show_error(str(exc))
+            return
+        factory = self._interface_factory if settings.mode == MOCK_MODE else lambda: self._live_interface_factory(settings)
         self._failed = False
         self.error_area.clear()
-        self.worker = ReceiveWorker(self.buffer, self._interface_factory, self,
-                                    frame_sink=self.logging_session.accept)
+        self.worker = ReceiveWorker(self.buffer, factory, self,
+                                    frame_sink=self.logging_session.accept, mode=settings.mode)
+        self.worker.opened.connect(self.receiver_opened)
         self.worker.failed.connect(self.show_error)
         self.worker.finished.connect(self.worker_finished)
         self.stop_button.setEnabled(True)
         self.update_controls()
-        self.status_label.setText("Running")
+        self.status_label.setText("Connecting" if settings.mode == LIVE_MODE else "Running")
+        self.connection_view.set_state("Connecting")
         self.timer.start()
         self.worker.start()
         self.logging_view.refresh()
@@ -239,6 +312,8 @@ class MainWindow(QMainWindow):
         if self.worker is not None:
             self.stop_button.setEnabled(False)
             self.worker.request_stop()
+            if not self._failed:
+                self.connection_view.set_state("Stopping")
 
     @Slot(str)
     def show_error(self, message):
@@ -247,6 +322,8 @@ class MainWindow(QMainWindow):
         self.logging_session.stop()
         self.logging_view.refresh()
         self.status_label.setText("Error")
+        self.connection_view.set_state("Error")
+        self.connection_view.show_error(message)
         self.error_area.appendPlainText(message)
 
     @Slot()
@@ -260,12 +337,17 @@ class MainWindow(QMainWindow):
         self.stop_button.setEnabled(False)
         if not self._failed:
             self.status_label.setText("Stopped")
+            self.connection_view.set_state("Stopped")
         completed = self.worker
         if completed is not None and not completed.wait(CLOSE_WAIT_MS):
             # finished 이후에도 native thread 정리를 확인하지 못하면 참조를 유지한다.
             self.show_error("Worker cleanup timed out; close again after it finishes.")
             self.update_controls()
             return
+        if completed is not None and completed.release_failed and self.connection_view.mode_combo.currentText() == LIVE_MODE:
+            # Live shutdown 실패는 재연결/Source 변경을 막고 미해제 상태를 명확히 표시한다.
+            self._live_release_failed = True
+            self.show_error("Live transport shutdown not confirmed; close the application and check the device.")
         self.worker = None
         if completed is not None:
             completed.deleteLater()
@@ -325,7 +407,7 @@ class MainWindow(QMainWindow):
             name = observation.message_name or ("Unknown / Undefined" if result and result.decode_status.value == "unknown" else "Not decoded / unresolved")
             stamp, channel, can_id, dlc, payload = frame_cells(frame)
             self.selection_label.setText(
-                f"Selected frame: Timestamp={stamp} | Channel={channel} | CAN ID={can_id} | DLC={dlc} | DATA={payload}\n"
+                f"Input: {self._source_text}\nSelected frame: Timestamp={stamp} | Channel={channel} | CAN ID={can_id} | DLC={dlc} | DATA={payload}\n"
                 f"DBC session={observation.session_id} | Message={name} | {observation_status(observation)}"
             )
             if result is not None:
@@ -365,7 +447,7 @@ class MainWindow(QMainWindow):
         cause = None if latest is None else (latest.processing_error or latest.decoded.error)
         error = "" if cause is None else f" | Latest error: {cause}"
         channel = "unknown" if cached.raw_frame.channel is None else str(cached.raw_frame.channel)
-        self.cache_label.setText(f"Last successful RX Cache: Channel={channel} | Message={cached.message_name} | Latest processed attempt={status}{error}")
+        self.cache_label.setText(f"Input: {self._source_text}\nLast successful RX Cache: Channel={channel} | Message={cached.message_name} | Latest processed attempt={status}{error}")
         definition = self.decode_session.loader.get_message_by_name(cached.message_name)
         units = {signal.name: signal.unit for signal in definition.signals}
         age = self.decode_session.cache_age(observation, self._clock())
@@ -404,6 +486,16 @@ class MainWindow(QMainWindow):
                 self.update_controls()
                 event.ignore()
                 return
+        if (self.worker is not None and self.worker.release_failed
+                and self.connection_view.mode_combo.currentText() == LIVE_MODE and not self._receiver_error_notice):
+            # Close 대기 중 발생한 shutdown 오류도 첫 Close에서 사용자에게 보인다.
+            self._receiver_error_notice = True
+            self._live_release_failed = True
+            self._closing = False
+            self.show_error("Live transport shutdown not confirmed; inspect the device and close again to exit.")
+            self.update_controls()
+            event.ignore()
+            return
         if not self.logging_session.wait(LOG_CLOSE_SECONDS):
             # 파일 I/O를 강제 종료하지 않고 창과 writer 참조를 유지한다.
             self._closing = False

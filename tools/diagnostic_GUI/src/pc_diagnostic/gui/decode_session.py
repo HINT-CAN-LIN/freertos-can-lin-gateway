@@ -41,6 +41,12 @@ class DecodeSession:
         self.latest_attempts.clear()
         self.loader.load(path)
 
+    def reset_observations(self):
+        # Source 설정 변경은 새 관측 세션이다. 명시적으로 로드한 DBC 정의만 유지한다.
+        self.session_id += 1
+        self.service.cache.clear()
+        self.latest_attempts.clear()
+
     def process(self, frame):
         # Bit/scale/enum 처리 및 정상 RX 저장은 기존 서비스에만 위임한다.
         result = None
