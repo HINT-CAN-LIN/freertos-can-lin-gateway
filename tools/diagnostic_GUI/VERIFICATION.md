@@ -1,3 +1,114 @@
+# HINT-48 Phase 3D-1 — Vehicle Status 검증 (2026-10-13, Asia/Seoul)
+
+이번 절은 현재 구현의 실제 검증 결과이며 아래 Phase 3C/3B/1~2 기록은 보존합니다.
+테스트 통과는 팀 고정 버전 승인, 담당자 리뷰, Production 매핑 승인 또는 Hardware PASS가 아닙니다.
+
+### 기준 및 관련 Source of Truth
+
+- Branch `PC-Diagnostic-Test`, HEAD `6139ea401fbbe6da6ccdb1a3fbfc3ffbc583bf79`.
+  시작 Working Tree clean / Stage 비어 있음.
+- D: AGENTS.md, 팀 README/CONTRIBUTING, 기존 GUI/Worker/Buffer/DecodeSession 및
+  SignalStateCache의 Channel/Message 키·원래 Timestamp·동일 clock Age 계약 확인.
+- `docs/requirements/02__메시지_정의서_ver1.2.xlsx`의
+  CAN_Message_Definition / CAN_Signal_Definition에서 차량 상태 관련 행을 읽기 전용으로 확인.
+  CAN_Signal_Definition 6–8, 10–11, 14–17은 역할/출처와 상대 담당자 리뷰 필요를 기록합니다.
+- `network/can/CAN__DB_펌웨어 전 최종본_v0.1.dbc`는 VERSION
+  `0.4 - review-ready interface proposal`. 실제 Speed/RPM/Gear/Brake/Torque 이름/Unit/comment
+  확인에만 사용했고 승인된 기본 매핑으로 등록하지 않았습니다.
+- Speed는 Gateway 가상값, RPM/Gear/Brake는 복수 Message 출처,
+  TorqueRequest와 TorqueApplied는 요청/적용값으로 구분됩니다. 역할을 추정해 합치지 않습니다.
+- 기존 TEST ONLY fixture는 합성 Measurement/Mode/Counter/Reading/mux 정의입니다.
+  Speed/RPM 의미의 Fixture를 생성하지 않았으며 모든 파일을 보존했습니다.
+
+### 구현 및 정책
+
+- 기존 Monitor/Signals 옆 Vehicle Status 탭 추가.
+- `VehicleStatusModel`은 Qt 독립이며 값은 SignalStateCache 조회 결과만 사용.
+  Unit은 사용자가 로드한 DBC, 상세 오류는 기존 DecodeSession 최신 처리 metadata에서 조회.
+- `VehicleStatusView`는 Qt 메인 스레드에서 고정 6개 행을 갱신.
+  Worker/Buffer/DecodeService/Codec/Cache의 기존 처리 계약은 유지.
+- 기본 연결 없음. 사용자가 Channel(타입 포함), exact Message, exact Signal을 선택하고
+  의미/출처 확인 후 Apply mapping. Source 변경 시 확인을 해제함.
+- 미매핑/미확인/Message 불명확은 Ambiguous, exact 정의 없음은 Not Defined.
+  정의된 완전한 연결의 미수신은 No Data. No DBC/Valid/Decode Error도 구분.
+- Decode Error와 마지막 정상 RX 값/시각을 동시에 표시.
+  Valid는 Decode 성공 Cache 존재만 뜻하며 timeout/min-max/ECU Health 판정이 아님.
+- 기존 Clear/Start/Stop은 동일 DBC session의 매핑/Cache를 보존.
+  성공/실패한 DBC 교체는 새 Cache와 함께 매핑/편집기 선택을 초기화.
+- PC 소유 `DbcLoader.get_messages()` 읽기 전용 tuple 조회만 추가.
+  기존 lookup/Decode/CAN Interface를 변경하거나 타 ECU Public Interface를 수정하지 않음.
+  이 PC API 추가에 대한 실제 담당자 코드 리뷰는 NOT VERIFIED.
+
+### 실제 실행 결과
+
+| 검증 | 결과 |
+| --- | --- |
+| 수정 전 baseline | **201 passed in 5.28s** |
+| GUI 최초 통합 후 기존 회귀 | **201 passed in 4.99s** |
+| 최종 전체 pytest | **239 passed in 5.94s** — 기존 201 + 신규 38 |
+| 신규 모델 | **26개**, Qt 독립, 기존 TEST ONLY DBC 사용 |
+| 신규 화면 | **12개**, Mock/Qt offscreen, Channel None/int/string 포함 |
+| 기존 201개 | 기존 Test/fixture 삭제·수정·약화 없음; 최종 전체 실행에 포함 |
+| 상태/정의 | No DBC/Not Defined/No Data/Valid/Decode Error/Ambiguous 및 exact 이름/중복 확인 |
+| 값·Unit·시각 | 기존 Measurement=-10.0, test_unit, 원래 RX Timestamp/반복 Cache 갱신 확인 |
+| 출처 격리 | Message/Channel 및 channel 타입 분리; TX는 RX 값 생성 안 함 |
+| 실패/복구 | length/codec/application 실패 후 정상 Cache 보존; 정상 RX 후 표시 복구 |
+| Age | 미제공/역행 unknown, 정지 중 타이머 갱신, 큰 Age에도 값 삭제/Health 판정 없음 |
+| Clear/Reload | Clear/Remove mapping/DBC 재로드 효과 구분, 실패한 교체도 이전 매핑 제거 |
+| Qt/Worker | 메인 스레드 갱신, 매회 새 Mock/새 수신, 반복 Start/Stop, active close 정상 해제 |
+| 유한 자원 | Vehicle 6행, 기존 512 buffer/500 Raw/100 batch 유지; 2000 입력 중 1488 제외·512 처리 구분 |
+| CLI 진입점 | 모듈 및 can-diag.exe --help 정상; 기존 CLI 140개 전체 실행에서 PASS |
+| GUI 진입점 | 모듈 및 can-diag-gui.exe --help 정상; 실제 정상 프로그램 창 실행 |
+| pip check | **No broken requirements found.** |
+| Raw native smoke | Windows 창, 3회 반복/Clear/active close, Mock 4개 해제·송신 없음 |
+| Decode native smoke | Windows 창, TEST ONLY 명시적 load/Decode/Cache/오류 보존, Mock 5개 해제·송신 없음 |
+| Vehicle native smoke | Windows 창/탭, TEST ONLY 직접 매핑, -10.0/test_unit, 3회 반복/Age/Clear/오류/Reload/active close, Mock 4개 해제·송신 없음 |
+| 사용자 Vehicle 수동 확인 | **정상 확인** — 사용자가 DBC Observation의 -10.0/test_unit/Valid 표시 확인. Start/Stop/Clear 후 Age 증가를 관찰했고, 마지막 Cache 값/시각 보존에 따른 정상 동작임을 설명 |
+| 실제 Speed/RPM/Gear/Brake/Torque 의미/수신 정확도 | **NOT VERIFIED** — 합성값을 실제 차량 값으로 표시/주장하지 않음 |
+| 실제 CANable/ECU 및 Bus | **NOT VERIFIED** |
+| 팀 고정 버전 / 담당자 리뷰 | **미확정 / NOT VERIFIED** |
+| Git add/Commit/Push/PR/Merge | **미실행**; 기준 HEAD/브랜치 유지 |
+
+실제 설치: Python 3.14.6 / PySide6 6.10.3 / python-can 4.6.1 / cantools 44.2.1 /
+pytest 9.1.1. 설치/버전 범위/pyproject 변경 없음. 다른 Python/OS/라이브러리 조합은 NOT VERIFIED.
+기존 Phase 3C 사용자 수동 확인을 이번 Vehicle 수동 확인으로 재사용하지 않습니다.
+
+pytest는 매 실행 새 GUID 테스트 전용 basetemp와 `-p no:cacheprovider`를 사용했습니다.
+최종 evidence 폴더:
+`.test-tmp/phase3d-final-8b28108c29ba420dbf4a527450ef9ecc`.
+Qt widget 렌더를 시각 확인했습니다. OS 전체/HW 캡처가 아닙니다.
+Temp/렌더/캐시/venv/egg-info는 기존 Git 제외 규칙을 유지합니다.
+
+### Trouble Shooting / Jira 질문 초안 — 외부 등록 미실행
+
+이번 구현·테스트에서 재현된 소스 결함은 없습니다.
+다음은 실제 관련 산출물과 미검증 상태에서 확인한 후속 질문입니다.
+
+**HINT-48 / Vehicle 표시 의미·출처 검토**
+- Signal 이름이 같은 RPM/Gear/Brake의 Source Message를 용도별로 확정할 담당자 리뷰 필요.
+- Vehicle_Status.Speed는 Gateway 가상값이며 실제 속도 센서 측정으로 표시하면 안 됨.
+- TorqueRequest(요청)와 TorqueApplied(적용)를 같은 기본 토크 값으로 혼합하면 안 됨.
+- 메시지 정의서의 Gear 범위와 현재 review-ready DBC의 정상 범위 표기가 다름.
+  기존 Interface Review 절차에 따라 의미/DBC/Matrix 정합성 검토 필요.
+- 현재 모든 Production 기본 매핑을 비웠으며 GUI 사용자의 연결은 내부 표시 설정뿐.
+- 팀 고정 Python/PySide6/python-can/cantools/pytest 기준 및 PC API 추가 리뷰 필요.
+- 실제 신호/승인된 캡처 기반 표시 검증은 후속 Task. 이번에는 TEST ONLY 관찰 행으로만 검증.
+- Fixture 확장/Production 산출물 수정/외부 Jira 등록/Jira Done 처리 미실행.
+
+### 변경 및 보존
+
+- 수정: README.md, VERIFICATION.md, src/pc_diagnostic/dbc_loader.py,
+  src/pc_diagnostic/gui/window.py.
+- 신규: src/pc_diagnostic/gui/vehicle_status.py, src/pc_diagnostic/gui/vehicle_view.py,
+  tests/test_vehicle_status.py, tests/test_vehicle_view.py, tests/gui_vehicle_native_smoke.py.
+- 기존 D: 원본 25개·다른 worktree tracked 파일·미추적 리뷰 문서를 SHA-256 기준으로 보존 검증.
+- 팀 공통 DBC/Matrix/Requirements/ECU 코드 수정 없음. 기존 201개 테스트와 Fixture 보존.
+- 실제 CAN 송신 기능이나 Interface 수치/Enum/Timeout/Fault 정책 추가 없음.
+- 매핑 저장/자동 복구, 실제 GUI backend, 실제 Vehicle 캡처 시험은 후속 범위.
+- 추후 Commit 후보: `[feat][YYYYMMDD][권도형] add vehicle status GUI` (이번 미실행).
+
+---
+
 # HINT-48 Phase 3C 검증 — 2026-10-12 (Asia/Seoul)
 
 이번 절은 Phase 3C의 실제 실행 결과입니다. 아래 기존 Phase 1~3B 기록은 보존했으며,

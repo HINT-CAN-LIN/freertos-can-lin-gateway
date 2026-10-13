@@ -92,6 +92,11 @@ class DbcLoader:
         if not self.is_loaded:
             raise DbcLookupError(self._status.error or "DBC is not loaded")
 
+    def get_messages(self) -> tuple["Message", ...]:
+        # GUI 목록 선택용 읽기 전용 snapshot. 반환한 Message는 기존 lookup과 같이 읽기 전용이다.
+        self._ensure_loaded()
+        return tuple(self._by_name.values())
+
     def get_message_by_name(self, name: str) -> "Message":
         self._ensure_loaded()
         try:

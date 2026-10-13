@@ -3,7 +3,7 @@
 Classic CAN raw 프레임을 수신·표시·기록·송신하는 독립 Python 패키지입니다.
 Gateway CAN ID, message별 DLC, Signal bit layout/scale/enum은 정의하지 않습니다.
 Phase 1 Raw CAN 기능 위에 명시적으로 지정한 DBC의 Decode/Encode와 PC 관찰용 State Cache를 제공합니다.
-Phase 3B는 PySide6 Mock Raw GUI, Phase 3C는 명시적 DBC Decode/Cache 화면을 제공합니다.
+Phase 3B는 Mock Raw GUI, Phase 3C는 명시적 DBC Decode/Cache, Phase 3D-1은 사용자 매핑 Vehicle Status를 제공합니다.
 LIN, GUI의 Logging/송신, ECU Health/Fault 정책, Fault Injection, KPI, 주기 송신, CAN FD는 미구현입니다.
 CAN FD 수신 시 명시적 오류로 중단하며 Classic CAN으로 변환하거나 조용히 버리지 않습니다.
 
@@ -416,3 +416,93 @@ Qt offscreen, Windows native 자동 검증, 사용자 직접 파일 선택/화�
 미구현: 실제 CAN GUI backend/송신, 파일 Logging/Export, Filter/Replay,
 운전자 입력, ECU Health/Fault, Fault Injection, standalone 배포, 수신 중 DBC 교체.
 Production DBC/Matrix 정합성 및 Interface 승인은 **상대 담당자 리뷰 필요**입니다.
+
+## Phase 3D-1 — Vehicle Status
+
+기존 GUI 실행 방법은 동일합니다. **Vehicle Status** 탭은 같은 DecodeSession의
+SignalStateCache를 조회하며 CAN 수신/DBC Decode/Scale/Enum 규칙을 새로 구현하지 않습니다.
+기존 CAN Monitor / Signals 탭과 CLI를 유지합니다.
+
+표시 후보는 Vehicle Speed / Motor RPM / Gear / Brake / Torque이며 **기본 매핑은 없습니다**.
+이 이름들은 화면 항목일 뿐 CAN Signal 정의가 아닙니다. 로드한 DBC의 exact Message,
+Signal과 실제 Channel을 사용자가 선택해야 합니다. Signal 이름의 유사 문자열, 단일 후보,
+동일 이름의 첫 Message를 자동 선택하지 않습니다.
+
+1. **Select DBC...**로 파일을 명시적으로 로드하고 Vehicle Status 탭을 엽니다.
+2. **Display item**, **Channel**, **DBC Message**, **Exact Signal**을 선택합니다.
+   Message 목록은 로드한 DBC의 실제 CAN ID/STD·EXT 속성을 함께 표시합니다.
+   Signal의 Unit/comment를 읽고 의미와 출처를 확인하세요. 요청 토크/적용 토크,
+   Motor 직접 값/Gateway 전달 값은 출처를 구분해야 합니다.
+3. **선택 출처/표시 의미 확인**을 체크하고 **Apply mapping**을 누릅니다.
+   이는 진단 도구 내부 표시 설정이며 팀 Interface 승인이 아닙니다.
+   Message/Signal/Channel 변경 시 이전 확인은 해제됩니다.
+4. 표에서 Source Message.Signal, 타입을 포함한 Channel, Value, Unit,
+   원래 RX Last Update, Age, State와 상세 이유를 확인합니다.
+   긴 출처/오류는 셀 tooltip으로 전체 내용을 볼 수 있습니다.
+5. **Remove mapping**은 해당 표시 연결만 제거합니다. 정상 수신 Cache는 수정하지 않습니다.
+
+Channel은 문자열/정수/None을 구분합니다. None은 명시적으로 선택한 unknown backend
+channel이며 모든 Channel을 뜻하지 않습니다. 기본 선택은 비어 있고, 기존 DEMO 채널과
+실제로 관찰된 Channel만 선택 목록에 제공합니다. 목록은 GUI 자원 제한인 128개까지이며
+물리 CAN 채널 수를 정의하지 않습니다. 같은 Signal 이름도 Message/Channel이 다르면
+값을 합치지 않습니다. 매핑은 메모리의 고정 6개 표시 항목 안에서만 관리합니다.
+
+| State | 의미 |
+| --- | --- |
+| No DBC | 파일 미로드/로드 실패; Value는 No Data |
+| Not Defined | 사용자가 지정한 exact Message/Signal이 현재 DBC에 없음 |
+| No Data | 완전한 매핑은 있으나 성공 RX Cache 값이 없음 |
+| Valid | 마지막 Decode 성공 RX 값이 존재함; ECU Health/물리값 유효성 판정이 아님 |
+| Decode Error | 해당 Channel/Message의 최신 처리 시도 실패; 마지막 정상 RX 값/시각은 유지 |
+| Ambiguous | 미매핑, Message/Channel 미선택, 의미 미확인 또는 동일 이름의 대상 불명확 |
+
+따라서 DBC 로드 후 **미매핑 후보는 Ambiguous**, 출처를 명시한 뒤 아직 수신하지 않은
+항목은 **No Data**입니다. 없는 신호를 Vehicle 이름과 비슷한 다른 신호로 대체하지 않습니다.
+정의가 없는 exact 이름은 Not Defined로 표시합니다.
+Age는 기존 Cache API에 DEMO RX와 같은 PC wall clock을 전달해 계산합니다.
+Timestamp 미제공/clock 역행은 unknown이며, 정지 후에도 Age가 갱신됩니다.
+Age가 커져도 값을 삭제하거나 Healthy/Offline/Fault를 선언하지 않습니다.
+TX 성공은 RX 값을 만들지 않으며 최신 TX 여부를 상세 이유에 구분합니다.
+Unknown/Error frame은 기존 Raw 정책을 유지하며 추정 Vehicle 값을 생성하지 않습니다.
+
+기존 **Clear**는 Raw 표시/계수를 초기화하고 같은 DBC session의 Vehicle 매핑/정상 Cache는
+보존합니다. Start/Stop도 같은 DBC session입니다.
+**DBC 교체 시도(성공/실패 포함)**는 기존 새 Cache 계약과 함께 Vehicle 사용자 매핑과
+편집기 선택을 초기화합니다. 새 파일의 데이터를 이전 출처로 표시하지 않습니다.
+파일 선택 취소는 기존 세션을 유지합니다. 수신 중 파일 교체 제한은 Phase 3C와 동일합니다.
+사용자 매핑 저장/자동 복구, 실제 backend 재연결 정책은 아직 구현하지 않았습니다.
+
+Cache 값은 마지막으로 정상 수신·해석한 관찰값입니다. Stop/Clear 후에도 값과 원래 수신 시각을
+유지하므로 Age는 계속 증가하는 것이 정상입니다. 새 정상 RX를 받으면 Last Update가 바뀌고
+Age가 다시 작은 값으로 갱신됩니다. Clear로 Cache/시각을 수신 없이 초기화하지 않습니다.
+
+### DEMO 검증과 실제 차량 의미의 구분
+
+기존 `tests/fixtures/test_only.dbc`에는 실제 Speed/RPM 신호가 없습니다.
+Fixture를 확장하거나 합성 Measurement를 차량 속도/RPM으로 기본 연결하지 않았습니다.
+화면/Cache 검증에는 **Display item=DBC Observation**, Channel=`DEMO/TEST ONLY`,
+Message=`TestOnlySample`, Signal=`Measurement`를 직접 선택합니다.
+확인 체크 후 Apply mapping → Start를 누르면 **-10.0 / test_unit**이 표시됩니다.
+이 값은 기존 합성 테스트 벡터이며 실제 차량 측정이 아닙니다.
+
+실제 Repository의 DBC는 review-ready 제안본이고 메시지 정의서의 관련 Signal도
+상대 담당자 리뷰가 필요합니다. Vehicle_Status.Speed는 Gateway 가상값이며, RPM/Gear/Brake는
+여러 Message에 존재하고 TorqueRequest/TorqueApplied는 역할이 다릅니다.
+이 조사 결과를 승인된 Production 매핑으로 내장하지 않았습니다.
+DBC/Matrix/Message Definition 정합성 및 실제 차량 의미 검증은 후속 리뷰가 필요합니다.
+
+패키지 폴더에서:
+```powershell
+New-Item -ItemType Directory -Force .test-tmp | Out-Null
+$vehicle_temp = '.test-tmp/vehicle-' + [guid]::NewGuid().ToString('N')
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp $vehicle_temp
+.\.venv\Scripts\python.exe tests/gui_vehicle_native_smoke.py --dbc tests/fixtures/test_only.dbc --screenshot .test-tmp/vehicle-native.png
+```
+
+최종 전체 **239 passed**: 기존 201개 + 신규 38개.
+모델 테스트는 Qt 독립, 화면 테스트는 Mock/offscreen, native smoke는 실제 Windows 창을 사용합니다.
+사람의 수동 확인은 VERIFICATION에서 자동 검증과 구분합니다.
+팀 고정 버전 **미확정**, 담당자 코드 리뷰 **NOT VERIFIED**,
+CANable/ECU/실제 Vehicle 값 **NOT VERIFIED**. Git 업로드는 이번 작업에 포함하지 않습니다.
+
+추후 Commit 후보: `[feat][YYYYMMDD][권도형] add vehicle status GUI` (실행하지 않음).

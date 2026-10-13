@@ -4,12 +4,13 @@ from time import time
 from PySide6.QtCore import QTimer, Qt, Slot
 from PySide6.QtWidgets import (QAbstractItemView, QFileDialog, QHBoxLayout, QHeaderView,
                               QLabel, QMainWindow, QPlainTextEdit, QPushButton,
-                              QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+                              QSplitter, QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 from ..dbc_loader import DbcLoadError
 from ..interfaces import MockCanInterface
 from .buffer import FrameBuffer
 from .decode_session import DecodeSession
 from .receiver import CLOSE_WAIT_MS, ReceiveWorker
+from .vehicle_view import VehicleStatusView
 
 # 아래 값은 GUI 표시 자원 제한이며 통신 규격 수치가 아니다.
 DISPLAY_REFRESH_MS = 50
@@ -124,7 +125,12 @@ class MainWindow(QMainWindow):
         detail_layout.addWidget(self.cache_label)
         detail_layout.addWidget(self.cache_table)
         splitter.addWidget(details)
-        layout.addWidget(splitter, 1)
+        # 기존 Monitor/Signal 화면을 보존하고 독립 Vehicle 조회 탭만 추가한다.
+        self.tabs = QTabWidget()
+        self.tabs.addTab(splitter, "CAN Monitor / Signals")
+        self.vehicle_view = VehicleStatusView(self.decode_session, lambda: self._clock(), self)
+        self.tabs.addTab(self.vehicle_view, "Vehicle Status")
+        layout.addWidget(self.tabs, 1)
         layout.addWidget(QLabel("오류 메시지"))
         self.error_area = QPlainTextEdit()
         self.error_area.setReadOnly(True)
@@ -137,6 +143,7 @@ class MainWindow(QMainWindow):
         self.age_timer = QTimer(self)
         self.age_timer.setInterval(AGE_REFRESH_MS)
         self.age_timer.timeout.connect(self.refresh_cache)
+        self.age_timer.timeout.connect(self.vehicle_view.refresh)
         self.age_timer.start()
         self.start_button.clicked.connect(self.start_monitor)
         self.stop_button.clicked.connect(self.stop_monitor)
@@ -188,6 +195,7 @@ class MainWindow(QMainWindow):
             self.dbc_label.setText(f"DBC: {status.path.name} | Loaded ({status.message_count} messages) | Decode enabled · Mock / DEMO ONLY")
             success = True
         self.show_selection()
+        self.vehicle_view.refresh()
         return success
 
     @Slot()
@@ -248,6 +256,7 @@ class MainWindow(QMainWindow):
             return
         frames, total, dropped = self.buffer.drain()
         for frame in frames:
+            self.vehicle_view.observe_channel(frame.channel)
             observation = self.decode_session.process(frame)
             if observation.processing_error:
                 self.error_area.appendPlainText(observation.processing_error)
@@ -265,6 +274,7 @@ class MainWindow(QMainWindow):
         self.drop_label.setText(f"표시 버퍼 제외: {dropped}")
         self.processed_label.setText(f"Raw/Decode processed: {self._processed}")
         self.refresh_cache()
+        self.vehicle_view.refresh()
         self.update_controls()
         if self.worker is None and not frames:
             self.timer.stop()
@@ -348,6 +358,7 @@ class MainWindow(QMainWindow):
         self.drop_label.setText("표시 버퍼 제외: 0")
         self.processed_label.setText("Raw/Decode processed: 0")
         self.show_selection()
+        self.vehicle_view.refresh()
         self.update_controls()
 
     def closeEvent(self, event):
@@ -369,4 +380,5 @@ class MainWindow(QMainWindow):
             completed.deleteLater()
         self.timer.stop()
         self.age_timer.stop()
+        self.vehicle_view.close_view()
         event.accept()
