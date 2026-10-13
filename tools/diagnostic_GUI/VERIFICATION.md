@@ -1,3 +1,165 @@
+# HINT-48 Phase 3D-2 — Commit 사전 재검증 (2026-10-13, Asia/Seoul)
+
+이번 절은 사용자 Commit·일반 Push 승인 후 **새로 실행한 Commit 전 검증**이다.
+아래 구현 단계 기록의 Git 미실행 표기는 해당 단계의 과거 상태이며 보존한다.
+Commit/Push의 실제 실행 결과와 Hash는 작업 완료 보고에서 별도 확인한다.
+
+- 기준 Branch: PC-Diagnostic-Test / HEAD `979251af694a7f87e7553d023b2c6c81a5cf7482`.
+- 실제 Worktree/origin/원격 HEAD 일치 확인. 다른 브랜치/공통 Interface 변경 없음.
+- 실제 Git Status와 수정 diff 및 미추적 6개 내용 검토: 수정 3개/신규 6개/삭제 0개.
+  모두 tools/diagnostic_GUI의 Phase 3D-2 GUI/관측/통계/Test/문서 범위.
+- 기존 Worker, RawCanFrame, DecodeService/Codec/Cache와 책임 분리 유지.
+  새 모델은 FrameObservation을 사용하며 CAN ID/Signal/Timeout/Fault Threshold를 정의하지 않음.
+- Observed는 처리된 RX 관측 사실. 임의 Healthy/Online/Fault 판정 없음.
+  명시적 typed Channel/STD-EXT 매핑과 LIN 개별 Signal 확인, Count/Drop 구분,
+  Clear/Reload/유한 저장 및 Mock/TEST ONLY 표시 검토.
+- 문서의 이전 사용자 확인(Start/Stop/Clear, VCU Observed, STD/EXT)은 기존 수동 증거.
+  이번 자동 테스트 결과로 수동 확인을 대체하거나 다시 요청하지 않음.
+
+| 이번 실제 재실행 | 결과 |
+| --- | --- |
+| 전체 pytest | **286 passed in 9.06s** — 기존 239 + Phase 3D-2 신규 47, 감소/skip 없음 |
+| 기존 CLI 7개 테스트 모듈 별도 실행 | **140 passed in 0.49s** |
+| CLI module/installed entry --help | PASS |
+| GUI module/installed entry --help | PASS |
+| CLI monitor --backend mock | 기존 TEST ONLY vector STD/EXT **2 frame(s)** 수신 |
+| pip check | **No broken requirements found.** |
+| Windows Raw Native Smoke | 실제 창/3회 Start-Stop/Clear/active close, Mock4개 해제·미송신 |
+| Windows ECU/Statistics Native Smoke | 실제 창/7카드/명시적 TEST ONLY/STD-EXT/Fault 읽기/오류·Clear·Reload/3회 Start-Stop/active close, Mock4개 해제·미송신 |
+| 사용자 수동 확인 | 기존 Start/Stop/Clear, VCU Observed, STD/EXT 확인 기록 유지 |
+| Fault 값 사용자 수동 확인 | **NOT VERIFIED** |
+| Hardware 및 실제 Fault 전파 | **NOT VERIFIED** |
+| 팀 고정 버전 / 담당자 코드 리뷰 | **미확정 / NOT VERIFIED** |
+| Production Signal/Fault 의미·출처 | **검토 필요 — 상대 담당자 리뷰 필요** |
+
+전용 쓰기 가능 Temp: `.test-tmp/phase3d2-commit-56f12f1282a147ed8a86d247742acbbc`.
+매회 새 basetemp와 `-p no:cacheprovider` 사용. Temp/스크린샷/JSONL/가상환경/캐시는 Commit 제외.
+신규 Source/Test 수정 없이 검증 결과만 이 문서에 추가했다.
+PR/Merge/Jira Done은 이번 승인 범위에 포함되지 않으며 미실행이다.
+
+---
+
+# HINT-48 Phase 3D-2 — ECU Health Observation 검증 (2026-10-13, Asia/Seoul)
+
+이번 절은 실제 수행한 Phase 3D-2 결과입니다. 아래 과거 검증 기록을 보존합니다.
+테스트 통과는 팀 리뷰/Interface 승인/Hardware PASS 또는 Jira Done을 뜻하지 않습니다.
+
+### 기준 / Source of Truth
+
+- Branch PC-Diagnostic-Test / 시작 HEAD `979251af694a7f87e7553d023b2c6c81a5cf7482`.
+  시작 Working Tree clean, Stage 비어 있음.
+- D: AGENTS.md, 팀 README/CONTRIBUTING, RawCanFrame/Worker/유한 Buffer,
+  DecodeSession/SignalStateCache와 Vehicle Status 명시적 매핑 계약 확인.
+- 메시지 정의서 v1.2: CAN_Message_Definition 6–11,
+  CAN_Signal_Definition 24–29, LIN_Frame_Definition 6–11 읽기 전용 확인.
+- 실제 DBC VERSION `0.4 - review-ready interface proposal`; 승인된 Production 기본값 아님.
+  Gateway_Status에 GatewayAlive/QueueUsage, Fault_Status에 FaultCode/ECUOffline/
+  RecoveryState/SystemState가 존재함. 구현의 기본값/임계값으로 사용하지 않음.
+- Door/Light/Window는 LIN slave→Gateway 상태 경로이며 PC는 Gateway CAN 보고만 관찰 가능.
+  Cluster의 독립 송신 Health Message를 현재 CAN DBC에서 확인하지 못함: 자동 생성/연결 없음.
+- 기존 리뷰 IFC-REV-006 GatewayAlive Invalid=0xF와 정상 0..15 중복,
+  IFC-REV-008 All/PC Receiver 범위 및 IFC-REV-007 PC/PC_TOOL 표기 질문 보존.
+  이 리뷰 문서와 원본/팀 Interface 파일은 수정하지 않음.
+- Fault layout/Choice의 일치는 승인/실제 전파 완료를 뜻하지 않음.
+  상대 담당자 리뷰 필요 상태 유지.
+
+### 구현 / Lifecycle
+
+- Qt 독립 MessageStatisticsStore(512키 상한), EcuObservationModel,
+  Qt EcuObservationView와 MainWindow 연결만 추가.
+- Worker/RawCanFrame/DecodeService/Codec/Cache/Vehicle Public 계약 변경 없음.
+  GUI는 기존 DecodeSession의 FrameObservation을 받아 decode를 반복하지 않음.
+- 7개 프로젝트 ECU 카드: 직접 CAN 4개, Gateway 경유 CAN 3개.
+  기본 연결 없음, 사용자 exact Message/Channel/ID/STD-EXT/출처 확인 필요.
+  개별 LIN Signal 없으면 Not Available. 중복 출처는 Ambiguous.
+- Count/시각은 처리된 RX 부분집합. ERROR/RTR와 STD/EXT/channel 구분, TX 제외.
+- 통계가 꽉 차면 새로운 키 프레임만 제외하며 기존 count 유지.
+  Buffer Drop과 capacity exclusion을 분리하여 No Data를 무수신/고장으로 해석하지 않도록 표시.
+- Fault target의 기존 Decode 결과/Unit/DBC Choice만 표시.
+  최근 실패 프레임 시각과 마지막 정상값 시각 구분, 별도 FaultCode/Recovery 의미 생성 없음.
+- Clear: 새 화면의 통계/관측 및 Fault 값 표 초기화; 사용자 매핑과 기존 Cache/Vehicle 값 유지.
+  다음 처리 RX부터 새 구간. Start/Stop는 기존 통계/매핑 유지하며 Age는 Stop 후 증가.
+- DBC Reload 성공/실패: 새 화면의 매핑/통계/Decode 관측 초기화. 과거 Raw 재처리 없음.
+- GUI timer는 bounded 처리 뒤 UI를 main thread에서 갱신. Qt per-frame signal 추가 없음.
+  종료는 기존 Worker 정리 후 화면 입력/갱신 차단.
+
+### 실제 실행 결과
+
+| 검증 | 결과 |
+| --- | --- |
+| 수정 전 baseline | **239 passed in 8.36s** |
+| 첫 통합(기존 239 + 모델 34) | **273 passed in 11.68s** |
+| 신규 모델/GUI | **47 passed in 2.11s** — 모델 34, Qt Mock/offscreen 13 |
+| 최종 전체 pytest | **286 passed in 10.92s** — 기존 239 + 신규 47 |
+| 기존 테스트/fixture | 삭제·수정·약화 없음; 전체 실행에 포함 |
+| ECU 상태 | 7카드/Not Configured/No Data/Observed/Not Available/Ambiguous/Not Defined/Decode Error 확인 |
+| Raw 통계 | DBC 없음/Unknown/RTR/Error, channel None/int/string, STD/EXT, Count/DLC/원래 시각 확인 |
+| Fault | 명시적 TEST ONLY 선택 후 -10.0/test_unit 및 DBC Choice ONE, 실패 시 마지막 정상값 시각 보존 |
+| Drop/저장 상한 | 1000입력→488 Buffer drop/512처리; 테스트 상한2키에서 capacity 제외510 구분 |
+| Lifecycle | Clear Cache 보존/새 통계 초기화, Reload 성공/실패 매핑 reset, 과거 세션 입력 거부 |
+| Qt/Worker | main-thread UI, 매회 새 Mock/신규 RX, Start 중복 차단, 3회 Start/Stop와 active close |
+| CLI | 모듈/설치 entry --help, 기존 CLI 140개 포함 전체 통과 |
+| GUI | 모듈/설치 entry --help 성공, 실제 Windows 창 실행 |
+| pip check | **No broken requirements found.** |
+| ECU Windows Native Smoke | 7카드/명시적 TEST ONLY/STD-EXT 통계/Fault 읽기/3회 반복/Age/Clear/오류/Reload/종료, Mock4개 해제·미송신 |
+| 기존 Vehicle Native Smoke | -10.0/test_unit/3회 반복/Cache/오류/Reload/active close, Mock4개 해제·미송신 |
+| 사용자 Phase 3D-2 수동 확인 | **확인 완료(해당 항목)** — 사용자 Start/Stop/Clear 정상 확인 및 안내 후 VCU State=Observed와 CAN Message Statistics의 Format=STD/EXT 두 행 모두 확인. 자동 검증과 별도 기록. Fault 값 표시의 사용자 수동 확인은 **NOT VERIFIED** |
+| Production ECU/Signal 의미·출처 / 실제 Fault 전파 | **검토 필요 / NOT VERIFIED** |
+| CANable/ECU/실제 CAN 또는 LIN Bus | **NOT VERIFIED** |
+| 팀 고정 라이브러리 버전 / 담당자 코드 리뷰 | **미확정 / NOT VERIFIED** |
+| Git add/Commit/Push/PR/Merge/Jira Done | **미실행** |
+
+실제 설치 버전: Python 3.14.6 / PySide6 6.10.3 / python-can 4.6.1 / cantools 44.2.1 /
+pytest 9.1.1. 기존 pyproject 범위/설치 변경 없음. 다른 환경은 NOT VERIFIED.
+매회 새 GUID basetemp와 `-p no:cacheprovider` 사용. 기존 Windows Temp 권한 오류 없음.
+최종 native evidence:
+`.test-tmp/phase3d2-final-4a22b49cc9c54ee998a46f2bfc075971`.
+ECU dashboard/statistics/fault의 Qt widget 렌더를 시각 확인함. 실제 Bus Capture가 아님.
+GUI 테스트는 기존 TEST ONLY fixture/vector만 사용하며 Production DBC/fixture 확장 없음.
+
+### 협업 / Jira 질문용 초안 (외부 등록 없음)
+
+새 구현에서 재현된 소스 결함은 없음. 다음은 미확정 Interface/검증 후속 질문이다.
+
+**HINT-48 — ECU 관측 매핑 및 Fault 전파 근거 승인**
+- 대상: HINT-41 Gateway, HINT-42 VCU, Motor/Cluster 담당자,
+  HINT-45 Door, HINT-46 Light, HINT-47 Window, HINT-48 PC/Test.
+- 질문: 각 ECU 표시의 승인 Source Message/Channel/STD-EXT/개별 Signal과 의미/보고 경로는 무엇인가?
+  Cluster 독립 송신 정의나 관측 Evidence가 없다면 Not Configured 유지가 맞는가?
+- LIN 개별 상태 수신의 freshness/validity가 CAN Signal에 전달되는지 확인 필요.
+  Body_Status 수신만으로 세 ECU의 정상/실제 LIN RX를 주장할 수 없음.
+- IFC-REV-006/008의 GatewayAlive Invalid/Receiver 문제를 기존 리뷰 절차에서 결정해야 함.
+  PC GUI에는 sequence/timeout/invalid 판정 또는 임의 임계값을 추가하지 않음.
+- Fault_Status 수신과 Cluster/PC 전파 완료, ECU 고장, Recovery 성공을 구분할 승인 capture/evidence 필요.
+  이번 Generic Fault view는 DBC 값만 읽음. Fault Injection/ECU 제어는 후속 Task.
+- Source 선택의 송신자 metadata와 물리 ECU identity를 동등한 증거로 취급하지 않아야 함.
+- GUI 표시 정책(512 stats, 128 channel, 64 fault rows, Clear/Reload 구간)의 팀 코드 리뷰와
+  Python/PySide6/python-can/cantools/pytest 고정 버전 확인 필요.
+- Fault/Alive/Timeout Interface를 변경하려면 별도 Jira Issue 및 상대 담당자 리뷰 필요.
+- 외부 Jira 등록/상태 변경/팀 질문 전송 미실행.
+
+**HINT-48 — 내부 탭 발견성 검토 (사용성 질문, 결함 확정 아님)**
+- 최초 사용자 응답: Start/Stop/Clear는 정상, VCU Observed/STD-EXT 행 위치는 찾지 못함.
+- 안내 후 사용자 응답: "Observed와 STD/EXT 모두 확인". 해당 표시의 수동 검증 완료로 기록.
+- 안내: ECU Health Observation → ECU Dashboard의 VCU State,
+  같은 화면의 CAN Message Statistics → Format 열. Clear 후 Start 필요.
+- 질문: 내부 탭의 발견성을 향후 UI 리뷰에서 확인할 필요가 있는가?
+  자동 표시 검증과 이후 사용자의 수동 확인을 구분하여 기록함. 위치 안내 후 확인됐으며 UI 결함으로 확정하지 않음.
+- 외부 Jira/팀 질문 등록은 승인되지 않아 초안만 작성.
+
+### 변경 / 보존
+
+수정 3개: README.md, VERIFICATION.md, src/pc_diagnostic/gui/window.py.
+신규 6개: src/pc_diagnostic/gui/message_statistics.py, ecu_observation.py, observation_view.py,
+tests/test_ecu_observation.py, test_ecu_observation_view.py, gui_ecu_native_smoke.py.
+삭제 0개. 기존 239개 테스트와 TEST ONLY DBC는 변경하지 않음.
+D: 원본 25개 및 다른 Worktree tracked 파일/리뷰 문서 SHA-256 보존 점검.
+공통 DBC/Matrix/Requirements/ECU·타 담당자 Public Interface 변경 없음.
+Commit 후보만 제시: `[feat][YYYYMMDD][권도형] add ECU observation and CAN statistics GUI`.
+이번 작업에서 Stage/Commit/Push 또는 기존 이력 변경 없음.
+
+---
+
 # HINT-48 Phase 3D-1 — Vehicle Status 검증 (2026-10-13, Asia/Seoul)
 
 이번 절은 현재 구현의 실제 검증 결과이며 아래 Phase 3C/3B/1~2 기록은 보존합니다.

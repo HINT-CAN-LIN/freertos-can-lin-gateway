@@ -11,6 +11,7 @@ from .buffer import FrameBuffer
 from .decode_session import DecodeSession
 from .receiver import CLOSE_WAIT_MS, ReceiveWorker
 from .vehicle_view import VehicleStatusView
+from .observation_view import EcuObservationView
 
 # 아래 값은 GUI 표시 자원 제한이며 통신 규격 수치가 아니다.
 DISPLAY_REFRESH_MS = 50
@@ -130,6 +131,8 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(splitter, "CAN Monitor / Signals")
         self.vehicle_view = VehicleStatusView(self.decode_session, lambda: self._clock(), self)
         self.tabs.addTab(self.vehicle_view, "Vehicle Status")
+        self.ecu_view = EcuObservationView(self.decode_session, lambda: self._clock(), self)
+        self.tabs.addTab(self.ecu_view, "ECU Health Observation")
         layout.addWidget(self.tabs, 1)
         layout.addWidget(QLabel("오류 메시지"))
         self.error_area = QPlainTextEdit()
@@ -144,6 +147,7 @@ class MainWindow(QMainWindow):
         self.age_timer.setInterval(AGE_REFRESH_MS)
         self.age_timer.timeout.connect(self.refresh_cache)
         self.age_timer.timeout.connect(self.vehicle_view.refresh)
+        self.age_timer.timeout.connect(self.ecu_view.refresh)
         self.age_timer.start()
         self.start_button.clicked.connect(self.start_monitor)
         self.stop_button.clicked.connect(self.stop_monitor)
@@ -196,6 +200,7 @@ class MainWindow(QMainWindow):
             success = True
         self.show_selection()
         self.vehicle_view.refresh()
+        self.ecu_view.refresh()
         return success
 
     @Slot()
@@ -258,6 +263,7 @@ class MainWindow(QMainWindow):
         for frame in frames:
             self.vehicle_view.observe_channel(frame.channel)
             observation = self.decode_session.process(frame)
+            self.ecu_view.record(observation)
             if observation.processing_error:
                 self.error_area.appendPlainText(observation.processing_error)
             if self.table.rowCount() >= MAX_TABLE_ROWS:
@@ -275,6 +281,9 @@ class MainWindow(QMainWindow):
         self.processed_label.setText(f"Raw/Decode processed: {self._processed}")
         self.refresh_cache()
         self.vehicle_view.refresh()
+        self.ecu_view.update_coverage(received=total, buffer_dropped=dropped,
+                                      pending=self.buffer.pending_count, processed=self._processed)
+        self.ecu_view.refresh()
         self.update_controls()
         if self.worker is None and not frames:
             self.timer.stop()
@@ -359,6 +368,7 @@ class MainWindow(QMainWindow):
         self.processed_label.setText("Raw/Decode processed: 0")
         self.show_selection()
         self.vehicle_view.refresh()
+        self.ecu_view.clear_observations()
         self.update_controls()
 
     def closeEvent(self, event):
@@ -381,4 +391,5 @@ class MainWindow(QMainWindow):
         self.timer.stop()
         self.age_timer.stop()
         self.vehicle_view.close_view()
+        self.ecu_view.close_view()
         event.accept()

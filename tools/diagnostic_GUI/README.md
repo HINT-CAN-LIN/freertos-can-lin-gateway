@@ -4,6 +4,7 @@ Classic CAN raw 프레임을 수신·표시·기록·송신하는 독립 Python 
 Gateway CAN ID, message별 DLC, Signal bit layout/scale/enum은 정의하지 않습니다.
 Phase 1 Raw CAN 기능 위에 명시적으로 지정한 DBC의 Decode/Encode와 PC 관찰용 State Cache를 제공합니다.
 Phase 3B는 Mock Raw GUI, Phase 3C는 명시적 DBC Decode/Cache, Phase 3D-1은 사용자 매핑 Vehicle Status를 제공합니다.
+Phase 3D-2는 명시적 ECU/Fault 관측과 처리된 Raw RX 통계를 제공합니다. Health/Fault 판정은 하지 않습니다.
 LIN, GUI의 Logging/송신, ECU Health/Fault 정책, Fault Injection, KPI, 주기 송신, CAN FD는 미구현입니다.
 CAN FD 수신 시 명시적 오류로 중단하며 Classic CAN으로 변환하거나 조용히 버리지 않습니다.
 
@@ -506,3 +507,119 @@ $vehicle_temp = '.test-tmp/vehicle-' + [guid]::NewGuid().ToString('N')
 CANable/ECU/실제 Vehicle 값 **NOT VERIFIED**. Git 업로드는 이번 작업에 포함하지 않습니다.
 
 추후 Commit 후보: `[feat][YYYYMMDD][권도형] add vehicle status GUI` (실행하지 않음).
+
+## Phase 3D-2 — ECU Health Observation / CAN Message Statistics
+
+ECU Health Observation 탭은 **PC Tool의 관측 상태**를 표시합니다.
+**Observed = 선택한 출처의 처리된 CAN RX가 존재함**이며 Healthy/Online, 실제 ECU 정상,
+LIN 수신, Fault 전파 성공 또는 Recovery 완료를 보장하지 않습니다.
+Age는 원래 RX Timestamp 이후 경과 시간이며 Offline/Timeout/Fault 임계값은 없습니다.
+
+### 실행과 명시적 매핑
+
+기존 GUI 설치/실행 방식과 CLI monitor/log/send/decode/encode는 유지합니다.
+
+```powershell
+.\tools\diagnostic_GUI\.venv\Scripts\python.exe -m pc_diagnostic.gui
+```
+
+1. Select DBC로 원하는 파일을 직접 선택합니다. 자동 Production DBC 로드/기본 매핑은 없습니다.
+2. ECU Health Observation에서 ECU / Fault target, Channel, 정확한 DBC Message를 선택합니다.
+   ID와 STD/EXT는 선택한 실제 DBC 정의에서 가져와 검증합니다.
+3. Door/Light/Window는 **개별 Signal**도 선택합니다. Body_Status 전체 수신만으로 세 ECU를
+   관측 완료/정상으로 표시하지 않습니다. 개별 Signal이 없으면 Not Available입니다.
+4. 출처/표시 목적을 확인하고 Apply mapping을 누릅니다.
+   체크박스는 진단 도구 내부 설정 확인이며 팀 Interface 승인이 아닙니다.
+   Source 변경 시 다시 확인해야 합니다.
+5. Start를 누르고 ECU Dashboard / CAN Message Statistics / Fault Observation을 확인합니다.
+
+Gateway/VCU/Motor/Cluster는 CAN 직접 관측 카드, Door/Light/Window는 Gateway 경유 CAN 관측 카드입니다.
+카드 이름은 프로젝트 구성요소 목록이며 어떤 Message를 그 ECU에 자동 연결하지 않습니다.
+Message 송신자 정보는 DBC metadata로 보여주며 CAN ID만으로 물리 송신 ECU를 식별/인증하지 않습니다.
+같은 Channel/Message/개별 Signal을 여러 ECU에 연결하면 Ambiguous로 표시합니다.
+동일 Message 안의 서로 다른 개별 LIN Signal은 분리해서 선택할 수 있습니다.
+Channel은 None/정수 0/문자열 '0'을 구분합니다.
+
+| 카드 상태 | 의미 |
+| --- | --- |
+| Not Configured | 사용자 매핑 없음 |
+| No DBC | 선택한 출처를 검사할 DBC 미로드 |
+| Not Defined | 정확한 Message/Signal 정의 없음 |
+| Ambiguous | 선택/확인 미완료, ID/format 불일치, 중복 출처/Signal |
+| Not Available | LIN ECU의 개별 Signal 미선택 |
+| No Data | 해당 구간에 처리된 RX가 없거나 개별 Signal이 최신 mux 응답에 없음 |
+| Observed | 해당 출처 RX 관측 사실; ECU Health 판정 아님 |
+| Decode Error | 해당 출처 최신 처리 실패; Raw Monitor는 프레임을 보존 |
+
+미수신/시각 미제공/clock 역행은 unknown으로 표시하며 시간을 합성하지 않습니다.
+Count는 그 Source Message의 **처리된 RX 수**이며 개별 Signal 업데이트 횟수 또는 전체 Bus 수신량이 아닙니다.
+
+### CAN Message Statistics / 자원 상한
+
+- 키: Raw Channel + CAN ID + STD/EXT + ERROR/RTR 속성. TX는 RX 통계에서 제외하고 별도 계수합니다.
+- DLC는 최신 실제 Raw DLC, First Seen/Last Seen은 첫/마지막 처리 RX의 원래 Timestamp입니다.
+  시각이 역행해도 도착 순서를 바꾸지 않습니다.
+- 현재 DBC에서 정의를 찾을 수 있으면 Message Name을 표시합니다.
+  미로드/Unknown은 Unknown / Undefined, Error Frame ID는 backend mask라 DBC 조회하지 않습니다.
+- 저장은 최대 **512개 키**입니다. 기존 키의 계수는 유지하고 상한 도달 후 새로운 키 프레임을 제외합니다.
+  Capacity excluded frames가 그 제외 수입니다. 항목 자동 eviction/전체 수신량 복원은 하지 않습니다.
+- 화면은 기존 **512 Buffer / 100 batch / Raw 500행**의 처리 결과만 받습니다.
+  Buffer dropped, Pending, Raw/Decode processed, Processed RX, Ignored TX,
+  Capacity excluded frames를 구분하여 표시합니다.
+  Buffer received는 Clear 이후, 새 통계는 Clear/DBC Reload 이후의 구간입니다.
+- **누락 후 No Data는 실제 ECU 무수신/Offline의 증거가 아닙니다.**
+  버퍼에서 제외된 Raw 프레임은 새 통계/Decode/Cache에 입력하지 않습니다.
+- Channel 선택 목록은 최대 128개, Fault Signal 표는 최대 64행입니다.
+  Fault 표 생략 수는 표시합니다. 이는 PC 자원 설정이며 통신/Fault 규격이 아닙니다.
+
+### Fault 읽기 전용 관측
+
+Fault Observation target에 사용자가 DBC Message를 명시적으로 선택합니다.
+Fault_Status를 자동 검색/연결하거나 Fault Code를 만들어 해석하지 않습니다.
+선택된 메시지의 RX 시각/Count/Source와 **기존 Decode 결과**의 Signal 값·Unit·DBC Choice를 표시합니다.
+FaultCode/ECUOffline/RecoveryState 등이 선택한 DBC에 있으면 그대로 표시합니다.
+Decode 실패 시 실패 프레임 시각/상태와 마지막 정상 decoded 값의 시각을 분리합니다.
+PC에서 수신한 이벤트는 Cluster 수신, 실제 고장, Recovery 성공의 증거가 아닙니다.
+Fault Injection, ECU 제어/실제 CAN 송신, Alive 검사 및 Health 정책은 구현하지 않았습니다.
+
+### Lifecycle와 기존 화면
+
+- Start/Stop: Worker 계약 유지, Count/마지막 관측과 사용자 매핑 유지, Stop 후 Age는 계속 증가합니다.
+- Clear: Raw/표시 카운터와 새 ECU/Fault 관측·통계 구간을 초기화합니다.
+  새 화면은 No Data로 돌아가고 마지막 Fault 표도 비웁니다.
+  **사용자 매핑과 기존 Signal Cache/Vehicle 마지막 정상값은 보존**합니다.
+  Clear는 수신 중단이 아니며 활성 Worker의 다음 RX부터 다시 집계합니다.
+- DBC Reload 성공/실패: 기존 계약대로 새 DecodeSession/Cache 사용.
+  새 ECU/Fault 매핑, 편집기 확인, 관측·통계도 초기화합니다.
+  과거 Raw 행을 새 관측 구간으로 재집계하지 않습니다.
+- 종료: 기존 Worker의 취소/유한 wait 완료 후 새 화면 갱신과 입력을 차단합니다.
+  수신은 별도 Worker, UI와 새 관측 모델은 메인 스레드에서만 처리합니다.
+
+### Mock 검증 및 한계
+
+기존 `tests/fixtures/test_only.dbc`를 수정 없이 재사용했습니다.
+VCU 카드에 TestOnlySample을 수동 연결하는 것은 **화면 검증용 테스트 출처**이며 VCU 응답이 아닙니다.
+Fault target에 같은 합성 메시지를 선택하면 Measurement=-10.0/test_unit,
+Mode=1/DBC Choice=ONE 등의 TEST ONLY 값이 보입니다. 실제 Fault Code가 아닙니다.
+Production Fixture, Signal/ID/Enum/Invalid/Alive/Timeout/정책 및 기본 매핑은 추가하지 않았습니다.
+
+관련 정의서는 Gateway_Status(GatewayAlive/QueueUsage), Fault_Status(FaultCode/ECUOffline/
+RecoveryState/SystemState)를 기록하지만 상대 담당자 리뷰가 필요합니다.
+review-ready DBC는 Interface 승인 완료가 아닙니다. 기존 IFC-REV-006의 GatewayAlive
+정상 sequence/Invalid 충돌과 IFC-REV-008의 Receiver 범위 질문은 그대로 Open입니다.
+
+```powershell
+# tools/diagnostic_GUI 위치에서 매회 새 테스트 전용 폴더 사용
+$test_root = Join-Path '.test-tmp' ('phase3d2-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $test_root | Out-Null
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp (Join-Path $test_root 'pytest')
+.\.venv\Scripts\python.exe tests/gui_ecu_native_smoke.py --dbc tests/fixtures/test_only.dbc --screenshot-prefix (Join-Path $test_root 'ecu-native')
+```
+
+이번 실제 결과: **286 passed** = 기존 239 + 신규 47(모델 34, GUI 13).
+Windows Native ECU/Vehicle Smoke 통과. 자동 테스트와 사람 수동 확인은 VERIFICATION에서 구분합니다.
+팀 고정 라이브러리 버전 미확정, 담당자 코드 리뷰 NOT VERIFIED,
+Production 의미·출처 및 실제 Fault 전파 검토 필요, CANable/ECU Hardware NOT VERIFIED.
+매핑 영구 저장, 실제 GUI backend, Fault Injection/제어/Health 판정은 후속 범위입니다.
+Commit 후보만 제시: `[feat][YYYYMMDD][권도형] add ECU observation and CAN statistics GUI`.
+이번 작업에서는 Git add/Commit/Push/PR/Merge를 실행하지 않습니다.
