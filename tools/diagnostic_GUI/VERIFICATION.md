@@ -1,3 +1,160 @@
+# HINT-48 Phase 3E — 현재 파일 재확인 (2026-10-13, Asia/Seoul)
+
+동일 재개 요청에 따라 현재 Git diff와 파일을 다시 조사하고 전체 검증을 새로 실행했다.
+직전 완료한 9개 파일과 SHA-256이 일치했으며 이미 적용된 종료 오류 수정을 유지했다.
+이번 실행에서 Source/Test의 추가 수정·재작성·삭제·초기화는 하지 않았다.
+README의 Logging 사용/기존 Logger 계약/상한/오류/미검증 상태 설명은 현재 구현과 일치하여 유지했다.
+
+| 이번 실제 재실행 | 결과 |
+| --- | --- |
+| 최우선 close-drain 회귀 단독 | **1 passed in 0.23s** |
+| Logging Session/View | **35 passed in 5.79s** — Session21 / GUI14 |
+| 전체 pytest | **321 passed in 11.28s** — 기존286 + 신규35 |
+| 기존 CLI 별도 회귀 | **140 passed in 0.52s** |
+| CLI/GUI 모듈·설치 진입점 | PASS |
+| pip check | **No broken requirements found.** |
+| Windows Logging Native Smoke | JSONL5 / CSV4프레임, CLI bytes 일치, 기존 파일 보호, 오류 후 재시작, Clear 중 기록 유지, active close, writer close/Receiver1개 해제 |
+| Windows Raw/Decode/Vehicle/ECU Native Smoke | **4종 모두 PASS**, Mock4/5/4/4개 해제·미송신 |
+| 이번 사람 수동 확인 / Hardware | **NOT VERIFIED / NOT VERIFIED** |
+| 팀 고정 버전 / 담당자 코드 리뷰 | **미확정 / NOT VERIFIED** |
+| Git add/Commit/Push/PR/Merge | **미실행** |
+
+기준 Branch/HEAD: PC-Diagnostic-Test / `10f18cc5517890600f9d7282feb34cc9dd317a8d`.
+종료 오류 테스트의 Condition/wait_for/snapshot 동기화는 Stop 이벤트 기반이다.
+첫 Close의 오류 표시/창 유지/Receiver·Writer 종료와 재차 Close를 현재 코드 그대로 확인했다.
+직전 실패 재현·수정 원인과 Jira 초안은 아래 과거 검증 절에 보존한다. 새 결함은 재현되지 않았다.
+전용 evidence: `.test-tmp/phase3e-recheck-89e78ef12d5f4798b33c52d79672224d`.
+캐시 비활성화 및 매회 새 basetemp 사용. 자동 Windows 실행을 사용자 수동 확인으로 기록하지 않는다.
+D: 원본25개, 리뷰 Worktree/문서, 공통 Interface와 기존286개 테스트 보존을 재확인했다.
+이 절만 추가했으며 앞선 검증 기록은 변경하지 않았다.
+
+---
+
+# HINT-48 Phase 3E — Logging GUI 재개·최종 검증 (2026-10-13, Asia/Seoul)
+
+아래 기존 Phase 3D-2 및 이전 기록은 보존한다. 이번 절은 실제 실행 결과이다.
+테스트 통과와 팀 고정 버전 승인/담당자 리뷰/Production 검증/Hardware PASS를 구분한다.
+
+### 중단 지점 복원 및 관련 계약
+
+- Branch PC-Diagnostic-Test / HEAD `10f18cc5517890600f9d7282feb34cc9dd317a8d`.
+- 최초 Phase 3E 시작 clean. 재개 시 기존 변경은 수정2개(receiver/window), 신규5개
+  (logging_session/view, test_logging_session/view, gui_logging_native_smoke).
+  README/VERIFICATION의 Phase 3E 절은 당시 아직 작성하지 않은 상태였다.
+- Git diff/실제 7개 파일과 마지막 회귀 테스트를 조사하고 삭제/초기화/재구현 없이 재개.
+- D: AGENTS.md, 기존 Logger/README/테스트/RawCanFrame 및 GUI/Buffer/Decode/ECU 계약 확인.
+- 핸드북의 PC Tool Logging 관련 p29–30은 archive/initial 문서이다.
+  thin GUI/책임 분리와 CSV/JSON 저장을 참고했다. p30의 decoded schema는
+  기존 Raw Logger schema와 다른 범위이므로 이번 사용자 요구대로 Raw 계약을 우선한다.
+  공통 문서/Interface를 수정하거나 decoded schema를 Raw 공식 필드로 확정하지 않았다.
+- RawCanLogger는 독점 x 생성, 매 write 후 flush, 기존 JSONL/CSV 9필드 및 close 계약 유지.
+  원래 Logger/CAN Interface/DBC/Cache 소스 변경 없음.
+
+### 마지막 종료 오류 — 테스트와 제품 원인 구분
+
+- 변경 전 재개 재현: 마지막 테스트 **1 failed in 0.30s**.
+  이전 세션에서도 **1 failed in 0.35s**로 동일 종료 동작을 확인했다.
+- Condition 기본 RLock에서 snapshot의 재진입이 가능하다.
+  wait_for는 Stop 상태 전이로 깨어나며 3초 무한 대기가 아니다.
+  이번 재현은 timeout/deadlock/Qt 이벤트 부재가 아니라 window.close()가 True를 반환한 assertion 실패다.
+- 제품 원인: MainWindow가 writer.wait() 종료 완료만 확인하고 LoggingSession Error를 검사하지 않아
+  drain 중 write 오류를 사용자에게 보여주기 전에 창을 닫았다.
+- 최소 수정: 종료 wait 후 Session Error 확인, Session generation별 첫 Close에서 창 유지·오류 표시.
+  두 번째 Close에서는 종료 허용. 새 Session 오류는 새로운 알림으로 처리.
+  generation은 내부 GUI 상태이며 Raw Logger 파일 schema에는 추가하지 않음.
+- 회귀 test 강화: 첫 Close 뒤 Writer inactive/file close 확인/Receiver non-running,
+  창/오류 표시 유지, 재차 Close 종료 검증.
+- 수정 후 같은 마지막 테스트를 포함한 Logging 검증 **31 passed in 4.88s**.
+  원래 실패 조건을 삭제하거나 완화하지 않았다. 신규 Phase 3E 오류-close 테스트를 더 엄격한 정책으로 보완했다.
+
+### 실제 최종 실행 결과
+
+| 검증 | 결과 |
+| --- | --- |
+| Phase 3E 시작 baseline | **286 passed in 11.32s** |
+| 초기 Session 통합 | **305 passed in 10.90s** — 기존286 + 신규19 |
+| 중단 전 최초 Logging 모델/GUI | **30 passed in 4.95s**, Windows Logging Smoke 통과 |
+| 재개 후 오류/경합 추가 검증 | **35 passed in 5.35s** — Session21 / GUI14 |
+| 최종 전체 pytest | **321 passed in 15.26s** — 기존286 + 신규35 |
+| 기존 CLI 별도 회귀 | **140 passed in 0.61s** |
+| CLI/GUI 모듈 및 설치 entry --help | 모두 PASS |
+| pip check | **No broken requirements found.** |
+| CSV/JSONL 계약 | 기존 CLI Logger와 byte 일치; 필드/순서/원래 Timestamp/null/Channel/RX-TX/RTR/Error 보존 |
+| Open/Stop 경합 | Condition 이벤트 기반 모의 Open 실패, 접수2/미확인2/기록0으로 분리 |
+| Write/flush 오류 | 성공 Count 미증가; bytes가 파일에 남아도 unconfirmed로 표시; 정상 handle 정리 |
+| 기존 파일/권한/잠금 | 기존 파일 bytes 보존 실제 검증, PermissionError/공유 위반은 모의; 실제 ACL/디스크 고갈 시험 아님 |
+| Queue/표시 Drop | 독립 저장/표시 경로, 상한과 새 입력 제외, 측정 계수 관계/INCOMPLETE 표시 확인 |
+| Receiver 오류/Stop | Queue seal/drain, 파일 close, 종료/재시작 guard 확인 |
+| 종료/반복 | 3회 새 Session, 중복 Start-Stop, active close, timeout 창 유지/재시도, drain 실패 알림 후 두 번째 Close |
+| GUI main thread | UI snapshot 갱신만 main thread; 생성/write/close는 단일 별도 writer thread |
+| Windows Logging Native | JSONL **5프레임**, CSV **4프레임**, 각각 CLI byte 일치; 기존 파일 보호/Error 후 재시작/Clear 중 계속 기록/active close, Receiver1개 해제·미송신 |
+| Windows Raw Native | 실제 창/3회 반복/Clear/active close, Mock4개 해제 |
+| Windows Decode Native | TEST ONLY 명시 load/Decode/Cache/오류 보존/active close, Mock5개 해제 |
+| Windows Vehicle Native | TEST ONLY -10.0/test_unit/3회 반복/Cache/오류/Reload/종료, Mock4개 해제 |
+| Windows ECU Native | 7카드/STD-EXT/Fault 읽기/3회 반복/Clear/Reload/오류/종료, Mock4개 해제 |
+| 이번 Logging 사람 수동 확인 | **NOT VERIFIED** — 요청하지 않았으며 이전 Phase 수동 결과로 대신하지 않음 |
+| 실제 CANable/ECU/Bus 및 Hardware 성능·KPI | **NOT VERIFIED** |
+| 팀 고정 버전 / 담당자 코드 리뷰 | **미확정 / NOT VERIFIED** |
+| Git add/Commit/Push/PR/Merge/Jira Done | **미실행** |
+
+실제 설치는 Python 3.14.6, PySide6 6.10.3, python-can 4.6.1, cantools 44.2.1,
+pytest 9.1.1로 이전 환경과 같음. pyproject/패키지 설치 변경 없음.
+매회 새 GUID 테스트 Temp와 `-p no:cacheprovider` 사용; Temp 접근 오류 없음.
+최종 evidence: `.test-tmp/phase3e-final-6503166321dc4ab0a0392960cf6591f3`.
+테스트 파일은 이 경로/pytest 관리 Temp에만 생성, 정상 handle 정리 및 Git 제외 확인.
+오류/부분 파일을 자동 삭제하지 않으며 증적은 Temp에 보존했다.
+Mock 자동 Windows 창 실행과 사람의 수동 파일 선택/내용 확인을 구분한다.
+
+### Logging 정책 / 제한
+
+- GUI 시작/CAN Start만으로 자동 기록하지 않음. Receiver 실행 중 별도 Start Logging 필요.
+- Receiver sink는 Raw 객체를 독립 Logging Queue와 기존 표시 Buffer에 전달.
+  파일 I/O는 GUI/Receiver thread에서 하지 않음.
+- 512 pending + 1 in-flight; 초과 시 새 프레임만 제외하고 queue_dropped로 표시.
+  Buffer Drop은 다른 계수이며 파일 손실과 자동으로 동일시하지 않음.
+- Received는 Recording admission 구간 입력, Logged는 write+flush 반환 건수,
+  unconfirmed는 실패한 in-flight 및 잔여 queue. 파일에 부분/전체 bytes가 있을 수도 있음.
+  Stop 완료 후 Received = Logged + Queue dropped + unconfirmed.
+- Stop Logging/CAN Stop/Receiver 실패/Close는 admission을 닫고 기존 Queue를 drain.
+  오류면 Error/원인/부분 파일 가능성 표시. Active writer는 참조 유지, 유한 wait 후 재시도.
+- Clear/DBC Reload는 기존 화면/Cache 계약을 유지하고 Logging 파일/계수를 바꾸지 않음.
+- 기존 파일은 empty라도 거부, Append/overwrite/상위 폴더 생성/자동 삭제 없음.
+- fsync/전원 차단 내구성/rotation/실제 고속 무손실/디스크 용량/GUI Hardware backend는 후속 범위.
+- Logger close 실패 시 Error/close confirmed=False로 표시하며 정상 종료를 주장하지 않음.
+  OS 파일 I/O 자체를 강제 취소하지 않음.
+
+### Jira 등록용 초안 — 외부 등록 미실행
+
+**HINT-48 / Bug / 종료 drain 중 Logging 오류 안내 누락 (이번 수정 완료, 담당자 리뷰 필요)**
+- 재현: Recording 상태에서 Close → Queue drain의 write 실패를 모의.
+- 수정 전: Writer Error는 존재하지만 MainWindow.close() True, 창이 사라져 오류 확인 불가.
+- 원인: Thread 종료와 Logger 성공을 동일하게 취급한 종료 경로.
+- 수정 후: Session Error를 검사하고 첫 Close를 무시하여 원인/부분 파일 안내 표시,
+  동일 Session에 재차 Close하면 종료. 실제 Receiver/Writer/파일 정리도 회귀에서 확인.
+- 검증: 실패 재현0.30s, 수정 후 동일 회귀 포함 Logging35/전체321 PASS.
+- 리뷰 대상: HINT-48 PC Tool 담당자. CAN/LIN 변경 없음.
+- Jira 등록/상태 변경/메시지 전송은 하지 않음.
+
+**HINT-48 / Open / 후속 검토**
+- 핸드북 decoded export schema는 Raw Logger와 별개: 후속 Signal/quality Export에 대한 범위/승인 필요.
+- 팀 고정 버전 및 내부 Receiver frame_sink/Logging Session API 코드 리뷰 필요.
+- 실제 ACL/공유 잠금/디스크 고갈/고속 capture/네트워크 파일시스템 종료 지연은 실환경 후속 검증.
+- blocking OS I/O의 강제 취소/무손실/파일 rotation을 이번 PASS로 확대하지 않음.
+- 공통 Interface 변경이 필요하면 별도 Jira Issue 및 상대 담당자 리뷰 필요.
+
+### 변경 / 보존
+
+수정4개: README.md, VERIFICATION.md, src/pc_diagnostic/gui/receiver.py, window.py.
+신규5개: src/pc_diagnostic/gui/logging_session.py, logging_view.py,
+tests/test_logging_session.py, test_logging_view.py, gui_logging_native_smoke.py.
+삭제0개. 기존286 테스트/Fixture 보존; 기존 Logger/CAN/DBC/Cache/ECU/Vehicle 소스 변경 없음.
+D: 원본25개 및 다른 리뷰 Worktree/문서는 SHA-256 기준으로 보존 점검.
+Common DBC/Matrix/Requirements/ECU·Interface 수치/Signal/Timeout/Fault 정책 변경 없음.
+기준 HEAD와 PC-Diagnostic-Test 유지, Stage 비어 있음.
+Commit 후보만 제시: `[feat][YYYYMMDD][권도형] add CAN logging GUI` (이번 실행하지 않음).
+
+---
+
 # HINT-48 Phase 3D-2 — Commit 사전 재검증 (2026-10-13, Asia/Seoul)
 
 이번 절은 사용자 Commit·일반 Push 승인 후 **새로 실행한 Commit 전 검증**이다.

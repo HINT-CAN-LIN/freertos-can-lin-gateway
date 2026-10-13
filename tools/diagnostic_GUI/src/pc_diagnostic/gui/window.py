@@ -12,6 +12,8 @@ from .decode_session import DecodeSession
 from .receiver import CLOSE_WAIT_MS, ReceiveWorker
 from .vehicle_view import VehicleStatusView
 from .observation_view import EcuObservationView
+from .logging_session import LOG_CLOSE_SECONDS, LoggingSession
+from .logging_view import LoggingView
 
 # 아래 값은 GUI 표시 자원 제한이며 통신 규격 수치가 아니다.
 DISPLAY_REFRESH_MS = 50
@@ -64,9 +66,11 @@ class MainWindow(QMainWindow):
         self._clock = clock
         self.buffer = FrameBuffer()
         self.decode_session = DecodeSession()
+        self.logging_session = LoggingSession()
         self.worker = None
         self._failed = False
         self._closing = False
+        self._logging_error_notice = None
         self._selecting_dbc = False
         self._processed = 0
         self.setWindowTitle("PC Diagnostic Tool")
@@ -133,6 +137,8 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.vehicle_view, "Vehicle Status")
         self.ecu_view = EcuObservationView(self.decode_session, lambda: self._clock(), self)
         self.tabs.addTab(self.ecu_view, "ECU Health Observation")
+        self.logging_view = LoggingView(self.logging_session, self.receiver_running, self)
+        self.tabs.addTab(self.logging_view, "Logging")
         layout.addWidget(self.tabs, 1)
         layout.addWidget(QLabel("오류 메시지"))
         self.error_area = QPlainTextEdit()
@@ -154,6 +160,10 @@ class MainWindow(QMainWindow):
         self.clear_button.clicked.connect(self.clear_monitor)
         self.dbc_button.clicked.connect(self.select_dbc)
         self.table.itemSelectionChanged.connect(self.show_selection)
+
+    def receiver_running(self):
+        # Stop 요청/오류/종료 중에는 신규 Logging 시작을 허용하지 않는다.
+        return self.worker is not None and self.stop_button.isEnabled() and not self._failed and not self._closing
 
     def can_change_dbc(self):
         # 정지한 worker의 잔여 프레임까지 기존 DBC로 처리한 뒤 교체한다.
@@ -210,7 +220,8 @@ class MainWindow(QMainWindow):
             return
         self._failed = False
         self.error_area.clear()
-        self.worker = ReceiveWorker(self.buffer, self._interface_factory, self)
+        self.worker = ReceiveWorker(self.buffer, self._interface_factory, self,
+                                    frame_sink=self.logging_session.accept)
         self.worker.failed.connect(self.show_error)
         self.worker.finished.connect(self.worker_finished)
         self.stop_button.setEnabled(True)
@@ -218,10 +229,13 @@ class MainWindow(QMainWindow):
         self.status_label.setText("Running")
         self.timer.start()
         self.worker.start()
+        self.logging_view.refresh()
 
     @Slot()
     def stop_monitor(self):
         # 비동기 정지: UI 응답을 유지하면서 worker의 취소 이벤트만 설정한다.
+        self.logging_session.stop()
+        self.logging_view.refresh()
         if self.worker is not None:
             self.stop_button.setEnabled(False)
             self.worker.request_stop()
@@ -230,12 +244,16 @@ class MainWindow(QMainWindow):
     def show_error(self, message):
         # Error는 worker 종료 후에도 유지하여 실패 원인을 확인할 수 있게 한다.
         self._failed = True
+        self.logging_session.stop()
+        self.logging_view.refresh()
         self.status_label.setText("Error")
         self.error_area.appendPlainText(message)
 
     @Slot()
     def worker_finished(self):
         # 수신 잔여 데이터는 제한된 batch로 처리하고 종료된 thread를 해제한다.
+        self.logging_session.stop()
+        self.logging_view.refresh()
         if self._closing:
             return
         self.refresh_frames()
@@ -375,6 +393,8 @@ class MainWindow(QMainWindow):
         # Qt 필수 override 명칭은 snake_case 규칙의 예외이다.
         # 제한 시간 안에 종료되지 않으면 창을 유지하여 실행 중 QThread 파괴를 방지한다.
         self._closing = True
+        self.logging_session.stop()
+        self.logging_view.refresh()
         self.update_controls()
         if self.worker is not None:
             self.worker.request_stop()
@@ -384,6 +404,23 @@ class MainWindow(QMainWindow):
                 self.update_controls()
                 event.ignore()
                 return
+        if not self.logging_session.wait(LOG_CLOSE_SECONDS):
+            # 파일 I/O를 강제 종료하지 않고 창과 writer 참조를 유지한다.
+            self._closing = False
+            self.show_error("Logging stop timed out; close again after the writer finishes.")
+            self.update_controls()
+            event.ignore()
+            return
+        snapshot = self.logging_session.snapshot()
+        notice = (id(self.logging_session), snapshot.generation, snapshot.error)
+        if snapshot.error and self._logging_error_notice != notice:
+            # Thread 종료와 기록 성공은 다르다. 오류를 표시한 뒤 재차 Close를 허용한다.
+            self._logging_error_notice = notice
+            self._closing = False
+            self.show_error(f"Logging ended with error: {snapshot.error}. Review the partial file; close again to exit.")
+            self.update_controls()
+            event.ignore()
+            return
         completed = self.worker
         self.worker = None
         if completed is not None:
@@ -392,4 +429,5 @@ class MainWindow(QMainWindow):
         self.age_timer.stop()
         self.vehicle_view.close_view()
         self.ecu_view.close_view()
+        self.logging_view.close_view()
         event.accept()

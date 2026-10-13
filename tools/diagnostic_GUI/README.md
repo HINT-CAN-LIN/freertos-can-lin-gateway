@@ -5,7 +5,8 @@ Gateway CAN ID, message별 DLC, Signal bit layout/scale/enum은 정의하지 않
 Phase 1 Raw CAN 기능 위에 명시적으로 지정한 DBC의 Decode/Encode와 PC 관찰용 State Cache를 제공합니다.
 Phase 3B는 Mock Raw GUI, Phase 3C는 명시적 DBC Decode/Cache, Phase 3D-1은 사용자 매핑 Vehicle Status를 제공합니다.
 Phase 3D-2는 명시적 ECU/Fault 관측과 처리된 Raw RX 통계를 제공합니다. Health/Fault 판정은 하지 않습니다.
-LIN, GUI의 Logging/송신, ECU Health/Fault 정책, Fault Injection, KPI, 주기 송신, CAN FD는 미구현입니다.
+Phase 3E는 기존 Raw Logger 계약의 CSV/JSONL 파일 기록 GUI를 제공합니다. 아래 이전 Phase 절은 당시 기록입니다.
+LIN, GUI의 송신, ECU Health/Fault 정책, Fault Injection, KPI, 주기 송신, CAN FD는 미구현입니다.
 CAN FD 수신 시 명시적 오류로 중단하며 Classic CAN으로 변환하거나 조용히 버리지 않습니다.
 
 ## 설계 근거 및 경계
@@ -623,3 +624,97 @@ Production 의미·출처 및 실제 Fault 전파 검토 필요, CANable/ECU Har
 매핑 영구 저장, 실제 GUI backend, Fault Injection/제어/Health 판정은 후속 범위입니다.
 Commit 후보만 제시: `[feat][YYYYMMDD][권도형] add ECU observation and CAN statistics GUI`.
 이번 작업에서는 Git add/Commit/Push/PR/Merge를 실행하지 않습니다.
+
+## Phase 3E — CAN Logging GUI
+
+Logging 탭은 기존 CLI `RawCanLogger`로 Mock RawCanFrame을 CSV/JSONL에 기록합니다.
+GUI/Receiver 시작만으로는 파일을 만들지 않습니다. **Mock / DEMO / TEST ONLY**이며
+실제 CANable/ECU 검증 또는 무손실 저장·Hardware 성능·KPI 보장이 아닙니다.
+
+### 사용 방법
+
+1. 기존 방식으로 `python -m pc_diagnostic.gui` 또는 `can-diag-gui.exe` 실행.
+2. Logging 탭에서 JSONL/CSV를 선택하고 **Select output file...**로 새 파일 경로를 직접 선택.
+   파일 확장자로 형식을 자동 추론하거나 원본 경로를 변경하지 않습니다.
+3. 상단 **Start**로 CAN Receiver 실행. 이때 Logging은 자동 시작되지 않습니다.
+4. **Start Logging**을 눌러 기록 시작. 파일 opening 중에는 별도 안내와 written=0을 표시합니다.
+5. **Stop Logging**은 기록 admission을 닫고 이미 받은 Queue를 drain한 뒤 flush/close를 완료합니다.
+   Receiver는 계속 동작합니다. 상단 CAN **Stop**은 Logging도 seal/drain하게 합니다.
+6. 상태·파일명·성공 기록 Count·Queue Drop·실패/미확인·pending/in-flight·마지막 오류를 확인합니다.
+   새 기록은 새 경로를 선택한 뒤 시작합니다.
+
+상태: Idle / Recording / Stopping / Stopped / Error.
+파일 I/O는 Session writer가 소유하며 UI와 Receiver는 직접 파일을 열거나 쓰지 않습니다.
+기록 중에는 형식/경로 변경 및 중복 Start를 차단합니다.
+GUI는 파일 권한 변경, 상위 디렉터리 생성, 기존 파일 삭제를 자동 수행하지 않습니다.
+
+### 기존 CLI 파일 계약
+
+`logger.py`는 수정하지 않았습니다. 같은 JSONL/CSV schema, 원래 Raw ID/DLC/DATA,
+STD/EXT/RTR/ERROR, Channel, Timestamp, RX/TX 필드를 그대로 직렬화합니다.
+Timestamp는 기존 초 단위 값이며 미제공 값을 보정/합성하지 않습니다.
+CSV header/null/bool, JSONL hex/data와 FIFO 순서도 기존 CLI와 같습니다.
+JSONL은 기존 `read_jsonl`로 읽을 수 있으며 CSV 입력/Replay는 구현하지 않습니다.
+Decoded Signal/Unit/quality나 핸드북의 decoded export schema는 Raw 파일에 추가하지 않습니다.
+
+기존 Logger의 `open(..., "x")` 정책을 그대로 사용합니다.
+**덮어쓰기·Append 미지원**입니다. 이미 존재하는 빈 파일도 Error로 거부합니다.
+선택 Dialog에서 기존 파일을 지정해도 overwrite 승인을 요청하거나 덮어쓰지 않습니다.
+파일 오류 이후 파일이 남아 있으면 부분 기록일 수 있으므로 검토하고 새 이름으로 재시작하세요.
+자동 삭제/재시도/임의 파일 복구는 하지 않습니다.
+
+### Queue / Count / Drop
+
+- Receiver는 표시 Buffer에 넣기 전에 **동일 immutable RawCanFrame**을 Logging Session에 전달합니다.
+  표시 Buffer Drop만으로 파일 손실을 단정하지 않습니다.
+- Logging Queue는 최대 **512 pending + 1 in-flight**입니다. 초과하면 가장 새 입력을 제외하고
+  `Queue dropped`를 올립니다. FIFO 기존 대상은 유지합니다.
+- `Receiver frames during this Logging session`은 Recording admission 구간의 입력 수입니다.
+  Recording 이전/Stop 이후 프레임은 이번 파일의 대상이 아니므로 이 수에 포함하지 않습니다.
+- `Logged`는 기존 Logger.write 및 그 안의 flush가 **모두 반환한** 프레임 수입니다.
+  실패한 write/flush를 성공으로 세지 않습니다.
+- `Failed/unconfirmed`는 실패한 in-flight 및 미처리 Queue 대상입니다.
+  실패 프레임은 실제 파일에 일부 또는 전부 존재할 수도 있어 정확한 누락 수로 단정하지 않습니다.
+- pending/in-flight도 별도 표시합니다. 정상 종료 후
+  received = logged + queue_dropped + failed/unconfirmed입니다.
+- 상단 Receiver received/GUI processed/Buffer dropped는 **Clear 이후** 구간,
+  Logging 계수는 **Logging Start 이후** 구간입니다. 표시/파일의 수가 같을 필요는 없습니다.
+- Queue Drop/오류가 있으면 INCOMPLETE 경고를 표시하며 전체 무손실 capture 성공으로 보고하지 않습니다.
+
+파일은 기존 Logger처럼 프레임마다 flush하지만 fsync/전원 차단 내구성, 파일 rotation,
+디스크 용량 보장, 고속 Hardware 무손실은 미검증·범위 밖입니다.
+출력 파일은 Source와 분리해 보관하세요. 이번 테스트의 전용 `.test-tmp/`만 Git 제외를 확인했습니다.
+
+### Stop / Clear / Reload / Close와 오류
+
+- Clear/DBC Reload는 Raw 화면/Decode 관측 계약을 유지하며 **Logging 파일/계수는 초기화하지 않습니다**.
+  파일에는 DBC가 아니라 Raw 프레임만 저장합니다.
+- Stop Logging/CAN Stop은 새 대상 접수를 닫고 Queue의 기존 대상을 완료한 뒤 파일을 닫습니다.
+  Receiver 오류에도 이미 접수한 파일 Queue를 drain합니다.
+- Open/권한/파일 잠금/직렬화/write/flush/close 오류는 Error와 원인으로 표시합니다.
+  오류 후에도 CAN Monitor/Decode는 유지되며 새 경로로 다음 Session을 시작할 수 있습니다.
+- GUI 종료는 CAN Worker와 파일 writer 종료를 확인합니다.
+  파일 I/O가 종료 제한 안에 끝나지 않으면 강제 종료하지 않고 창과 worker 참조를 유지합니다.
+- **종료 drain 중 기록 오류가 있으면 첫 Close에서 창을 유지하고 오류를 표시합니다.**
+  부분 파일을 확인한 뒤 다시 Close하면 종료할 수 있습니다.
+  새 Session의 오류는 다시 표시합니다. 재시도 Close는 파일 정상 저장 인증이 아닙니다.
+- 내부 generation은 오류 알림을 Session별로 구분하는 GUI metadata이며 CSV/JSONL 필드가 아닙니다.
+
+### 검증
+
+```powershell
+# tools/diagnostic_GUI 위치, 실행마다 새 폴더 생성
+$test_root = Join-Path '.test-tmp' ('phase3e-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $test_root | Out-Null
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp (Join-Path $test_root 'pytest')
+.\.venv\Scripts\python.exe tests/gui_logging_native_smoke.py --output-dir $test_root
+```
+
+전체 **321 passed** = 기존 286 + 신규 35(Session 21 / GUI 14).
+CSV/JSONL 출력의 기존 CLI와 byte 일치, Queue/Count/오류/반복/종료 검증 완료.
+Logging 및 기존 Raw/Decode/Vehicle/ECU Windows Native Smoke 통과.
+**Logging 사용자 수동 확인 NOT VERIFIED**, Hardware NOT VERIFIED,
+팀 고정 버전 미확정, 담당자 코드 리뷰 NOT VERIFIED.
+확인된 종료 오류와 후속 질문은 VERIFICATION의 Jira 등록용 초안에 기록했습니다.
+이번 작업에서 Git add/Commit/Push/PR/Merge 미실행.
+향후 Commit 후보: `[feat][YYYYMMDD][권도형] add CAN logging GUI`.

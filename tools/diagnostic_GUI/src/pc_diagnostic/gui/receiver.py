@@ -13,10 +13,11 @@ CLOSE_WAIT_MS = 1000
 class ReceiveWorker(QThread):
     failed = Signal(str)
 
-    def __init__(self, buffer, interface_factory=MockCanInterface, parent=None):
+    def __init__(self, buffer, interface_factory=MockCanInterface, parent=None, *, frame_sink=None):
         # 수신 프레임마다 Qt signal을 보내지 않아 이벤트 큐 누적을 제한한다.
         super().__init__(parent)
         self._buffer = buffer
+        self._frame_sink = frame_sink
         self._interface_factory = interface_factory
         self._stop_event = Event()
 
@@ -38,6 +39,9 @@ class ReceiveWorker(QThread):
                 transport.inject(make_demo_frame(index))
                 frame = transport.recv(timeout=RECEIVE_POLL_SECONDS)
                 if frame is not None:
+                    # Logging Queue는 표시 Buffer drop 이전의 동일 Raw 객체를 받는다.
+                    if self._frame_sink is not None:
+                        self._frame_sink(frame)
                     self._buffer.append(frame)
                 index += 1
                 if self._stop_event.wait(DEMO_INTERVAL_SECONDS):
