@@ -61,6 +61,7 @@ const osMessageQueueAttr_t canRxQueue_attributes = {
   .name = "canRxQueue"
 };
 /* USER CODE BEGIN PV */
+static uint8_t gatewayAliveCounter;
 
 /* USER CODE END PV */
 
@@ -76,6 +77,14 @@ static void ProcessCanMessage(const CanRxMessage_t *message);
 static void CanMonitorInit(void);
 static void MonitorCanMessage(const CanRxMessage_t *message);
 static void CheckCanTimeouts(void);
+static HAL_StatusTypeDef CanTransmitStandardFrame(uint16_t id,
+                                                  uint8_t *data,
+                                                  uint8_t dlc);
+static void TransmitGatewayStatus(void);
+static void TransmitFaultStatus(uint8_t faultCode,
+                                uint8_t ecuOffline,
+                                uint8_t recoveryState,
+                                uint8_t systemState);
 
 /* USER CODE END PFP */
 
@@ -374,12 +383,94 @@ static void SendUartText(char *text, uint16_t textSize, int textLength)
                     100U);
 }
 
+static HAL_StatusTypeDef CanTransmitStandardFrame(uint16_t id,
+                                                  uint8_t *data,
+                                                  uint8_t dlc)
+{
+  CAN_TxHeaderTypeDef txHeader = {0};
+  uint32_t txMailbox;
+
+  if ((data == NULL) || (id > 0x7FFU) || (dlc > DBC_CAN_FRAME_DLC))
+  {
+    return HAL_ERROR;
+  }
+
+  txHeader.StdId = id;
+  txHeader.ExtId = 0U;
+  txHeader.IDE = CAN_ID_STD;
+  txHeader.RTR = CAN_RTR_DATA;
+  txHeader.DLC = dlc;
+  txHeader.TransmitGlobalTime = DISABLE;
+
+  return HAL_CAN_AddTxMessage(&hcan1, &txHeader, data, &txMailbox);
+}
+
+static uint8_t GetCanQueueUsagePercent(void)
+{
+  uint32_t queueCapacity;
+  uint32_t queueCount;
+
+  if (canRxQueueHandle == NULL)
+  {
+    return 0U;
+  }
+
+  queueCapacity = osMessageQueueGetCapacity(canRxQueueHandle);
+  queueCount = osMessageQueueGetCount(canRxQueueHandle);
+
+  if (queueCapacity == 0U)
+  {
+    return 0U;
+  }
+
+  if (queueCount >= queueCapacity)
+  {
+    return 100U;
+  }
+
+  return (uint8_t)((queueCount * 100U) / queueCapacity);
+}
+
+static void TransmitGatewayStatus(void)
+{
+  uint8_t txData[DBC_CAN_FRAME_DLC] = {0};
+
+  txData[0] = (uint8_t)(gatewayAliveCounter & 0x0FU);
+  txData[1] = GetCanQueueUsagePercent();
+
+  if (CanTransmitStandardFrame(DBC_CAN_ID_GATEWAY_STATUS,
+                               txData,
+                               DBC_CAN_FRAME_DLC) == HAL_OK)
+  {
+    gatewayAliveCounter = (uint8_t)((gatewayAliveCounter + 1U) & 0x0FU);
+  }
+}
+
+static void TransmitFaultStatus(uint8_t faultCode,
+                                uint8_t ecuOffline,
+                                uint8_t recoveryState,
+                                uint8_t systemState)
+{
+  uint8_t txData[DBC_CAN_FRAME_DLC] = {0};
+
+  txData[0] = faultCode;
+  txData[1] = (uint8_t)((ecuOffline & 0x0FU)
+                      | ((recoveryState & 0x01U) << 4U)
+                      | ((systemState & 0x03U) << 5U));
+
+  (void)CanTransmitStandardFrame(DBC_CAN_ID_FAULT_STATUS,
+                                 txData,
+                                 DBC_CAN_FRAME_DLC);
+}
+
 typedef struct
 {
   uint8_t have_frame;
   uint8_t last_alive;
   uint8_t alive_error;
   uint8_t timeout_reported;
+  uint8_t timeout_fault_code;
+  uint8_t ecu_offline;
   uint32_t last_rx_tick;
 } CanMonitorState_t;
 
@@ -393,12 +484,16 @@ static void CanMonitorInit(void)
   vcuMonitorState.last_alive = 0U;
   vcuMonitorState.alive_error = 0U;
   vcuMonitorState.timeout_reported = 0U;
+  vcuMonitorState.timeout_fault_code = DBC_FAULT_CODE_VCU_TIMEOUT;
+  vcuMonitorState.ecu_offline = DBC_FAULT_ECU_VCU;
   vcuMonitorState.last_rx_tick = 0U;
 
   motorMonitorState.have_frame = 0U;
   motorMonitorState.last_alive = 0U;
   motorMonitorState.alive_error = 0U;
   motorMonitorState.timeout_reported = 0U;
+  motorMonitorState.timeout_fault_code = DBC_FAULT_CODE_ECU_OFFLINE;
+  motorMonitorState.ecu_offline = DBC_FAULT_ECU_MOTOR;
   motorMonitorState.last_rx_tick = 0U;
 
   canMonitorStartTick = HAL_GetTick();
@@ -428,6 +523,11 @@ static void MonitorAliveCounter(const char *sourceName,
 
     if (state->timeout_reported != 0U)
     {
+      TransmitFaultStatus(state->timeout_fault_code,
+                          state->ecu_offline,
+                          DBC_FAULT_RECOVERY_CLEARED,
+                          DBC_SYSTEM_STATE_DEGRADED);
+
       textLength = snprintf(text,
                             sizeof(text),
                             "CAN_MONITOR %s TIMEOUT_RECOVERED Alive=%u\r\n",
@@ -447,6 +547,11 @@ static void MonitorAliveCounter(const char *sourceName,
     {
       if (state->alive_error == 0U)
       {
+        TransmitFaultStatus(DBC_FAULT_CODE_ALIVE_ERROR,
+                            state->ecu_offline,
+                            DBC_FAULT_RECOVERY_ACTIVE,
+                            DBC_SYSTEM_STATE_DEGRADED);
+
         textLength = snprintf(
             text,
             sizeof(text),
@@ -461,6 +566,11 @@ static void MonitorAliveCounter(const char *sourceName,
     }
     else if (state->alive_error != 0U)
     {
+      TransmitFaultStatus(DBC_FAULT_CODE_ALIVE_ERROR,
+                          state->ecu_offline,
+                          DBC_FAULT_RECOVERY_CLEARED,
+                          DBC_SYSTEM_STATE_DEGRADED);
+
       textLength = snprintf(text,
                             sizeof(text),
                             "CAN_MONITOR %s ALIVE_RECOVERED Alive=%u\r\n",
@@ -476,6 +586,11 @@ static void MonitorAliveCounter(const char *sourceName,
 
   if (state->timeout_reported != 0U)
   {
+    TransmitFaultStatus(state->timeout_fault_code,
+                        state->ecu_offline,
+                        DBC_FAULT_RECOVERY_CLEARED,
+                        DBC_SYSTEM_STATE_DEGRADED);
+
     textLength = snprintf(text,
                           sizeof(text),
                           "CAN_MONITOR %s TIMEOUT_RECOVERED Alive=%u\r\n",
@@ -530,6 +645,11 @@ static void CheckCanSourceTimeout(const char *sourceName,
   {
     if (state->timeout_reported == 0U)
     {
+      TransmitFaultStatus(state->timeout_fault_code,
+                          state->ecu_offline,
+                          DBC_FAULT_RECOVERY_ACTIVE,
+                          DBC_SYSTEM_STATE_DEGRADED);
+
       char text[80];
       int textLength = snprintf(text,
                                 sizeof(text),
@@ -1079,11 +1199,13 @@ void StartDefaultTask(void *argument)
 
   CanRxMessage_t rxMessage = {0};
   uint32_t lastLedToggleTick;
+  uint32_t lastGatewayStatusTxTick;
 
   (void)argument;
 
   CanMonitorInit();
   lastLedToggleTick = HAL_GetTick();
+  lastGatewayStatusTxTick = lastLedToggleTick;
 
   HAL_UART_Transmit(&huart2,
                     (uint8_t *)boot_message,
@@ -1109,6 +1231,14 @@ void StartDefaultTask(void *argument)
     }
 
     CheckCanTimeouts();
+
+    if ((uint32_t)(now - lastGatewayStatusTxTick) >=
+        DBC_CAN_GATEWAY_STATUS_PERIOD_MS)
+    {
+      TransmitGatewayStatus();
+      lastGatewayStatusTxTick = now;
+    }
+
     osDelay(DBC_CAN_MONITOR_SERVICE_PERIOD_MS);
   }
 
