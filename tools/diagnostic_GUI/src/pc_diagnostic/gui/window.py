@@ -1,18 +1,25 @@
-"""Raw CAN 표시만 담당하는 Qt 메인 윈도우."""
+"""Raw 관찰/선택 결과/마지막 정상 Cache를 표시하는 thin Qt 화면."""
+from pathlib import Path
+from time import time
 from PySide6.QtCore import QTimer, Qt, Slot
-from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QHeaderView, QLabel,
-                              QMainWindow, QPlainTextEdit, QPushButton, QTableWidget,
-                              QTableWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QFileDialog, QHBoxLayout, QHeaderView,
+                              QLabel, QMainWindow, QPlainTextEdit, QPushButton,
+                              QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+from ..dbc_loader import DbcLoadError
 from ..interfaces import MockCanInterface
 from .buffer import FrameBuffer
+from .decode_session import DecodeSession
 from .receiver import CLOSE_WAIT_MS, ReceiveWorker
 
 # 아래 값은 GUI 표시 자원 제한이며 통신 규격 수치가 아니다.
 DISPLAY_REFRESH_MS = 50
+AGE_REFRESH_MS = 250
 MAX_TABLE_ROWS = 500
 MAX_ERROR_LINES = 50
-WINDOW_WIDTH = 980
-WINDOW_HEIGHT = 600
+WINDOW_WIDTH = 1100
+WINDOW_HEIGHT = 850
+WINDOW_SCREEN_MARGIN = 60
+SIGNAL_HEADERS = ["Message", "Signal", "Value", "Unit", "Last Update / Age (s)", "Decode Status"]
 
 
 def frame_cells(frame):
@@ -27,20 +34,60 @@ def frame_cells(frame):
             str(frame.dlc), frame.data.hex(" ").upper())
 
 
+def observation_status(observation):
+    # 미로드/처리 오류와 기존 Codec 상태를 서로 구분한다.
+    if observation.processing_error:
+        return observation.processing_error
+    if observation.decoded is None:
+        return "Decode disabled"
+    result = observation.decoded
+    status = "Unknown / Undefined" if result.decode_status.value == "unknown" else result.decode_status.value
+    return status + (f": {result.error}" if result.error else "")
+
+
+def configure_table(table, headers):
+    # 공통 표시 설정만 담당하며 데이터 해석은 하지 않는다.
+    table.setHorizontalHeaderLabels(headers)
+    table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+    table.setAlternatingRowColors(True)
+    table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+    table.horizontalHeader().setStretchLastSection(True)
+
+
 class MainWindow(QMainWindow):
-    def __init__(self, interface_factory=MockCanInterface):
+    def __init__(self, interface_factory=MockCanInterface, *, clock=time):
         # Qt widget와 표시 타이머는 메인 스레드에서만 생성한다.
         super().__init__()
         self._interface_factory = interface_factory
+        self._clock = clock
         self.buffer = FrameBuffer()
+        self.decode_session = DecodeSession()
         self.worker = None
         self._failed = False
+        self._closing = False
+        self._selecting_dbc = False
+        self._processed = 0
         self.setWindowTitle("PC Diagnostic Tool")
-        self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
+        # Windows 배율을 적용한 가용 화면 안에 초기 창을 배치한다.
+        available = self.screen().availableGeometry()
+        self.resize(min(WINDOW_WIDTH, available.width() - WINDOW_SCREEN_MARGIN),
+                    min(WINDOW_HEIGHT, available.height() - WINDOW_SCREEN_MARGIN))
         central = QWidget(self)
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
-        layout.addWidget(QLabel("Mock · DEMO / TEST ONLY — 실제 ECU 데이터가 아닙니다. Hardware NOT VERIFIED"))
+        banner = QLabel("Mock · DEMO / TEST ONLY — 실제 ECU 데이터가 아닙니다. Hardware NOT VERIFIED")
+        banner.setWordWrap(True)
+        layout.addWidget(banner)
+        dbc_controls = QHBoxLayout()
+        self.dbc_button = QPushButton("Select DBC...")
+        self.dbc_label = QLabel("DBC: not selected | Decode disabled")
+        self.dbc_label.setWordWrap(True)
+        dbc_controls.addWidget(self.dbc_button)
+        dbc_controls.addWidget(self.dbc_label, 1)
+        layout.addLayout(dbc_controls)
+        self.dbc_policy_label = QLabel("DBC 변경: Stop 후 잔여 처리 완료 시 가능 · 로드 성공은 Interface 승인이 아닙니다.")
+        self.dbc_policy_label.setWordWrap(True)
+        layout.addWidget(self.dbc_policy_label)
         controls = QHBoxLayout()
         self.start_button = QPushButton("Start")
         self.stop_button = QPushButton("Stop")
@@ -51,41 +98,110 @@ class MainWindow(QMainWindow):
         self.status_label = QLabel("Disconnected")
         self.counter_label = QLabel("Received: 0")
         self.drop_label = QLabel("표시 버퍼 제외: 0")
-        for label in (self.status_label, self.counter_label, self.drop_label):
+        self.processed_label = QLabel("Raw/Decode processed: 0")
+        for label in (self.status_label, self.counter_label, self.drop_label, self.processed_label):
             controls.addWidget(label)
         layout.addLayout(controls)
         self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Timestamp", "Channel", "CAN ID", "DLC", "DATA"])
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        self.table.horizontalHeader().setStretchLastSection(True)
-        layout.addWidget(self.table)
+        configure_table(self.table, ["Timestamp", "Channel", "CAN ID", "DLC", "DATA"])
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.selection_label = QLabel("Raw 행을 선택하면 해당 프레임의 결과가 표시됩니다.")
+        self.selection_label.setWordWrap(True)
+        self.signal_table = QTableWidget(0, len(SIGNAL_HEADERS))
+        configure_table(self.signal_table, SIGNAL_HEADERS)
+        self.cache_label = QLabel("Last successful RX Cache: 선택 없음 · Age는 Health/Timeout 판정이 아닙니다.")
+        self.cache_label.setWordWrap(True)
+        self.cache_table = QTableWidget(0, len(SIGNAL_HEADERS))
+        configure_table(self.cache_table, SIGNAL_HEADERS)
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.addWidget(self.table)
+        details = QWidget()
+        detail_layout = QVBoxLayout(details)
+        detail_layout.addWidget(self.selection_label)
+        detail_layout.addWidget(QLabel("Selected frame signals — Last Update는 이 프레임 Timestamp; Age는 아래 Cache 참조"))
+        detail_layout.addWidget(self.signal_table)
+        detail_layout.addWidget(self.cache_label)
+        detail_layout.addWidget(self.cache_table)
+        splitter.addWidget(details)
+        layout.addWidget(splitter, 1)
         layout.addWidget(QLabel("오류 메시지"))
         self.error_area = QPlainTextEdit()
         self.error_area.setReadOnly(True)
         self.error_area.document().setMaximumBlockCount(MAX_ERROR_LINES)
-        self.error_area.setMaximumHeight(100)
+        self.error_area.setMaximumHeight(80)
         layout.addWidget(self.error_area)
         self.timer = QTimer(self)
         self.timer.setInterval(DISPLAY_REFRESH_MS)
         self.timer.timeout.connect(self.refresh_frames)
+        self.age_timer = QTimer(self)
+        self.age_timer.setInterval(AGE_REFRESH_MS)
+        self.age_timer.timeout.connect(self.refresh_cache)
+        self.age_timer.start()
         self.start_button.clicked.connect(self.start_monitor)
         self.stop_button.clicked.connect(self.stop_monitor)
         self.clear_button.clicked.connect(self.clear_monitor)
+        self.dbc_button.clicked.connect(self.select_dbc)
+        self.table.itemSelectionChanged.connect(self.show_selection)
+
+    def can_change_dbc(self):
+        # 정지한 worker의 잔여 프레임까지 기존 DBC로 처리한 뒤 교체한다.
+        return not self._closing and self.worker is None and self.buffer.pending_count == 0
+
+    def update_controls(self):
+        # 파일 선택 nested event loop 및 종료 중에는 신규 동작을 차단한다.
+        self.dbc_button.setEnabled(self.can_change_dbc() and not self._selecting_dbc)
+        self.start_button.setEnabled(not self._closing and not self._selecting_dbc and self.worker is None)
+        self.dbc_button.setToolTip("Stop 후 Worker와 잔여 버퍼 정리가 완료되어야 DBC를 변경할 수 있습니다.")
+
+    @Slot()
+    def select_dbc(self):
+        # 사용자가 명시적으로 선택한 경로만 로드한다. 취소는 기존 세션을 유지한다.
+        if not self.can_change_dbc() or self._selecting_dbc:
+            if not self._closing:
+                self.error_area.appendPlainText("DBC selection blocked: stop and finish pending frames first.")
+            return
+        self._selecting_dbc = True
+        self.update_controls()
+        try:
+            path, _ = QFileDialog.getOpenFileName(self, "Select DBC (Mock / DEMO ONLY)", "", "DBC files (*.dbc);;All files (*)")
+            if path and not self._closing:
+                self.load_dbc(path)
+        finally:
+            self._selecting_dbc = False
+            self.update_controls()
+
+    def load_dbc(self, path):
+        # 공개 통신 API 변경 없이 Loader 실패 상태를 UI에 표시하고 Raw 기능을 유지한다.
+        if not self.can_change_dbc():
+            if not self._closing:
+                self.error_area.appendPlainText("DBC load blocked: stop and finish pending frames first.")
+            return False
+        try:
+            self.decode_session.load(path)
+        except DbcLoadError as exc:
+            self.dbc_label.setText(f"DBC: {Path(path).name} | Load failed | Decode disabled")
+            self.error_area.appendPlainText(str(exc))
+            success = False
+        else:
+            status = self.decode_session.loader.status
+            self.dbc_label.setText(f"DBC: {status.path.name} | Loaded ({status.message_count} messages) | Decode enabled · Mock / DEMO ONLY")
+            success = True
+        self.show_selection()
+        return success
 
     @Slot()
     def start_monitor(self):
         # 종료 signal 처리 전까지 worker 참조를 유지해 중복 실행을 차단한다.
-        if self.worker is not None:
+        if self.worker is not None or self._closing or self._selecting_dbc:
             return
         self._failed = False
         self.error_area.clear()
         self.worker = ReceiveWorker(self.buffer, self._interface_factory, self)
         self.worker.failed.connect(self.show_error)
         self.worker.finished.connect(self.worker_finished)
-        self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
+        self.update_controls()
         self.status_label.setText("Running")
         self.timer.start()
         self.worker.start()
@@ -107,54 +223,150 @@ class MainWindow(QMainWindow):
     @Slot()
     def worker_finished(self):
         # 수신 잔여 데이터는 제한된 batch로 처리하고 종료된 thread를 해제한다.
+        if self._closing:
+            return
         self.refresh_frames()
         self.stop_button.setEnabled(False)
-        self.start_button.setEnabled(True)
         if not self._failed:
             self.status_label.setText("Stopped")
         completed = self.worker
         if completed is not None and not completed.wait(CLOSE_WAIT_MS):
             # finished 이후에도 native thread 정리를 확인하지 못하면 참조를 유지한다.
-            self.start_button.setEnabled(False)
             self.show_error("Worker cleanup timed out; close again after it finishes.")
+            self.update_controls()
             return
         self.worker = None
         if completed is not None:
             completed.deleteLater()
+        self.update_controls()
         # 정지 후 남은 버퍼도 timer로 비우되 새 수신은 발생하지 않는다.
 
     @Slot()
     def refresh_frames(self):
-        # 한 번에 제한된 행만 추가하고 화면/대기 버퍼 모두 유한하게 유지한다.
+        # 한 번에 제한된 행만 해석한다. 제외된 프레임은 Cache 갱신 근거로 쓰지 않는다.
+        if self._closing:
+            return
         frames, total, dropped = self.buffer.drain()
         for frame in frames:
+            observation = self.decode_session.process(frame)
+            if observation.processing_error:
+                self.error_area.appendPlainText(observation.processing_error)
             if self.table.rowCount() >= MAX_TABLE_ROWS:
                 self.table.removeRow(0)
             row = self.table.rowCount()
             self.table.insertRow(row)
             for column, value in enumerate(frame_cells(frame)):
-                self.table.setItem(row, column, QTableWidgetItem(value))
+                item = QTableWidgetItem(value)
+                if column == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, observation)
+                self.table.setItem(row, column, item)
+            self._processed += 1
         self.counter_label.setText(f"Received: {total}")
         self.drop_label.setText(f"표시 버퍼 제외: {dropped}")
+        self.processed_label.setText(f"Raw/Decode processed: {self._processed}")
+        self.refresh_cache()
+        self.update_controls()
         if self.worker is None and not frames:
             self.timer.stop()
 
+    def selected_observation(self):
+        # 행에 보관한 immutable 결과를 사용하여 후속 수신과 프레임 연관성을 보존한다.
+        row = self.table.currentRow()
+        item = self.table.item(row, 0) if row >= 0 else None
+        return None if item is None else item.data(Qt.ItemDataRole.UserRole)
+
+    @Slot()
+    def show_selection(self):
+        # 선택 프레임의 결과와 실시간 Cache를 별도 화면으로 표시한다.
+        observation = self.selected_observation()
+        self.signal_table.setRowCount(0)
+        if observation is None:
+            self.selection_label.setText("Raw 행을 선택하면 해당 프레임의 결과가 표시됩니다.")
+        else:
+            frame = observation.frame
+            result = observation.decoded
+            name = observation.message_name or ("Unknown / Undefined" if result and result.decode_status.value == "unknown" else "Not decoded / unresolved")
+            stamp, channel, can_id, dlc, payload = frame_cells(frame)
+            self.selection_label.setText(
+                f"Selected frame: Timestamp={stamp} | Channel={channel} | CAN ID={can_id} | DLC={dlc} | DATA={payload}\n"
+                f"DBC session={observation.session_id} | Message={name} | {observation_status(observation)}"
+            )
+            if result is not None:
+                self.fill_signal_table(self.signal_table, result, observation.units, stamp, result.decode_status.value)
+        self.refresh_cache()
+
+    def fill_signal_table(self, table, message, units, update_age, status):
+        # 값은 기존 Decode 결과 그대로, Unit은 해당 DBC의 메타데이터만 표시한다.
+        table.setRowCount(0)
+        for signal, value in message.signals.items():
+            row = table.rowCount()
+            table.insertRow(row)
+            values = (message.message_name, signal, str(value), units.get(signal) or "", update_age, status)
+            for column, text in enumerate(values):
+                table.setItem(row, column, QTableWidgetItem(text))
+
+    @Slot()
+    def refresh_cache(self):
+        # 수신 정지 후에도 Age만 갱신한다. 값/시각은 마지막 정상 RX snapshot에서 읽는다.
+        if self._closing:
+            return
+        observation = self.selected_observation()
+        self.cache_table.setRowCount(0)
+        if observation is None:
+            self.cache_label.setText("Last successful RX Cache: 선택 없음 · Age는 Health/Timeout 판정이 아닙니다.")
+            return
+        cached = self.decode_session.cached_message(observation)
+        if cached is None:
+            reason = "historical DBC session" if observation.session_id != self.decode_session.session_id else "no successful RX"
+            self.cache_label.setText(f"Last successful RX Cache: {reason}")
+            return
+        latest = self.decode_session.latest_attempt(observation)
+        status = "latest attempt unavailable"
+        if latest is not None:
+            status = "processing error" if latest.processing_error else latest.decoded.decode_status.value
+            status += " RX" if latest.frame.is_rx else " TX (cache unchanged)"
+        cause = None if latest is None else (latest.processing_error or latest.decoded.error)
+        error = "" if cause is None else f" | Latest error: {cause}"
+        channel = "unknown" if cached.raw_frame.channel is None else str(cached.raw_frame.channel)
+        self.cache_label.setText(f"Last successful RX Cache: Channel={channel} | Message={cached.message_name} | Latest processed attempt={status}{error}")
+        definition = self.decode_session.loader.get_message_by_name(cached.message_name)
+        units = {signal.name: signal.unit for signal in definition.signals}
+        age = self.decode_session.cache_age(observation, self._clock())
+        stamp = "unknown" if cached.timestamp is None else f"{cached.timestamp:.6f}"
+        age_text = "unknown" if age is None else f"{age:.3f}"
+        self.fill_signal_table(self.cache_table, cached, units, f"{stamp} / {age_text}", f"cached decoded RX; latest {status}")
+
     @Slot()
     def clear_monitor(self):
-        # 통신 상태를 바꾸지 않고 화면과 표시 계수만 초기화한다.
+        # 기존 Clear는 화면/표시 계수만 초기화한다. 정상 Cache는 DBC 교체 전까지 유지한다.
+        if self._closing:
+            return
         self.buffer.clear()
         self.table.setRowCount(0)
+        self._processed = 0
         self.counter_label.setText("Received: 0")
         self.drop_label.setText("표시 버퍼 제외: 0")
+        self.processed_label.setText("Raw/Decode processed: 0")
+        self.show_selection()
+        self.update_controls()
 
     def closeEvent(self, event):
         # Qt 필수 override 명칭은 snake_case 규칙의 예외이다.
         # 제한 시간 안에 종료되지 않으면 창을 유지하여 실행 중 QThread 파괴를 방지한다.
+        self._closing = True
+        self.update_controls()
         if self.worker is not None:
             self.worker.request_stop()
             if not self.worker.wait(CLOSE_WAIT_MS):
+                self._closing = False
                 self.show_error("Worker stop timed out; close again after it finishes.")
+                self.update_controls()
                 event.ignore()
                 return
+        completed = self.worker
+        self.worker = None
+        if completed is not None:
+            completed.deleteLater()
         self.timer.stop()
+        self.age_timer.stop()
         event.accept()

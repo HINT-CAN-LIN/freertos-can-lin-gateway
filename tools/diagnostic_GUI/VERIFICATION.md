@@ -1,3 +1,121 @@
+# HINT-48 Phase 3C 검증 — 2026-10-12 (Asia/Seoul)
+
+이번 절은 Phase 3C의 실제 실행 결과입니다. 아래 기존 Phase 1~3B 기록은 보존했으며,
+과거 절의 "미구현/기준 HEAD"는 당시 상태입니다. 테스트 통과는 담당자 리뷰나
+Production Interface 승인, Hardware 검증을 의미하지 않습니다.
+
+- 시작/종료 Branch: `PC-Diagnostic-Test`.
+- 기준 HEAD: `69f904c7d74cf6238a37be7f2c4e02321962deb6`. 시작 Working Tree clean.
+- 작업 시작 시 D: AGENTS.md, 팀 CONTRIBUTING/README, 핸드북 §11 (p29–30),
+  실제 Loader/Codec/DecodeService/Cache 및 GUI 소스/테스트 계약을 확인했습니다.
+- 실제 팀 DBC `network/can/CAN__DB_펌웨어 전 최종본_v0.1.dbc`의 VERSION은
+  `0.4 - review-ready interface proposal`입니다. 승인된 Production 기본값으로
+  등록하지 않았으며 GUI 자동 로드/실제 Bus 검증에 사용하지 않았습니다.
+- Phase 2 DbcLoader 계약: 재로드 시 새 Cache, 실패 시 기존 lookup 제거.
+  따라서 Worker/잔여 처리 종료 후 새 서비스 세션을 구성합니다.
+- 실제 설치 환경: Python **3.14.6**, PySide6 **6.10.3**, python-can **4.6.1**,
+  cantools **44.2.1**, pytest **9.1.1**. 패키지 재설치/버전 변경 없음.
+  팀 승인 고정 버전 **미확정**, 다른 Python/OS/라이브러리 조합 **NOT VERIFIED**.
+
+| 검증 | 실제 결과 / 제한 |
+| --- | --- |
+| 수정 전 전체 기준선 | **170 passed in 3.20s** |
+| 기존 170개 테스트 소스 | 삭제/수정/약화 없음; 최종 전체 실행에 포함 |
+| 최종 전체 pytest | **201 passed in 5.79s** — 기존 170 + 신규 31 |
+| 신규 테스트 | GUI Mock 통합 26 + Qt 독립 DecodeSession 5 |
+| CLI 기존 140개 | 전체 실행에서 모두 PASS; monitor/log/send/decode/encode 및 JSONL/CSV/Codec/Cache 회귀 보존 |
+| CLI 진입점 | `python -m pc_diagnostic --help`, 설치된 `can-diag.exe --help` 성공 |
+| GUI 진입점 | `python -m pc_diagnostic.gui --help`, 설치된 `can-diag-gui.exe --help` 성공; 실제 실행 창 노출 |
+| 선택 의존성 | Qt/cantools 차단 모의에서도 Raw CLI/빈 DecodeSession 동작; cantools 부재 로드 실패 안내 |
+| DBC 선택 | offscreen 파일 선택 버튼 및 취소 테스트 PASS; 사용자 직접 실제 파일 선택 **정상 확인** |
+| DBC 미선택/로드 실패 | Mock Raw 수신 유지; missing/malformed 후 정상 파일 재시도 PASS |
+| Decode | 기존 TEST ONLY fixture에서 STD/EXT 이름/값/Unit 및 Raw 참조 보존 PASS |
+| Signal Cache | Channel/Message 분리, 반복 RX 갱신, TX 비갱신, 실패 시 값/원래 RX 시각 보존 PASS |
+| Age | 원래 Timestamp 기준, 미제공/역행 unknown, 정지 중 타이머 갱신 PASS; Health 판정 없음 |
+| 재로드 | 새 Cache 구성; 과거 Raw 해석/Unit 보존, 과거 세션과 현재 Cache 혼합 방지 PASS |
+| 오류/동시 요청 | Unknown/length/decode/application 오류, Running/Stopping/잔여 버퍼 교체 차단, dialog 재진입/close 후 요청 차단 PASS |
+| 유한 처리 | 2000 입력 → 1488 버퍼 제외 / 512 처리 / 500 Raw 이력; 제외 프레임 Decode 안 함 |
+| 기존 Windows Raw native smoke | 실제 windows 플랫폼 창 노출, 3회 반복, Clear, active close; Mock 4개 해제·송신 없음 |
+| Windows Decode native smoke | 실제 windows 플랫폼 창 노출, 명시적 TEST ONLY 파일 load API, DBC 없는 Raw, Decode/Cache, 3회 반복, 길이 실패 보존, active close; Mock 5개 해제·송신 없음 |
+| 사용자 Windows 수동 확인 | 사용자가 직접 Select DBC → test_only.dbc → Start/STD 행 선택 → Measurement=-10.0 / test_unit / Cache / Age / Stop/Clear **정상 확인** 응답 |
+| pip check | **No broken requirements found.** |
+| 실제 CANable/ECU/Production Decode 정확도 | **NOT VERIFIED** |
+| 실제 담당자 코드 리뷰 | **NOT VERIFIED** |
+| Interface | 공통 CAN/LIN DBC/Matrix/ECU/Phase 1~2 Public Interface 변경 없음 |
+| Git 업로드 | add/Commit/Push/PR/Merge 미실행; 이력 재작성 없음 |
+
+자동 native smoke의 `human_manual_file_dialog=NOT VERIFIED` 출력은 자동화가 사람의
+직접 파일 선택을 검증하지 않는다는 뜻입니다. 이후 사용자 응답은 위 별도 행에 기록했습니다.
+Qt widget 렌더 `.test-tmp/phase3c-native-final.png`를 시각 확인했습니다.
+Windows 화면 배율에서도 초기 창이 가용 화면에 들어오도록 크기를 제한했습니다.
+OS 전체 캡처 또는 Hardware evidence가 아닙니다. 생성 Temp/렌더/캐시/가상환경은 Git 제외입니다.
+
+### 실행 및 재현
+
+패키지 폴더에서 실행했으며 pytest basetemp는 매 실행 새로운 테스트 전용 GUID 경로,
+`-p no:cacheprovider`를 사용했습니다. 사용자 데이터 경로를 정리하지 않았습니다.
+
+```powershell
+New-Item -ItemType Directory -Force .test-tmp | Out-Null
+$phase3c_temp = '.test-tmp/phase3c-' + [guid]::NewGuid().ToString('N')
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp $phase3c_temp
+.\.venv\Scripts\python.exe tests/gui_native_smoke.py --screenshot .test-tmp/raw-native.png
+.\.venv\Scripts\python.exe tests/gui_decode_native_smoke.py --dbc tests/fixtures/test_only.dbc --screenshot .test-tmp/phase3c-native.png
+.\.venv\Scripts\python.exe -m pip check
+```
+
+### Trouble Shooting / Jira 등록용 초안 — 외부 등록 미실행
+
+**HINT-48 / 예상 밖 DecodeService 오류에서 최신 Cache 상태 표시 누락**
+- 재현: 정상 TEST ONLY RX 후 `DecodeService.process`에 RuntimeError를 주입하고
+  같은 Channel/Message 프레임을 수신. 최신 오류 조회 guard가 decoded=None을 제외하여
+  정상 Cache 옆 최신 상태가 오류 대신 unavailable로 표시됨.
+- 최초 통합 실행: **199 PASS / 1 FAIL**. 신규 assertion이 이 표시 결함을 검출함.
+- 원인: 실패 관찰의 DBC Message 메타데이터가 있어도 decoded 결과가 없는 경로를 배제함.
+- 수정: 기존 Loader의 Message 메타데이터를 기준으로 최신 시도를 조회하고
+  application 오류와 codec invalid를 구분 표시. 성공 Cache 값/시각은 변경하지 않음.
+- 최종: 해당 회귀 및 최종 전체 **201 PASS**. 담당자 리뷰는 **NOT VERIFIED**.
+- 영향 범위: GUI 표시만. CAN/LIN 정의/공통 Public Interface/DBC 파일 변경 없음.
+
+
+**HINT-48 / Error 프레임 mask의 DBC Message 오표시**
+- 재현: 기존 TEST ONLY ID와 숫자가 같은 Error 프레임을 입력하면 Codec은 invalid를
+  반환하지만 GUI 메타데이터 조회가 일반 DBC Message 이름/Cache를 연결함.
+- 검출: 신규 Error mask 테스트가 수정 전 **1 FAIL**을 반환함.
+- 원인: GUI 보조 조회가 is_error_frame 속성을 구분하지 않음.
+- 수정: 기존 RawCanFrame 계약에 따라 Error ID를 Message lookup에 사용하지 않음.
+  Raw ERROR 표시와 기존 invalid 결과는 유지하고 정상 RX Cache는 보존함.
+- 최종 전체 **201 PASS**. CAN ID/Signal/DBC 파일은 변경하지 않음.
+
+**HINT-48 / 팀 버전 및 운영 Cache 정책 확인 요청**
+- 팀 Python/PySide6/python-can/cantools/pytest 고정 버전/lock 승인 기준 확인 필요.
+- 기존 DBC session 재로드 계약은 적용했으나 Cache 영속화, 실제 backend 재연결,
+  timestamp clock 동기화, 운영용 reset 정책은 Open/후속 범위.
+- 현재 Clear/Start/Stop은 같은 DEMO DBC session을 유지함. 이를 차량 ECU 정책으로 확정하지 않음.
+- Production DBC/Matrix 일치와 공식 Interface 승인에는 **상대 담당자 리뷰 필요**.
+- Jira Issue/팀 메시지 등록이나 Jira Done 변경은 수행하지 않음.
+
+### 변경 및 보존 범위
+
+- 수정: `README.md`, `VERIFICATION.md`,
+  `src/pc_diagnostic/gui/buffer.py`, `src/pc_diagnostic/gui/window.py`.
+- 신규: `src/pc_diagnostic/gui/decode_session.py`,
+  `tests/test_gui_decode.py`, `tests/test_gui_decode_session.py`,
+  `tests/gui_decode_native_smoke.py`.
+- `pyproject.toml`/기존 GUI app/receiver/demo 및 기존 테스트는 변경하지 않음.
+- D: 원본 25개와 다른 worktree/미추적 리뷰 문서는 시작 SHA-256 기준으로 보존 검증.
+  기존 리뷰 SHA-256: `751ecd803fc1866cc12a51ba2df4a93a64bd41f2cc441456eb9ea49b3178b975`.
+- GUI 조합 계층은 기존 RawCanFrame/DecodedMessage를 참조하는 관찰 묶음만 추가했으며
+  CAN Frame 모델/신호 변환을 중복 구현하지 않음.
+- 미구현/미검증: 실제 CAN GUI 연결·송신, Production Interface 정합성, Logging/Export,
+  수신 중 DBC 교체, Health/Fault, Fault Injection, standalone 배포, Hardware 시험.
+
+향후 Commit 후보(실행하지 않음):
+`[feat][YYYYMMDD][권도형] add DBC decode and signal cache GUI`.
+날짜는 실제 Commit일을 사용합니다.
+
+---
+
 # PC Diagnostic 검증 기록
 
 ## HINT-48 Phase 3B — P2/P3 수정 (2026-10-12, Asia/Seoul)

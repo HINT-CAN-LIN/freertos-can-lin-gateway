@@ -16,6 +16,12 @@ class FrameBuffer:
         self.total_received = 0
         self.dropped = 0
 
+    @property
+    def pending_count(self):
+        # DBC 교체 전에 남은 처리 대기 프레임을 lock 안에서 확인한다.
+        with self._lock:
+            return len(self._frames)
+
     def append(self, frame):
         # GUI가 늦어지면 가장 오래된 표시 대기 프레임을 제외한다.
         with self._lock:

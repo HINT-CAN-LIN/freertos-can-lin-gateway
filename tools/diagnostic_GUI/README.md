@@ -3,8 +3,8 @@
 Classic CAN raw 프레임을 수신·표시·기록·송신하는 독립 Python 패키지입니다.
 Gateway CAN ID, message별 DLC, Signal bit layout/scale/enum은 정의하지 않습니다.
 Phase 1 Raw CAN 기능 위에 명시적으로 지정한 DBC의 Decode/Encode와 PC 관찰용 State Cache를 제공합니다.
-Phase 3B는 PySide6 Mock 전용 Raw CAN GUI를 제공합니다.
-LIN, GUI의 DBC Decode/Logging/송신, ECU Health/Fault 정책, Fault Injection, KPI, 주기 송신, CAN FD는 미구현입니다.
+Phase 3B는 PySide6 Mock Raw GUI, Phase 3C는 명시적 DBC Decode/Cache 화면을 제공합니다.
+LIN, GUI의 Logging/송신, ECU Health/Fault 정책, Fault Injection, KPI, 주기 송신, CAN FD는 미구현입니다.
 CAN FD 수신 시 명시적 오류로 중단하며 Classic CAN으로 변환하거나 조용히 버리지 않습니다.
 
 ## 설계 근거 및 경계
@@ -260,7 +260,7 @@ snapshot = service.cache.snapshot()
 
 ## Phase 3B — Windows Mock GUI
 
-CLI는 그대로 유지하며 GUI는 Raw CAN 관찰만 제공합니다. GUI에서 실제 CAN 연결이나
+CLI는 그대로 유지합니다. Phase 3B Raw GUI에 Phase 3C의 명시적 DBC Decode/Cache 표시를 추가했습니다. GUI에서 실제 CAN 연결이나
 송신을 선택할 수 없습니다. 창 상단의 **Mock / DEMO / TEST ONLY** 표시는 실제 ECU 응답이
 아님을 뜻합니다. Hardware **NOT VERIFIED**.
 
@@ -292,7 +292,7 @@ PySide6가 없거나 import할 수 없으면 콘솔 실행은 stderr에 원인�
   STD/EXT/RTR/ERROR 속성을 구분하며 ID 숫자와 DLC를 변환하지 않습니다.
 - 데모는 기존 `tests/fixtures/test_only.dbc` 및 `test_dbc_codec.py`의 합성 예제를 재사용합니다.
   새 공식 ID/Signal/Enum을 정의하지 않습니다. 데모 timestamp는 PC에서 생성한 시간이며
-  채널은 `DEMO/TEST ONLY`입니다. GUI는 DBC를 로드하지 않고 Signal을 해석하지 않습니다.
+  채널은 `DEMO/TEST ONLY`입니다. 사용자가 DBC를 선택하기 전에는 Signal을 해석하지 않습니다.
 
 구조: `MockCanInterface.recv → 기존 RawCanFrame → ReceiveWorker → FrameBuffer → Qt timer/slot → MainWindow`.
 Qt 오류/종료 signal만 사용하며 프레임마다 signal을 발행하지 않습니다. 수신은 QThread에서,
@@ -334,7 +334,7 @@ cantools 44.2.1 / pytest 9.1.1입니다. 기존 Python >=3.10 조건과 기존 �
 고정 버전이 아닙니다. 팀 README/CONTRIBUTING/핸드북/설정에서 고정 버전은 확인되지
 않았습니다. 팀 버전 합의와 Python 3.10~3.13 검증은 **검토 필요 / NOT VERIFIED**입니다.
 
-미구현: GUI DBC Decode/State Cache 화면, GUI 파일 Logging, Filter, Replay, 실제 CAN
+미구현: GUI 파일 Logging, Filter, Replay, 실제 CAN
 backend, 운전자 입력/송신, Health/Fault 판정, Fault Injection, standalone 배포.
 기존 CLI의 monitor/log/send/decode/encode는 유지하며 실제 버스 시험은 이번 작업에
 포함하지 않습니다. 생산용 Interface 변경은 **상대 담당자 리뷰 필요**입니다.
@@ -347,3 +347,72 @@ P2/P3 수정 검증 결과: 기존 CLI 140개 + GUI/버퍼/안내 30개, 전체 
 실제 Windows pythonw 오류 안내창과 정상 GUI 진입점을 별도로 확인했습니다.
 현재 설치/팀 승인 상태와 검증 상세는 `VERIFICATION.md`의 최신 절을 참조하세요.
 Windows API 근거: [Microsoft MessageBoxW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-messageboxw).
+
+## Phase 3C — 명시적 DBC Decode / Signal Cache GUI
+
+GUI 실행 진입점은 그대로입니다. 패키지 폴더의 활성 환경에서
+`pip install -e '.[gui,dbc]'`로 필요한 선택 의존성을 설치할 수 있습니다.
+CLI만 사용하는 경우 GUI extra는 필요하지 않습니다. 이번 작업에서는 패키지를
+재설치하거나 버전 범위를 바꾸지 않았습니다.
+
+1. GUI를 열면 **DBC: not selected / Decode disabled**입니다. 아무 파일도 자동 로드하지 않습니다.
+2. **Select DBC...**에서 파일을 직접 선택합니다. 파일명, Loaded / Load failed,
+   Decode enabled / disabled를 확인합니다. 로드 성공은 팀 Interface 승인을 의미하지 않습니다.
+3. DEMO 검증에만 `tests/fixtures/test_only.dbc`를 선택한 뒤 **Start**를 누릅니다.
+   공식/검토 중인 DBC와 합성 DEMO 프레임의 의미를 연결하거나 실제 ECU 응답으로 해석하지 않습니다.
+4. Raw 행을 선택하면 원래 Timestamp/Channel/CAN ID/DLC/DATA, DBC Message 이름 및
+   해당 프레임의 Decode 결과/오류가 보입니다. STD/EXT 형식은 기존 Codec 계약을 따릅니다.
+5. **Selected frame signals**는 선택한 프레임의 값/Unit/원래 Timestamp입니다.
+   **Last successful RX Cache**는 같은 Channel/Message에서 마지막으로 성공한 RX의 값,
+   원래 Timestamp / Age와 최신 처리 시도 상태입니다. 과거 프레임을 선택하면 두 화면의
+   Timestamp와 값이 다를 수 있으며, Cache 값이 선택 프레임의 값으로 표시되지는 않습니다.
+
+신호 이름/Unit은 명시적으로 로드한 DBC, 값은 기존 DbcCodec 결과에서만 가져옵니다.
+빈 Unit은 그대로 비워 둡니다. Unknown ID는 Raw를 유지하고 **Unknown / Undefined**로
+표시하며 가짜 Signal을 만들지 않습니다. Error frame의 ID는 오류 mask일 수 있어 DBC Message로 연결하지 않습니다. DLC 불일치/Decode 예외는 기존 `invalid`
+결과를 표시하고 정상 Cache 값/시각은 유지합니다. 최신 실패 원인은 Cache 영역에도
+따로 표시합니다. TX의 해석 성공은 정상 RX Cache를 갱신하지 않습니다.
+
+DBC가 없거나 로드가 실패해도 Raw Monitor는 동작합니다. 선택 취소는 기존 세션을
+유지합니다. Loader 계약에 따라 **파일 교체 시도마다 새 DecodeService/Cache**를 만들며,
+실패한 교체는 Decode를 비활성화합니다. 이전 Raw 행에는 그 당시 Decode 결과와 Unit을
+보존하고 **historical DBC session**으로 표시하여 새 Cache와 섞지 않습니다.
+**Stop 후 Worker 종료와 잔여 버퍼 처리 완료 전에는 파일 교체가 차단**됩니다.
+수신 중 핫 리로드는 지원하지 않습니다.
+
+기존 **Clear**는 표시 행/카운터/대기 버퍼를 초기화하며 같은 DBC 세션의 정상 Cache는
+보존합니다. Start/Stop도 같은 DBC 세션을 유지합니다. 프로그램 종료 시 Cache는 소멸합니다.
+별도 Cache 영속화, 실제 backend 재연결/clock 동기화/운영 정책은 **Open / 향후 검토**이며
+현재 DEMO 동작을 제품 정책으로 확정하지 않습니다.
+
+Age는 DEMO가 사용하는 PC wall clock과 원래 RX Timestamp의 차이를 기존 Cache API로
+계산합니다. Timestamp 미제공/역행은 **unknown**이며 수신을 멈춰도 Age 표시는 갱신됩니다.
+Age만으로 Offline/Healthy/Fault를 판정하지 않습니다.
+
+구조:
+`ReceiveWorker → FrameBuffer → 제한된 메인 스레드 batch → DecodeSession → 기존 DecodeService/DbcCodec/SignalStateCache → Qt 표시`.
+CAN 수신은 기존 QThread에서 처리하고 GUI 조합 계층은 Qt 독립입니다.
+버퍼 512개, Raw 이력 500행, batch 100개 제한을 유지합니다. 최신 처리 상태 메타데이터도
+512개 Channel/Message key로 제한하며 제외된 key는 최신 시도를 조회할 수 없다고 표시합니다.
+기존 Cache의 저장 계약은 변경하지 않았습니다.
+**Received / 표시 버퍼 제외 / Raw/Decode processed**를 구분합니다. 처리 전에 제외된
+프레임은 Decode/Cache에 전달하지 않으며 전체 수신을 모두 해석했다고 주장하지 않습니다.
+250 ms Age 갱신과 화면 크기/여백은 GUI 설정이며 CAN/LIN 규격 수치가 아닙니다.
+
+패키지 폴더에서 검증:
+```powershell
+New-Item -ItemType Directory -Force .test-tmp | Out-Null
+$phase3c_temp = '.test-tmp/phase3c-' + [guid]::NewGuid().ToString('N')
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp $phase3c_temp
+# 실제 Windows 창 자동 검증: 호출자가 TEST ONLY DBC를 명시
+.\.venv\Scripts\python.exe tests/gui_decode_native_smoke.py --dbc tests/fixtures/test_only.dbc --screenshot .test-tmp/phase3c-native.png
+```
+
+현재 검증: 기존 170개 보존 + 신규 31개, 전체 **201 passed**.
+Qt offscreen, Windows native 자동 검증, 사용자 직접 파일 선택/화면 확인은 서로 구분하여
+`VERIFICATION.md`에 기록합니다. **Hardware NOT VERIFIED**,
+팀 고정 라이브러리 버전 미확정, 담당자 코드 리뷰 **NOT VERIFIED**를 유지합니다.
+
+미구현: 실제 CAN GUI backend/송신, 파일 Logging/Export, Filter/Replay,
+운전자 입력, ECU Health/Fault, Fault Injection, standalone 배포, 수신 중 DBC 교체.
+Production DBC/Matrix 정합성 및 Interface 승인은 **상대 담당자 리뷰 필요**입니다.
