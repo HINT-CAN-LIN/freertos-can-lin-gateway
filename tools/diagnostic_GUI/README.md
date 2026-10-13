@@ -5,7 +5,7 @@ Gateway CAN ID, message별 DLC, Signal bit layout/scale/enum은 정의하지 않
 Phase 1 Raw CAN 기능 위에 명시적으로 지정한 DBC의 Decode/Encode와 PC 관찰용 State Cache를 제공합니다.
 Phase 3B는 Mock Raw GUI, Phase 3C는 명시적 DBC Decode/Cache, Phase 3D-1은 사용자 매핑 Vehicle Status를 제공합니다.
 Phase 3D-2는 명시적 ECU/Fault 관측과 처리된 Raw RX 통계를 제공합니다. Health/Fault 판정은 하지 않습니다.
-Phase 3E는 Raw Logging GUI, Phase 3F는 명시적 Mock/Live CAN 수신 Source 선택을 제공합니다. 아래 이전 Phase 절은 당시 기록입니다.
+Phase 3E는 Raw Logging GUI, Phase 3F는 Mock/Live CAN 연결, Phase 3G는 명시적 DBC Signal Graph를 제공합니다. 아래 이전 Phase 절은 당시 기록입니다.
 LIN, GUI의 송신, ECU Health/Fault 정책, Fault Injection, KPI, 주기 송신, CAN FD는 미구현입니다.
 CAN FD 수신 시 명시적 오류로 중단하며 Classic CAN으로 변환하거나 조용히 버리지 않습니다.
 
@@ -823,3 +823,98 @@ python tests/gui_live_native_smoke.py --output-dir $newExistingEvidenceDirectory
 자동 재연결, 사용자 매핑 영구 저장, CAN FD, GUI TX/운전자 입력, Fault 판정·전파 검증.
 **Hardware 및 이번 사람 수동 GUI 확인 NOT VERIFIED**, 팀 고정 버전 미확정, 담당자 코드 리뷰 NOT VERIFIED.
 Commit/Push/PR/Merge는 수행하지 않습니다.
+
+## Phase 3G — Real-time Signal Graph
+
+**Signal Graph**는 단일 DBC Signal의 기존 per-frame Decode 결과를 표시합니다.
+기존 Mock/Live 연결, Raw/Signal/Cache, Vehicle/ECU/Fault 관측, Logging과 같은 수신 파이프라인을 사용하며,
+Graph에서 Payload를 다시 Decode하거나 Cache의 마지막 값을 timer마다 새 Sample로 복사하지 않습니다.
+기존 탭 위치는 유지하고 마지막에 Graph 탭을 추가했습니다.
+
+### 사용법과 명시적 선택
+
+1. 기존 방식으로 GUI를 실행하고 Mock 또는 사용자가 확인한 Live 설정을 선택합니다.
+2. **Select DBC...**에서 DBC를 명시적으로 로드합니다. 기본 Production DBC/Signal 자동 연결은 없습니다.
+3. **Signal Graph** 탭에서 **CAN Channel**을 타입까지 확인하여 선택합니다.
+   Mock의 DEMO 채널은 TEST ONLY입니다. Live는 실제 Raw에서 관찰한 Channel만 목록에 추가하며,
+   None은 unknown Channel의 명시적 선택이고 wildcard가 아닙니다.
+4. **Message Name / CAN ID / STD·EXT**와 **Exact Signal**을 선택하고 **Apply signal**을 누릅니다.
+   Signal 이름이 다른 Message와 같아도 첫 후보/유사 이름으로 자동 연결하지 않습니다.
+   **DBC Unit**은 읽기 전용이며 파일 metadata 그대로 사용합니다. 미정 단위를 임의 생성하지 않습니다.
+5. CAN Receiver를 Start하면 선택된 Source/Channel/ID/Format/Message/Signal의 처리된 RX만 Sample로 추가합니다.
+   마지막 숫자 관측값·단위·원래 Timestamp·Sample 수와 오류/제외 계수를 표시합니다.
+
+최신 숫자 관측값은 정상 Decode 숫자 기준입니다. 시간축에 넣을 수 없는 Timestamp의 경우
+숫자와 원래 Timestamp/unknown은 표시하고, 해당 점은 그래프에 추가하지 않습니다.
+
+### Sample·Timestamp·품질 정책
+
+- Graph Sample에는 Source, DBC/Source session ID, typed Channel, CAN ID, STD/EXT,
+  Message/Signal 이름, Unit, Raw Timestamp, 원래 숫자 값과 표시 segment를 보관합니다.
+- Sample Buffer는 **1000개**입니다. 초과 시 가장 오래된 Graph 이력만 제외하며 **Graph history omitted**를 증가시킵니다.
+  이 수치는 수신 CAN 손실이나 Logging Queue Drop이 아닙니다.
+- Graph 렌더링은 별도 Qt timer **200 ms**입니다. CAN 수신/Decode 빈도와 독립적인 GUI 설정이며
+  ECU 주기·Fault Timeout·측정 KPI가 아닙니다.
+- X축은 첫 **현재 retained Sample의 Raw RX Timestamp**를 0으로 한 경과 초입니다.
+  rolling history에서 가장 오래된 점이 제외되면 기준도 이동합니다. 원래 Timestamp는 숫자 표시와 Sample에 유지됩니다.
+  backend clock 정확도·실제 수신 시각은 Hardware 검증이 필요합니다.
+- 동일 Timestamp의 서로 다른 실제 처리 프레임은 순서대로 보관합니다.
+  누락 Timestamp와 마지막 accepted Timestamp보다 역전된 값은 **Unsupported Timestamp**로 표시하고
+  별도 제외 계수를 증가시킵니다. PC 현재 시각을 대신 넣거나 Sample을 정렬하지 않습니다.
+- 정상 Decode된 유한 int/float만 허용합니다. Text/enum label/bool, NaN/Infinity, 표시 불가능한 숫자는
+  **Unsupported Value**로 구분합니다. 현재 codec은 numeric enum을 반환하므로 숫자 enum은 그대로 관측합니다.
+  문자열 enum을 임의 숫자로 변환하지 않습니다.
+- 기존 DecodedMessage는 비숫자·NaN/Infinity를 upstream에서 거부할 수 있습니다.
+  그 경우 Graph는 **Decode Error**이며 Unsupported Value 방어는 경계 모의 테스트로도 검증합니다.
+- Decode 실패 시 마지막 정상값을 새 Sample로 추가하지 않습니다. mux frame에 선택 Signal이 없으면 No Data입니다.
+  TX echo 및 error-mask ID는 Signal RX Sample로 사용하지 않습니다.
+- 오류·Timestamp 제외·GUI Buffer Drop 이후에는 다음 정상점과 이전점을 선으로 연결하지 않습니다.
+  선 연결은 관측점의 표시일 뿐 중간 값이 실제 측정됐다는 뜻이 아닙니다.
+- Invalid/Reserved 패턴이나 DBC min/max 밖 숫자는 기존 Decode 관측 계약을 따릅니다.
+  decoded 값/곡선이 있다고 ECU Healthy·실차 값 유효·Fault 해제라고 판정하지 않습니다.
+- Graph 화면의 GUI Buffer dropped는 기존 표시 처리 전 제외량입니다. Graph는 GUI가 실제 처리한 RX만 보므로
+  Sample 수는 전체 Bus 수신량이 아닙니다. 실제 CAN 손실률·CPU·Jitter는 측정하지 않았습니다.
+
+### Pause / Resume / Clear / Session
+
+**표시만 Pause**하는 정책을 선택했습니다. CAN Receiver, Decode, Cache, Statistics, Logger와 Graph Sample 수집은
+계속합니다. Pause는 곡선 snapshot만 유지하며 최신 숫자/상태/계수는 계속 갱신합니다.
+Resume은 현재 유한 Buffer를 표시합니다. 오래 Pause하면 이전 Graph 이력 일부가 상한으로 제외될 수 있고
+해당 계수로 확인할 수 있습니다. Sample 수집까지 멈추는 정책은 중간 데이터가 없어지는 단점이 있어 채택하지 않았습니다.
+
+**Clear Graph**는 Sample/곡선/Graph 품질 계수만 비우고 선택은 유지합니다.
+Raw Monitor, 성공 Cache, ECU Statistics, Logging과 CAN Worker는 변경하지 않습니다.
+Pause 중 Clear하면 곡선은 비어 있고 수집은 계속하며 Resume에서 현재 Buffer를 표시합니다.
+기존 상단 Raw Clear는 Graph를 초기화하지 않습니다.
+
+같은 Source의 CAN Start/Stop 반복은 Graph 이력을 유지합니다.
+DBC Reload 또는 Mock/Live/Backend/Channel/Bitrate 설정 전환은 기존 session generation 정책을 따라
+Graph 데이터·선택·Channel 후보와 paused snapshot을 초기화합니다. 이전 곡선을 새 Source로 표시하지 않습니다.
+어떤 timer도 샘플 Timestamp를 새로 합성하지 않습니다.
+
+### 구현·의존성·검증
+
+`ReceiveWorker → 기존 FrameBuffer → DecodeSession.process → FrameObservation → SignalGraphModel → QPainter`
+
+기존 **PySide6 QtGui QPainter**를 사용하여 외부 plotting package를 추가·설치하지 않았습니다.
+Graph Model은 Qt 독립이고 Canvas는 유한 snapshot만 표시합니다. UI/그리기는 Qt 메인 스레드에서만 수행하며,
+Graph timer는 MainWindow의 정상 Close에서 정리합니다. 기존 Logger/Worker 종료 계약은 유지합니다.
+Qt/Python 호환성은 실제 기존 환경에서 검증했고 팀 고정 버전 승인을 의미하지 않습니다.
+로컬 PySide6 metadata의 라이선스는 LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only입니다.
+배포 라이선스 선택·고지는 팀 배포 검토 항목이며 이번 구현으로 승인 완료를 주장하지 않습니다.
+
+근거: [Qt 6.10 QPainter](https://doc.qt.io/qtforpython-6.10/PySide6/QtGui/QPainter.html),
+[Qt for Python licenses](https://doc.qt.io/qtforpython-6/licenses.html).
+
+기존 TEST ONLY DBC로 Mock 및 Fake Live를 검증합니다. 기본 Mock Measurement는 기존 고정 -10.0이므로
+시간에 따라 같은 값의 선이 표시됩니다. 변화하는 곡선은 Native 시험의 Fake producer가 기존 TEST ONLY Signal을
+기존 DBC Encoder로 생성한 값이며 실제 ECU 데이터가 아닙니다. Production Fixture/Interface는 수정하지 않았습니다.
+
+```powershell
+python -m pytest -q tests/test_signal_graph.py tests/test_graph_view.py -p no:cacheprovider --basetemp $newWritableTemp
+python tests/gui_graph_native_smoke.py --output-dir $newExistingEvidenceDirectory
+```
+
+단일 Signal, 마지막1000개 rolling graph만 제공합니다. 다중 Signal·Graph Export·Cursor/Zoom·영구 선택 저장은 후속 범위입니다.
+**Hardware 및 이번 사용자 수동 확인 NOT VERIFIED**, 팀 고정 버전 미확정, 담당자 코드 리뷰 NOT VERIFIED.
+실행한 결과는 VERIFICATION의 Phase 3G 절을 참조하세요. Commit/Push/PR/Merge는 이번 작업에서 수행하지 않습니다.

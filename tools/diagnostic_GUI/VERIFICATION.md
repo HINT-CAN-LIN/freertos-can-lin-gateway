@@ -1,3 +1,61 @@
+# Phase 3G 검증 — 2026-10-13
+
+기준 Branch `PC-Diagnostic-Test`, HEAD `c8d20b6f33660b81575f6dd0adacd29308cb3fbd`.
+이번 절은 실제 Phase 3G 실행 결과이며 아래 이전 Phase 실행 기록과 구분한다.
+
+| 검증 | 실제 결과 |
+|---|---|
+| 전체 pytest | **410 passed in 31.35s** — 기존367 + 신규43, skip 없음 |
+| 신규 Graph 테스트 별도 실행 | **43 passed in 4.01s** (Qt 독립 모델30 + Graph UI13) |
+| 기존 CLI 별도 회귀 | **140 passed in 1.12s** |
+| Windows Graph Native Smoke | 실제 windows 창, Mock/변화하는 Fake Live TEST ONLY Graph, Pause/Resume/Clear, active close PASS |
+| Graph Native Logging | JSONL7 프레임, 저장 수=written, Graph Pause/Clear 중 기록 지속 |
+| Graph Native 해제 | Fake transport3개 정확히 해제, application send 호출0, Graph timer 정지 |
+| 기존 Windows Native Smoke | Raw/Decode/Vehicle/ECU/Logging/Fake Live **6종 모두 PASS** |
+| 기존 Mock Logging Native | JSONL5 / CSV5, 기존 CLI Logger byte 일치 |
+| 기존 Fake Live Native | JSONL6 / CSV5, 기존 CLI Logger byte 일치, transport4 해제·TX0 |
+| CLI/GUI 모듈·설치 진입점 | 도움말 실행 정상 |
+| pip check | No broken requirements found. |
+| 사람 수동 GUI / 실제 CANable·Cluster | **NOT VERIFIED / NOT VERIFIED** |
+| 팀 고정 버전 / 담당자 코드 리뷰 | **미확정 / NOT VERIFIED** |
+
+pytest는 cacheprovider 비활성화 및 Worktree의 제외 대상 `.test-tmp/phase3g-*` 신규 쓰기 가능 경로에서 실행했다.
+Windows screenshot은 Qt widget 렌더링이며 native windows QApplication와 창 노출을 확인했다.
+Fake Live Graph screenshot에서 TEST ONLY Source, 선택 Channel/0x651 STD/Measurement,
+test_unit, 숫자 값·원래 Timestamp·Sample 계수·경과 시간축과 변화 곡선을 실제로 확인했다.
+이는 Hardware 수신·실제 차속/RPM·손실률·성능 KPI의 증거가 아니다.
+
+## 구현 계약 검증
+
+- MainWindow는 기존 DecodeSession.process 반환 FrameObservation만 Graph에 전달한다.
+  자동 테스트에서 codec 호출 수가 기존 처리 프레임 수와 같고 Graph refresh로 Sample이 늘지 않는 것을 확인.
+- 명시적 Channel/Message ID/STD·EXT/Signal 선택; 같은 Signal 이름의 TEST ONLY metadata 중복에도 자동 연결 없음.
+- typed Channel 0/'0'/None, 동일 숫자 ID의 STD/EXT, 다른 Message, TX/error-mask 분리.
+- 원래 숫자 값/단위/Timestamp와 Source/session 식별자 보존.
+- sample 상한1000, oldest-history 제외, 수신 Buffer drop와 Graph history/time/value 제외 계수 분리.
+- Pause는 곡선 snapshot만 정지하고 수집/Decode/Logging 유지. Resume은 최신 유한 Buffer 표시.
+- Clear Graph는 Graph만 초기화; Raw/Cache/Statistics/Logging 유지. 선택 Unit과 No DBC 상태도 보존.
+- DBC Reload/Source 변경 시 선택·곡선·Pause snapshot 초기화. 같은 Source 반복 Start/Stop에는 새 sample 증가.
+- Decode 실패, mux Signal 부재, 비숫자/NaN/Infinity/큰 수 경계 모의, timestamp 누락/역전 처리 확인.
+  기존 DecodedMessage가 거부하는 값은 경계 모의로 Graph 방어를 시험하며 upstream 계약을 변경하지 않음.
+- 오류/누락 뒤 segment를 끊고 Cache의 이전 정상값을 새 점으로 생성하지 않음.
+- renderer의 큰 유한 수 좌표 정규화, Qt main-thread 호출 및 종료 후 timer 정리 확인.
+- 기존367개 테스트·TEST ONLY DBC·Transport/Codec/Cache/Logger/CLI 소스는 수정하지 않음.
+
+## 환경·라이선스·미검증
+
+기존 Python3.14.6 / PySide6 6.10.3 / python-can4.6.1 / cantools44.2.1 / pytest9.1.1을 사용.
+새 외부 라이브러리 추가/설치, pyproject 의존성 변경, USB driver/firmware 변경은 하지 않았다.
+QPainter는 기존 PySide6 QtGui에 포함된다. 로컬 PySide6 metadata:
+LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only. 팀 배포 라이선스 검토 완료는 NOT VERIFIED.
+
+실제 backend Clock 정확도·실제 CANable/Cluster·사용자 수동 Graph 확인·고부하/장시간/손실률·KPI는 NOT VERIFIED.
+Numeric enum/Invalid/Reserved 값의 표시와 ECU Healthy/Fault/물리 유효성 판단은 구분한다.
+CAN/LIN Interface/DBC/Matrix/Requirements/ECU 수정은 없으며 변경 필요 시 상대 담당자 리뷰가 필요하다.
+다중 Signal·Graph Export·영구 설정은 구현하지 않았다. Git add/Commit/Push/PR/Merge는 실행하지 않았다.
+
+---
+
 # Phase 3F 검증 — 2026-10-13
 
 기준 HEAD `8390c6f9c21a5e5343db7892d4c978e07fe448fb`, Branch `PC-Diagnostic-Test`.

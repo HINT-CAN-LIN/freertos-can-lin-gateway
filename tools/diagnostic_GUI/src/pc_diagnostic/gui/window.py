@@ -16,6 +16,7 @@ from .vehicle_view import VehicleStatusView
 from .observation_view import EcuObservationView
 from .logging_session import LOG_CLOSE_SECONDS, LoggingSession
 from .logging_view import LoggingView
+from .graph_view import SignalGraphView
 
 # 아래 값은 GUI 표시 자원 제한이며 통신 규격 수치가 아니다.
 DISPLAY_REFRESH_MS = 50
@@ -147,6 +148,8 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.ecu_view, "ECU Health Observation")
         self.logging_view = LoggingView(self.logging_session, self.receiver_running, self)
         self.tabs.addTab(self.logging_view, "Logging")
+        self.graph_view = SignalGraphView(self.decode_session, self)
+        self.tabs.addTab(self.graph_view, "Signal Graph")
         layout.addWidget(self.tabs, 1)
         layout.addWidget(QLabel("오류 메시지"))
         self.error_area = QPlainTextEdit()
@@ -211,6 +214,7 @@ class MainWindow(QMainWindow):
         self.vehicle_view.reset_selectors()
         self.ecu_view.reset_selectors()
         self.logging_view.set_input_source(self._source_text)
+        self.graph_view.set_input_source(self._source_text, is_mock=is_mock)
         if self.decode_session.loader.is_loaded:
             status = self.decode_session.loader.status
             self.dbc_label.setText(f"DBC: {status.path.name} | Loaded ({status.message_count} messages) | Decode enabled · {self.dbc_source_text()}")
@@ -276,6 +280,7 @@ class MainWindow(QMainWindow):
         self.show_selection()
         self.vehicle_view.refresh()
         self.ecu_view.refresh()
+        self.graph_view.refresh()
         return success
 
     @Slot()
@@ -360,10 +365,12 @@ class MainWindow(QMainWindow):
         if self._closing:
             return
         frames, total, dropped = self.buffer.drain()
+        self.graph_view.note_buffer_drop(dropped)
         for frame in frames:
             self.vehicle_view.observe_channel(frame.channel)
             observation = self.decode_session.process(frame)
             self.ecu_view.record(observation)
+            self.graph_view.record(observation)
             if observation.processing_error:
                 self.error_area.appendPlainText(observation.processing_error)
             if self.table.rowCount() >= MAX_TABLE_ROWS:
@@ -522,4 +529,5 @@ class MainWindow(QMainWindow):
         self.vehicle_view.close_view()
         self.ecu_view.close_view()
         self.logging_view.close_view()
+        self.graph_view.close_view()
         event.accept()
