@@ -9,6 +9,10 @@ RM := rm -rf
 
 # All of the sources participating in the build are defined here
 -include sources.mk
+-include Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/subdir.mk
+-include Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/subdir.mk
+-include Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/subdir.mk
+-include Middlewares/Third_Party/FreeRTOS/Source/subdir.mk
 -include Drivers/STM32F4xx_HAL_Driver/Src/subdir.mk
 -include Drivers/BSP/STM32F4xx-Nucleo/subdir.mk
 -include Core/Startup/subdir.mk
@@ -61,8 +65,8 @@ all: main-build
 main-build: gateway_ECU.elf secondary-outputs
 
 # Tool invocations
-gateway_ECU.elf gateway_ECU.map: $(OBJS) $(USER_OBJS) C:\Project\freertos-can-lin-gateway\firmware\gateway_ECU\STM32F446RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "gateway_ECU.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Project\freertos-can-lin-gateway\firmware\gateway_ECU\STM32F446RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="gateway_ECU.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+gateway_ECU.elf gateway_ECU.map: $(OBJS) $(USER_OBJS) /Users/parkjunho/2026_Project/freertos-can-lin-gateway/firmware/gateway_ECU/STM32F446RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "gateway_ECU.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"/Users/parkjunho/2026_Project/freertos-can-lin-gateway/firmware/gateway_ECU/STM32F446RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="gateway_ECU.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

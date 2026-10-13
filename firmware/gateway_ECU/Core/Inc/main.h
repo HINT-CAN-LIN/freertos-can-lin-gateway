@@ -38,7 +38,60 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
+typedef struct
+{
+  uint32_t id;
+  uint8_t dlc;
+  uint8_t data[8];
+} CanRxMessage_t;
 
+typedef struct
+{
+  uint16_t torque_request_raw;
+  uint8_t gear;
+  uint8_t brake;
+  uint8_t alive_counter;
+} VcuCommand_t;
+
+typedef struct
+{
+  uint16_t rpm;
+  uint16_t torque_applied_raw;
+  uint8_t motor_state;
+  uint8_t alive_counter;
+} MotorStatus_t;
+
+typedef struct
+{
+  uint16_t speed_raw;
+  uint16_t rpm;
+  uint8_t gear;
+  uint8_t brake;
+  uint8_t network_state;
+} VehicleStatus_t;
+
+typedef struct
+{
+  uint8_t reverse_lamp;
+  uint8_t door_open;
+  uint8_t door_status;
+  uint8_t light_status;
+  uint8_t window_status;
+} BodyStatus_t;
+
+typedef struct
+{
+  uint8_t gateway_alive;
+  uint8_t queue_usage;
+} GatewayStatus_t;
+
+typedef struct
+{
+  uint8_t fault_code;
+  uint8_t ecu_offline;
+  uint8_t recovery_state;
+  uint8_t system_state;
+} FaultStatus_t;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
@@ -71,6 +124,17 @@ void Error_Handler(void);
 #define SWO_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+#define DBC_CAN_ID_VCU_COMMAND  (0x100U)
+#define DBC_CAN_ID_MOTOR_STATUS (0x110U)
+#define DBC_CAN_ID_VEHICLE_STATUS (0x120U)
+#define DBC_CAN_ID_BODY_STATUS  (0x200U)
+#define DBC_CAN_ID_GATEWAY_STATUS (0x300U)
+#define DBC_CAN_ID_FAULT_STATUS (0x310U)
+#define DBC_VCU_COMMAND_DLC    (8U)
+#define DBC_CAN_FRAME_DLC      (8U)
+#define DBC_CAN_MONITOR_TIMEOUT_MS (50U)
+#define DBC_CAN_MONITOR_SERVICE_PERIOD_MS (10U)
+#define DBC_LED_TOGGLE_PERIOD_MS (500U)
 
 /* USER CODE END Private defines */
 
