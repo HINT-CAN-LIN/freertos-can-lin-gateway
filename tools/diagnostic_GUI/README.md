@@ -1175,3 +1175,200 @@ Stop/Close 시 Queue drain과 flush/close는 기존 Logger 계약을 따릅니�
 
 신규 의존성·라이브러리 설치/버전 변경·공통 Interface 변경 없음.
 Git add/Commit/Push/PR/Merge/Jira Done 미실행.
+
+## Phase 3H-3 — Packaging / Fixture Distribution 검토 (NEEDS_REVIEW)
+
+2026-10-14, 기준 HEAD e5621aa9f156a0bcbc97190a64a1b0450eb237a8.
+사용자는 기존 TEST ONLY DBC에 대해 **“아직 미승인 — 자동 포함을 보류하세요”**라고 확인했습니다.
+따라서 Package Data 추가·Fixture 복사·리소스 조회 코드 변경은 **보류**합니다.
+현재 Wheel은 원인 분석용 로컬 산출물이며 팀원 배포 승인/완성된 배포 패키지가 아닙니다.
+
+### 정적 리소스 Inventory
+
+| 실제 경로 (이 도구 기준) | 용도·Scenario 의존 | 출처·추적 | Wheel 처리 / 승인 |
+|---|---|---|---|
+| tests/fixtures/test_only.dbc | TEST ONLY Signal/STD·EXT/Choice 정의. 현재 Runner는 모든 시나리오의 내부 무결성 확인에 사용; Raw 이외는 명시적 DBC 로드도 필요 | TEST ONLY 합성·프로젝트 정의 복제 아님으로 표기, cde2ebf/DHK, Git tracked | 현재 미포함. 모든 11개 시나리오의 독립 실행에 필요하지만 배포 미승인; 자동 포함 보류 |
+| src/pc_diagnostic/gui/demo.py | 기존 TEST_ONLY_ID / 두 payload; Mock 입력 재사용 | 69f904c/DHK, 기존 Fixture/codec 예제 출처 주석, Git tracked | 기존 Python 모듈로 Wheel에 포함. 새 별도 데이터 파일 아님; 정식 배포 권한·정책은 별도 검토 |
+| src/pc_diagnostic/gui/automation.py | 고정 Catalog11 / 입력 조합 / Assertion 기대값 / TEST_ONLY DBC SHA | e5621aa/DHK, Git tracked | 기존 Python 모듈로 Wheel에 포함. Expected를 actual로 생성하지 않음; 새 Frame/Signal 정의 없음 |
+
+무결성 SHA-256:
+- test_only.dbc (823 bytes): `9ff1750df33163d0b9591912f202be56dda2a61af9dd97fa398f5a2c2c13a93b`
+- demo.py (675 bytes): `db7899aa9545b8676f92322e493cf65756133c89ec1f43353e4507f434d8ef3b`
+- automation.py (9236 bytes): `b222bafff19c299e839b8d0c30d9ef1fa02d09be488539ad57ff70b424707bc9`
+
+Mock payload와 Expected Value는 위 Python 모듈 내부의 기존 상수/고정 계약입니다.
+추가 Scenario 파일·외부 DBC·Capture·새 합성 Fixture를 만들지 않았습니다.
+Git author와 합성 자료라는 주석은 출처의 근거이며 법적 소유·재배포 권한·팀 승인을 대신하지 않습니다.
+현재 도구의 명시적 LICENSE/SECURITY/redistribution 승인 근거는 확인되지 않았습니다.
+Production DBC/Matrix/Routing/Firmware는 Wheel 입력에 넣지 않습니다.
+
+### 방식 비교와 보류 설계
+
+| 기준 | A: Package Data + importlib.resources | B: 외부 Fixture 디렉터리 | C: 사용자가 파일 명시 선택 |
+|---|---|---|---|
+| Wheel 독립성 | 승인된 자료까지 포함하면 가장 높음 | 별도 자료가 있어야 완성 | 사용자가 적법한 자료를 준비해야 완성 |
+| 재현성 | 고정 SHA·버전으로 높음 | 외부 파일 버전/누락 관리 필요 | 선택한 파일의 SHA/조건 검증 필요 |
+| 보안 | 고정 내부 데이터·읽기 전용 접근; 실행 스크립트 없음 | 자동 검색 대신 명시 경로·허용 자료 검증 필요 | 자동 Production 연결 없이 사용자 선택·무결성 확인 |
+| 배포 권한 | 자료 포함 전 승인 필수 | 별도 자료 배포도 사용권 승인 필요 | 도구가 자료를 배포하지 않아도 사용자가 가진 자료의 사용권 확인 필요 |
+| 개발 호환성 | 표준 locator와 기존 Fixture 계약의 동등성 회귀 필요 | CWD/개인 경로 하드코딩 금지 | 기존 Select DBC 유지 가능 |
+| 유지보수 | 자료 중복 시 byte 동일성·버전 정책 필요 | 외부 디렉터리 수명·설정 정책 필요 | UI에서 미선택/누락/오류 안내 필요 |
+
+권장 **후보**는 승인 확보 후 A입니다. 단, 구현·확정하지 않았습니다.
+승인 후 기존 DBC의 바이트를 그대로 package resource에 포함하고, 기존 Scenario SHA를 유지하며
+Python 표준 importlib.resources로 조회하는 안을 검토합니다.
+파일 경로가 필요한 loader에는 resource context 수명을 Runner cleanup까지 유지해야 합니다.
+설치 디렉터리에 쓰지 않고 CWD/개인 PC 절대 경로에 의존하지 않아야 합니다.
+TEST ONLY 선택은 명시적으로 안내하고 Production DBC 자동 선택은 계속 금지합니다.
+
+B/C도 아직 구현하지 않았습니다. **현재 Select DBC로 외부 파일을 선택하는 것만으로는 해결되지 않습니다.**
+Runner가 먼저 개발 구조의 내부 fixture_path()를 검사하므로 Wheel에서 실패합니다.
+B/C를 채택하려면 적법한 사용자 선택 자료의 무결성 확인과 내부 locator 의존 제거를
+별도 승인 범위로 구현·회귀 검증해야 합니다. Fixture 경로를 임의로 새 기본값으로 넣지 않습니다.
+
+### 현재 Build / 설치 구조
+
+- 기존 setuptools.build_meta, src package discovery, Requires-Python >=3.10을 유지합니다.
+- Package Data는 설정되어 있지 않으며 tests/fixtures는 src 밖에 있습니다.
+- 현재 locator는 __file__.parents[3] / tests/fixtures/test_only.dbc입니다.
+  개발 트리에서는 동작하지만 Wheel에서는 설치 환경의 Lib/tests/fixtures를 가리킵니다.
+- 선언 의존성은 기본 없음, 선택 extras:
+  GUI PySide6>=6.10,<7, CAN python-can>=4.6,<5, DBC cantools>=40,<45,
+  test pytest>=8,<10 및 CAN/DBC. 기존 slcan/gs-usb extras도 유지합니다.
+- CLI can-diag, GUI can-diag-gui 및 모듈 진입점을 유지합니다.
+- 개발 환경 검증 버전과 팀 승인 고정 버전은 구분합니다. 팀 고정 버전/배포 라이선스는 미확정입니다.
+
+이번에는 기존 설치된 Build 도구(Python3.12.14/setuptools84.0.0/wheel0.48.0)만 사용해
+새 임시 src/pyproject/README 복사본에서 기존 backend로 Wheel을 만들었습니다.
+원래 Worktree의 build/egg-info 생성이나 pyproject/source 변경은 없습니다.
+프로젝트 .venv에는 setuptools/wheel/build가 설치되어 있지 않았으며 이를 재설치하지 않았습니다.
+
+승인 후 절차(현재 미완료):
+1. TEST ONLY DBC 사용권·재배포 범위/담당자/날짜/Evidence 및 팀 배포 정책 확보.
+2. 승인된 resource만 포함하고 표준 resource locator 구현; 기존 Fixture/Expected 계약 유지.
+3. 기존 backend로 새 임시 Build 입력에서 Wheel 생성·Archive Inventory/SHA 검사.
+4. Worktree 밖 새 venv/CWD에서 설치 및 resource/GUI/11개 Scenario 실행 검증.
+5. read-only resource 접근·누락 안내·Source/Live 보호·종료/정리 신규 시험.
+6. 기존517/CLI140/Native9 회귀 후 팀원 PC 검증·코드 리뷰. Git 업로드는 별도 승인.
+
+현재 기본 Wheel만 오프라인 설치하는 진단 절차는 다음 형태입니다.
+Build 도구가 설치된 실행 Python과 완전히 새 출력/venv를 사용합니다.
+
+    python -c "import setuptools.build_meta; print(setuptools.build_meta.build_wheel('NEW_WHEEL_OUTPUT'))"
+    python -m venv --without-pip NEW_CLEAN_VENV
+    python -m pip --python NEW_CLEAN_VENV/Scripts/python.exe install --no-index --no-deps PATH_TO_LOCAL_WHEEL
+    python -m pip --python NEW_CLEAN_VENV/Scripts/python.exe check
+    NEW_CLEAN_VENV/Scripts/python.exe -I -B -m pc_diagnostic --help
+    NEW_CLEAN_VENV/Scripts/python.exe -I -B -m pc_diagnostic.gui --help
+
+Build 명령의 CWD는 Worktree 자체가 아닌 새 Build 입력 복사본입니다.
+--no-deps 기본 설치에는 PySide6/cantools/python-can가 없으므로 GUI 실제 실행·Decode/Live 지원을
+증명하지 않습니다. 승인된 배포 환경에서는 필요한 기존 extras를 별도 설치·검증해야 하며
+이번에 외부 패키지 다운로드·설치나 새 버전 고정은 하지 않았습니다.
+GUI --help 성공은 정상 창 실행 성공과 다릅니다.
+
+### 현재 결과·Gate·후속 검토
+
+실제 Wheel Inventory/Clean Install/누락 재현·회귀 결과는 VERIFICATION의 Phase3H-3에 기록합니다.
+독립 설치에서 Catalog11 로드는 가능하지만 필요한 DBC가 없으므로 11개 실행은 미검증/보류입니다.
+Package Resource 조회 구현·승인 Fixture 포함·완성된 Wheel GUI 배포 완료를 주장하지 않습니다.
+
+Jira 초안(외부 등록/Done 미실행):
+1. **[HINT-48][Review] TEST ONLY DBC 재배포 승인** (PC/배포/팀 담당자, 1일):
+   위 SHA·출처·Wheel 포함 범위·허용 배포 대상·승인 담당자/날짜/Evidence 기록.
+2. **[HINT-48][Packaging] 승인 Fixture resource locator 구현** (PC/Test, 1~2일, 위 승인 후):
+   Package Data/importlib.resources·읽기 전용/누락/CWD/11개 시나리오·Clean GUI 검증.
+3. **[HINT-48][Troubleshooting] pip 임시 디렉터리 정리 권한**:
+   외부 clean install의 기본 sandbox Temp 정리 경고 재현. 전용 TEMP/TMP/TMPDIR 지정 후
+   새 환경의 설치·pip check·진입점 재실행에 경고 없음/전용 Temp 비어 있음 확인.
+   타인/기존 Temp 디렉터리 수동 삭제 없음.
+4. **[HINT-48][Test] 팀원 PC 배포·라이선스 체크** (PC/팀원/Test, 1~2일):
+   승인된 extras/지원 Python·설치·Mock GUI·11개 시나리오·배포 조건을 실제 팀원 PC에서 확인.
+
+최종 상태는 **NEEDS_REVIEW**. 배포 승인 Gate는 **미승인/보류**입니다.
+Hardware·사용자 수동 GUI·팀원 PC·담당자 리뷰: NOT VERIFIED.
+CAN/LIN Interface 변경 시 상대 담당자 리뷰 필요. Git add/Commit/Push/PR/Merge/Jira Done 미실행.
+
+## Phase 3J-1 — Driver Control / Mock Input (2026-10-14)
+
+기존 GUI에서 **Driver Control** 탭을 선택한다. GUI 실행 방식은 그대로다.
+Repository 루트에서 .\tools\diagnostic_GUI\.venv\Scripts\python.exe -m pc_diagnostic.gui
+또는 기존 설치 진입점 can-diag-gui를 실행한다.
+
+1. Mode=Mock을 유지한다. DBC/Receiver 실행 없이도 PC 내부 입력을 검증할 수 있다.
+2. Accelerator, Brake, Gear를 명시적으로 설정한다. 초기값은 Not Configured이며 0/OFF와 구분한다.
+3. Window Open/Close, Light ON/OFF 버튼은 편집만 한다. **Apply Mock Input**이 메모리 Mock Adapter에 전달한다.
+4. Request State의 Mock Input / Mock Accepted / Input Error, PC 생성 시각과 내부 이력을 확인한다.
+5. **Reset Mock Inputs**는 PC 메모리만 초기화한다. 차량 정지/해제 명령은 아니다.
+6. 기존 Start/Stop/Clear는 CAN 관측 기능이다. 동일 Source에서는 Driver 입력/마지막 Mock 수락을 유지한다.
+   Source 설정 변경은 기존 Receiver/Writer 정리 후 가능하며 미적용 입력·수락 결과·입력 이력을 폐기한다.
+
+### 입력 모델 / Adapter 경계
+
+- DriverControlView → DriverInputModel → MockDriverAdapter 구조다. Qt 메인 스레드에서 짧은 메모리 처리만 한다.
+  Driver 경로는 Bus, Receiver, RawCanFrame, Encoder, 기존 CLI Sender를 호출하지 않는다.
+- Accelerator 0..100%는 핸드북9.1/임시안의 **Mock 모델 정책**이다. Production Scale/단위/범위 승인으로 보지 않는다.
+- Brake는 Mock ON/OFF(bool), Gear는 P/N/D/R 이름, Window는 OPEN/CLOSE 의도, Light는 ON/OFF 의도만 보관한다.
+  PC 입력 CAN Enum/bit layout을 정의하거나 기존 ECU Enum 숫자로 변환하지 않는다.
+  Ignition, Window STOP/세부 모드, 개별 Lamp 선택은 이번 범위에 없다.
+- 숫자 변환 실패, 범위 초과, NaN/Infinity, 잘못된 타입/선택을 거부한다.
+  Accelerator+Brake 동시 입력은 그대로 보관한다. Torque 제한/우선순위/Fail-safe는 VCU 책임이며 계산하지 않는다.
+- 매 Apply는 PC 내부 번호와 생성 시각을 가진 명시적 요청이다. 주기 송신·자동 재시도·무한 큐는 없다.
+  재진입 호출을 거부하며 입력 이력/Mock 수락 이력은 각각 최대128건이다. CAN AliveCounter/Timeout이 아니다.
+- Mock Accepted는 **메모리 요청 처리 성공**이다. ECU Response Not Verified는 계속 유지한다.
+  현재 편집/실패의 Applied=False와 과거 Last Mock Accepted를 별도로 표시한다.
+  Adapter 생성/수락/정리 실패는 오류 종류를 표시하며 내부 경로/인증정보를 오류 문자열에서 노출하지 않는다.
+- Live는 버튼과 모델 양쪽에서 차단한다. disabled 버튼의 직접 Slot 호출/모델 호출도 송신하지 않는다.
+  현재 코드에는 Interface 승인이나 Live 운전자 송신을 활성화하는 경로가 없다.
+- TorqueRequest는 VCU 계산 결과의 관측 항목이다. 이 탭은 자동 신호 매핑/값 계산을 하지 않는다.
+  실제 RX 값은 기존 CAN Monitor/Signals 또는 명시적으로 매핑한 Vehicle Status/Signal Graph에서 확인한다.
+- Mock 수락을 Raw RX/Signal Cache/Graph/Fault/CAN Logger에 가짜 ECU 응답으로 넣지 않는다.
+  입력 이력은 PC 메모리 표시이며 기존 CSV/JSONL Raw Logger 계약을 변경하지 않는다.
+
+### 실제 산출물 / 임시설계 대조 결과
+
+- 외부 제공 HINT48_PC_Driver_Input_Interface_임시설계_v0.1.xlsx의 5개 sheet를 읽었다.
+  SHA-256: 871e172dcd591c3b12a4dae796ef4b5f2c4e1f54e0f27ef3134a9e180f423476.
+  Repository 밖의 임시 초안이며 수정/복사/패키지 포함을 하지 않았다.
+- 메시지_제안 row2의 PC_Driver_Input ID 0x600은 개발 임시 후보이며 DLC/Payload/주기/Timeout은 TBD다.
+  PC_Body_Input 경로와 ID도 Open이다. 이 후보 ID는 소스의 CAN 생성/설정 값으로 쓰지 않았다.
+- 현재 network/can/CAN__DB_펌웨어 전 최종본_v0.1.dbc 내부 VERSION은 0.4 - review-ready interface proposal이다.
+  파일명만으로 승인된 최종본이라고 취급하지 않는다. PC_Driver_Input/PC_Body_Input 정의는 없다.
+  후보 ID가 DBC에 없다는 사실은 예약/충돌 검사 완료를 뜻하지 않는다.
+- 이 DBC와 docs/requirements/02__메시지_정의서_ver1.2.xlsx CAN_Message_Definition row6은
+  VCU_Command=0x100, Standard, DLC8, VCU 송신, 10ms를 정의한다.
+  TorqueRequest/Gear/Brake/AliveCounter는 **VCU 출력**이며 PC가 대신 송신하지 않는다.
+  Gear 이름 P/N/D/R은 기존 DBC Value Table과 일치하나 PC 입력 CAN Encoding은 미승인이다.
+- 핸드북9.1의 Brake/Torque 제한 예시는 VCU 설계 책임이다.
+  docs/requirements/05__요구사항_명세서_ver1.2.xlsx Requirements row8(SYS_REQ_003)도
+  VCU 입력 기반 제어 요구사항이며 PC 입력 CAN 수신 계약/동시 입력 우선순위를 확정하지 않는다.
+- 현재 PC 브랜치 VCU 폴더는 scaffold다. fetch 없이 로컬 보관 origin/VCU_ECU
+  (95a3e55d4b5b9a51ca7d136858f86b6adb3144e3)의 Core/Src/main.c를 읽었다.
+  HAL 초기화/빈 main loop이며 운전자 CAN 입력 해석을 확인하지 못했다. 최신 원격 구현 확인 결과는 아니다.
+- 임시안 신호_제안 row7의 Window 목적지는 Door ECU로 적혀 있다.
+  메시지 정의서 LIN_Frame_Definition row10과 Requirements row49~50은 별도 Window ECU/로컬 limit-stop을 명시한다.
+  **검토 필요 차이**다. OPEN/CLOSE→UP/DOWN 변환 및 로컬/원격 우선순위는 구현하지 않았다.
+- network/routing/Gateway_Routing_Table_v0.4_CAN_to_LIN_Decision_Baseline.xlsx CAN_to_LIN row4/9/12/13은
+  VCU_Command Byte3의 Body 제어 후보와 Gateway→LIN Light/Door/Window 경로를 제안한다.
+  현재 DBC에는 해당 Body 요청 신호가 없다. Matrix/DBC/LDF 동기화와 **상대 담당자 리뷰 필요** 상태를 유지한다.
+  Window/Light 입력은 이 Routing 후보를 적용하지 않는 메모리 의도다. Door 입력은 이번 UI 범위가 아니다.
+- 별도 CAN_Matrix.xlsx 및 승인된 PC 입력 Interface는 확인되지 않았다.
+  핸드북4.2/5.5 및 CONTRIBUTING Interface Change 절차 이후에만 Production 구현을 검토한다.
+
+### 검증 / 미완료 / 다음 협업
+
+2026-10-14 전체569(기존517+신규52), CLI별도140, Windows Native10종 PASS.
+Driver 자동 검증에서 CAN 생성/송신 경계 호출0회. 실제 수동 확인/Hardware 검증은 아니다.
+새 라이브러리 설치/pyproject 변경 없음. 팀 고정 버전 미확정, 담당자 코드 리뷰 NOT VERIFIED.
+Hardware 및 Driver GUI 사용자 수동 확인 NOT VERIFIED. Fixture Wheel 재배포 미승인 상태도 유지한다.
+
+후속 Jira 등록용 초안(외부 등록하지 않음):
+
+- **1~2일 / HINT-48 PC→VCU Interface 승인**: PC/VCU/Gateway/시스템 담당.
+  후보 ID 충돌/예약, DLC/Signal/Scale/Enum, 주기/Timeout/Fail-safe, 모드/권한/수신 확인을 검토.
+  완료 증거는 담당자 승인과 Matrix/DBC 동기화 diff이며 Mock PASS로 대체하지 않는다.
+- **1~3일 / Body 입력 경로·Window 책임 정합성**: VCU/Gateway/Door/Light/Window 및 PC 담당.
+  PC→VCU 또는 Gateway 진입점, Window 대상 오류, OPEN/CLOSE 의미, 동시 입력/로컬 우선순위,
+  Lamp 범위와 Routing Byte3/DBC 차이를 정리한다. 상대 담당자 리뷰 필요.
+- **1~3일 / 승인 후 PC 송신 및 응답 분리 시험**: PC/VCU/Gateway/테스트 담당.
+  앞선 Interface 승인 이후 별도 작업으로 Encoder/권한/수신 확인/실기 Gate를 설계한다.
+  CANable/ECU 실측은 현재 Hardware 준비 조건 충족 전에는 진행하지 않는다.

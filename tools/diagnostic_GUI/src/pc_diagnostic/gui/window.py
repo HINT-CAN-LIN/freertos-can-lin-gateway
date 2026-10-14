@@ -18,6 +18,7 @@ from .logging_session import LOG_CLOSE_SECONDS, LoggingSession
 from .logging_view import LoggingView
 from .graph_view import SignalGraphView
 from .fault_monitor_view import FaultMonitorView
+from .driver_control_view import DriverControlView
 
 # 아래 값은 GUI 표시 자원 제한이며 통신 규격 수치가 아니다.
 DISPLAY_REFRESH_MS = 50
@@ -67,6 +68,7 @@ class MainWindow(QMainWindow):
         # Qt widget와 표시 타이머는 메인 스레드에서만 생성한다.
         super().__init__()
         self.automation_view = None
+        self.driver_control_view = None
         self._interface_factory = interface_factory
         self._live_interface_factory = live_interface_factory or open_live_interface
         self._source_text = MOCK_SOURCE_LABEL
@@ -158,6 +160,9 @@ class MainWindow(QMainWindow):
             from .automation_view import AutomationView
             self.automation_view = AutomationView(self, self)
             self.tabs.addTab(self.automation_view, "Test Automation")
+        # 기존 탭 순서를 유지하고 CAN 전송 없는 Driver 입력 화면을 끝에 추가한다.
+        self.driver_control_view = DriverControlView(self, self)
+        self.tabs.addTab(self.driver_control_view, "Driver Control")
         layout.addWidget(self.tabs, 1)
         layout.addWidget(QLabel("오류 메시지"))
         self.error_area = QPlainTextEdit()
@@ -228,6 +233,7 @@ class MainWindow(QMainWindow):
         self.logging_view.set_input_source(self._source_text)
         self.graph_view.set_input_source(self._source_text, is_mock=is_mock)
         self.fault_monitor_view.set_input_source(self._source_text, is_mock=is_mock)
+        self.driver_control_view.set_input_source(self._source_text, is_mock=is_mock)
         if self.decode_session.loader.is_loaded:
             status = self.decode_session.loader.status
             self.dbc_label.setText(f"DBC: {status.path.name} | Loaded ({status.message_count} messages) | Decode enabled · {self.dbc_source_text()}")
@@ -258,6 +264,8 @@ class MainWindow(QMainWindow):
         self.dbc_button.setToolTip("Stop 후 Worker와 잔여 버퍼 정리가 완료되어야 DBC를 변경할 수 있습니다.")
         if self.automation_view is not None:
             self.automation_view.refresh()
+        if self.driver_control_view is not None:
+            self.driver_control_view.refresh()
 
     @Slot()
     def select_dbc(self):
@@ -556,6 +564,7 @@ class MainWindow(QMainWindow):
         self.logging_view.close_view()
         self.graph_view.close_view()
         self.fault_monitor_view.close_view()
+        self.driver_control_view.close_view()
         if self.automation_view is not None:
             self.automation_view.close_view()
         event.accept()

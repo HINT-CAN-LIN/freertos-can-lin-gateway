@@ -1,3 +1,483 @@
+# Phase 3J-1 Driver Control Panel / Mock Input 검증 — 2026-10-14
+
+**최종 판정: PASS (Mock 소프트웨어 구현/자동 검증 범위). Production TX는 미구현/차단.**
+기준 Branch PC-Diagnostic-Test / HEAD e5621aa9f156a0bcbc97190a64a1b0450eb237a8.
+시작 시 기존 Phase3H-3/3I-1 README.md, VERIFICATION.md 수정2개와 빈 Stage를 확인했다.
+기존 문서 전체를 유지하고 본 기록만 앞에 추가한다.
+팀 고정 버전 미확정, 담당자 코드 리뷰/Driver 사용자 수동 검증/Hardware 모두 NOT VERIFIED다.
+
+## 이번 실제 실행 결과
+
+| 검증 | 결과 |
+|---|---|
+| 새 입력 모델/Adapter 테스트 | 40 PASS |
+| 새 Driver Qt 테스트 | 12 PASS |
+| 신규 합계 | 52 PASS (1.25s) |
+| 전체 pytest | 569 PASS (51.78s) = 기존517 + 신규52 |
+| 원본 Phase1/2 목록 기반 CLI 별도 회귀 | 140 PASS (0.53s) |
+| Windows Driver Control Native | PASS; Windows 플랫폼 실제 창 노출 |
+| 기존 Windows Native | Raw/Decode/Vehicle/ECU/Logging/Fake Live/Graph/Fault/Automation 9/9 PASS |
+| 전체 Native | 10/10 PASS; 수동 확인/Hardware와 별개 |
+| CLI/GUI 모듈 --help | PASS |
+| 설치 can-diag.exe / can-diag-gui.exe --help | PASS |
+| CLI monitor --backend mock | 종료0; fixture 미주입 Captured0 (실기 결과 아님) |
+| pip check | No broken requirements found. |
+
+pytest는 매 실행 새 .test-tmp/phase3j1-* 경로를 사용하고 캐시를 비활성화했다.
+검증 산출물/스크린샷은 Git 제외 경로에만 생성했다. Windows Driver 화면 캡처도 실제 열어 확인했다.
+첫 focused 실행50 PASS/2 FAIL은 신규 테스트의 잘못된 Sender 이름과 이미 삭제된 Qt Worker 참조 검사 때문이었다.
+실제 RawCanSender.send 및 isValid 검사를 사용하도록 신규 테스트만 정정했다.
+그 후 신규52/전체569 모두 통과했다. CLI 첫 부분 선택97 PASS는 전체140 검증으로 사용하지 않았으며,
+원본 파일 목록으로 다시 실행한140 PASS를 위에 기록했다. 기존 테스트는 수정/삭제/약화하지 않았다.
+
+## 검증된 범위
+
+- Accelerator 범위/변환/NaN/Infinity/타입, Brake ON/OFF, Gear P/N/D/R, Window OPEN/CLOSE, Light ON/OFF.
+- Brake+Accelerator 동시 값 보존. VCU 우선순위/토크 계산 미구현.
+- 편집/명시적 Apply/현재 Applied/과거 Last Mock Accepted/Input Error 분리.
+- 잘못된 편집 후 이전 draft 재적용 차단, Adapter 생성/수락/잘못된 receipt/정리 오류, Reset 후 회복.
+- 생성 시각 오류, 재진입 차단, 반복 요청의 독립 PC 번호, 각128건 이력 상한.
+- Receiver/DBC 없이 Mock 입력. 수락 결과를 Raw/Cache/Logger/Graph/Fault에 ECU 데이터로 넣지 않음.
+- Source 변경에서 입력/Mock 결과/이력 초기화; Live UI 및 직접 Slot/모델 호출 차단.
+- 기존 can.Bus / BusABC.send / MockCanInterface.send / PythonCanInterface.send / RawCanSender.send 경계를
+  감시한 Driver 테스트에서 호출0회. 실제 CANable/ACK/배선 검증이 아니다.
+- Driver Native: 전체 버튼/동시 입력/세 번의 새 Receiver 수신·정지/Raw Clear와 입력 분리/
+  Live 전환·직접 호출 차단/Reset 및 활성 Worker 종료.
+- Driver Adapter는 메모리만 소유하고 추가 Thread/Timer/파일/Bus 없음. 종료 후 입력 거부.
+  기존 Receiver/Logger/Graph 자원 계약과 Native 회귀 유지.
+- Logging Native: CSV/JSONL Raw 저장의 CLI byte 호환성과 기존 파일 보호 재확인.
+  PC 입력 이력을 Raw Logger Schema에 합치지 않았다.
+
+## Interface 근거 및 Open
+
+외부 임시 Excel SHA-256: 871e172dcd591c3b12a4dae796ef4b5f2c4e1f54e0f27ef3134a9e180f423476.
+메시지_제안 row2~4, 신호_제안 row2~8 등 실제5개 sheet를 읽었다.
+0x600은 제안일 뿐이며 소스의 CAN ID로 사용하지 않았다. PC Payload/주기/Timeout/Fail-safe는 Open이다.
+DBC의 VCU_Command0x100은 VCU 송신이며 PC가 대신 송신하지 않는다.
+DBC 내부 VERSION은 review-ready proposal이며 파일명만으로 승인 여부를 확정하지 않았다.
+Window 임시안의 Door 목적지와 별도 Window ECU 정의가 다르며 Routing Body Byte3 후보와 DBC 부재도 검토 필요다.
+README에 근거 행/책임과 후속 Jira 초안을 기록했다.
+공통 DBC/Matrix/Requirements/Routing/Firmware 및 CLI 공개 Interface 변경 없음.
+CAN/LIN Interface는 상대 담당자 리뷰 필요 상태다. 새 Frame/Bit Layout/Timeout/Fail-safe는 생성하지 않았다.
+
+## 환경 / 보존 / 협업
+
+실제 .venv Python3.14.6 / PySide6 6.10.3 / python-can4.6.1 / cantools44.2.1 / pytest9.1.1.
+기존 설치 환경이며 팀 승인 고정 버전이 아니다. 새 설치/가상환경 재설정/pyproject 변경 없음.
+Git add/Commit/Push/PR/Merge/Reset/Rebase 및 Jira 등록/Done 없음.
+Fixture Wheel 배포 승인 보류와 Phase3I-1 Hardware BLOCKED/NOT RUN 기록 유지.
+실제 CANable/ECU, Driver 사용자 수동 확인, ECU 수신/제어 결과, Production 의미/권한/안전 정책,
+담당자 리뷰, 배포 라이선스/Fixture 승인, Integration Merge는 완료로 주장하지 않는다.
+
+## 최종 보존 검사
+
+최종 git diff --check PASS, Stage 비어 있음. 추적 수정3개/미추적 신규6개/삭제0개.
+기존 테스트 및 공통 산출물 SHA-256 변경 없음. D: 원본25개, 다른 Worktree 추적 파일/HEAD/Status,
+리뷰 문서(SHA-256 751ecd803fc1866cc12a51ba2df4a93a64bd41f2cc441456eb9ea49b3178b975),
+기존 Git refs 모두 작업 시작 기준과 동일함을 확인했다.
+기존 README/VERIFICATION 내용도 작업 시작 바이트를 SHA-256으로 확인했다.
+.venv/.test-tmp는 git check-ignore로 제외 확인. 신규 소스/테스트 비밀키·토큰·개인 절대경로 검색 결과 없음.
+
+---
+
+# Phase 3I-1 CANable Pro Live Hardware Integration 사전 검증 — 2026-10-14
+
+**최종 판정: BLOCKED (Hardware Gate). Software 회귀는 PASS.**
+사용자가 CANable Pro·ECU 미연결, CAN 배선 미연결, ECU 전원 미인가,
+실제 송신 노드 없음 및 실기 설정/Flash 버전 미확인을 명시했다.
+사용자 지시에 따라 실제 CAN 연결·수신·실기 Decode는 시도하지 않았다.
+추가 패키지 설치·Firmware/Driver 변경도 수행하지 않았다.
+
+기준 Branch PC-Diagnostic-Test / HEAD e5621aa9f156a0bcbc97190a64a1b0450eb237a8.
+시작 상태는 기존 Phase3H-3 README.md/VERIFICATION.md 수정2개, Stage 비어 있음.
+해당 내용을 보존하고 이번 Phase3I-1 기록만 VERIFICATION 앞에 추가한다.
+
+## Gate A — Windows 장치 조사 (READ ONLY)
+
+2026-10-14 13:13:38 +09:00의 실제 조회:
+- Win32_PnPEntity에서 USB/Ports 및 CANable/candleLight/CANtact/gs_usb/SLCAN 이름 검색.
+  조회된 USB/Ports 항목6개, CAN 이름 후보0개. 관련 항목은 내장 장치이며 CANable을 식별하지 못했다.
+- Win32_SerialPort: **0개**, 실제 COM 목록 비어 있음.
+- HKLM HARDWARE/DEVICEMAP/SERIALCOMM: **없음**.
+- pnputil /enum-devices /connected /class Ports: **No devices were found on the system.**
+- CANable VID/PID: **UNKNOWN**. Firmware/Driver/Service/포트 점유: **UNKNOWN / NOT VERIFIED**.
+  확인되지 않은 COM 포트나 gs_usb index를 임의로 선택하지 않았다.
+- 사용자 확인과 일치: **CANable Pro USB-C 미연결**.
+  케이블 형태로 SLCAN/candleLight/gs_usb Firmware를 추정하지 않았다.
+- 최초 sandbox CIM 조회는 리소스 접근 오류였으며, 시스템 변경 없는 읽기 전용 조회로 다시 확인했다.
+  이 권한 오류를 장치 Firmware/Driver 결함으로 단정하지 않았다.
+- Device Manager에 해당하는 Windows PnP 정보를 조사했으나 GUI Device Manager 조작/Driver 변경은 없었다.
+  장치가 없으므로 실제 Device Manager 후보의 상세 Driver/Hardware 정보 확인은 미완료다.
+
+**Gate A BLOCKED.** Windows의 미검출 관측과 사용자가 확인한 미연결 상태를 구분해 기록한다.
+장치 모델/Revision·VID/PID·현재 Firmware·Driver·Backend·점유 여부는 재연결 후 다시 확인해야 한다.
+
+## 물리 상태 — 사용자 확인 (실측 아님)
+
+| 항목 | 사용자 응답 |
+|---|---|
+| CANable Pro USB-C | 미연결 |
+| CAN_H / CAN_L | 미연결 |
+| CAN Transceiver / 종단저항 / GND·절연 | 미확인 |
+| ECU 전원 | 미인가 |
+| 실제 CAN 송신 노드 | 없음 |
+| 각 노드의 500000 bps | 실기 미확인 |
+| 실제 Cluster Flash 버전 | 미확인 |
+
+소프트웨어로 배선/절연/저항/전원을 확인했다고 주장하지 않는다.
+현재 실제 Live RX 측정은 하지 않았으므로 **RX=0 실측**이 아니라 **RX NOT RUN**이다.
+송신 노드 없이 수신0이 될 수 있다는 일반 조건과 실제 수신 측정 결과를 혼동하지 않는다.
+500000 bit/s / Classic CAN / STD는 사용자 제시 Cluster 시험 기준과 현재 GUI의 초기값이며,
+연결 장치/실행 Firmware의 측정·설정 확인 결과가 아니다.
+
+## Gate B — Backend 의존성 / 기존 GUI 계약
+
+현재 개발 .venv Python3.14.6의 배포 설치 정보와 실제 Runtime import를 각각 검사했다.
+
+| 패키지 / import | 설치 Version | import 결과 |
+|---|---|---|
+| python-can / can | 4.6.1 | PASS |
+| pyserial / serial | 미설치 | ModuleNotFoundError |
+| gs-usb / gs_usb | 미설치 | ModuleNotFoundError |
+| pyusb / usb | 미설치 | ModuleNotFoundError |
+| PySide6 | 6.10.3 | PASS (Qt 창 실행은 Native 회귀에서 별도 확인) |
+| cantools | 44.2.1 | PASS |
+
+pyserial이 없으므로 serial.tools.list_ports의 추가 열거는 수행할 수 없었다.
+이는 Win32/PnP/레지스트리에서 확인한 COM0과 별도로 기록한다.
+gs_usb/pyusb 및 실제 USB backend library/Driver 준비는 확인되지 않았다.
+모듈 설치/명목 Windows 지원을 실제 Firmware/Driver 통신 성공으로 간주하지 않는다.
+
+확인한 기존 코드:
+- gui/connection.py:7~17: Mock/Live, slcan/gs_usb 선택 및 시험 bitrate500000.
+- connection.py:29~38: SLCAN의 명시 port string, gs_usb의 명시 nonnegative index,
+  입력 bitrate 검증. 코드에서 COM3/index0을 자동 선택하지 않는다.
+- connection.py:47~67: 선택 Backend 의존성 확인 후 기존 PythonCanInterface 생성.
+- gui/window.py:303~323: 선택 Source에 맞는 Factory를 Worker에 전달;
+  Live 실패를 Mock로 자동 대체하지 않는 기존 정책.
+- gui/receiver.py:39~62: factory 생성·Live transport 계약 확인·기존 recv loop.
+  GUI Live 수신 경로는 application CAN send를 호출하지 않는다.
+- window.py:330/501 이후: 기존 Stop/Close/Receiver/Writer 정리 경로.
+- python-can Adapter의 CLI send API는 기존 기능으로 보존되나 이번 실제 Hardware 작업에서 호출하지 않았다.
+
+현재 Backend·Channel은 **UNKNOWN / 미선택**이다. 실 CAN bitrate 적용도 **NOT RUN**.
+**Gate B 미완료**: 장치/Firmware 미확인 및 선택 의존성 누락.
+다른 프로그램의 실제 장치 점유/해제도 장치가 없으므로 확인하지 않았다.
+
+### 의존성 준비 후보 — 설치 미실행
+
+아래는 재연결 후 Firmware/Backend를 확인하고 사용자 설치 승인을 받은 경우에만 검토할 후보다.
+현재 사용자 지시대로 **설치하지 않는다**.
+
+- SLCAN이 실제 확인될 경우:
+  `.venv/Scripts/python.exe -m pip install "python-can[serial]==4.6.1" "pyserial==3.5"`
+- gs_usb/candleLight가 실제 확인될 경우:
+  `.venv/Scripts/python.exe -m pip install "python-can[gs-usb]==4.6.1" "gs-usb==0.3.1" "pyusb==1.3.1"`
+
+현재 python-can4.6.1 metadata의 선택 제약:
+serial extra → pyserial~=3.0, gs-usb extra → gs-usb>=0.2.1, Requires-Python>=3.9.
+위 버전은 이 제약과 공식 배포 정보에 따른 **설치 검토 후보**이며 팀 승인 고정 버전이 아니다.
+Python3.14.6에서 해당 미설치 패키지의 실제 Runtime/장치 연동 호환성은 NOT VERIFIED.
+GS 계열은 PyUSB에 더해 실제 USB backend library/Windows Driver 준비가 필요하다.
+Firmware Flash·Driver 교체·Zadig 등은 이번 범위에서 실행하지 않으며 별도 승인/검토 대상이다.
+python-can의 현재 설치 metadata License-Expression은 LGPL-3.0-only.
+라이선스 확인을 조직 배포 승인으로 해석하지 않는다.
+
+공식 참고 (2026-10-14 조회, 자료의 샘플 송신 코드는 실행하지 않음):
+- [python-can4.6.1 SLCAN](https://python-can.readthedocs.io/en/v4.6.1/interfaces/slcan.html):
+  serial port 기반, bitrate와 tty baudrate 구분, listen_only 옵션 계약.
+- [python-can4.6.1 gs_usb](https://python-can.readthedocs.io/en/v4.6.1/interfaces/gs_usb.html):
+  Windows 지원 설명·명시 index/channel 및 PyUSB backend library 필요.
+- [pyserial 공식 License](https://github.com/pyserial/pyserial/blob/master/LICENSE.txt):
+  BSD-3-Clause. [pyserial 배포3.5](https://pypi.org/project/pyserial/).
+- [gs-usb 배포0.3.1 / License](https://pypi.org/project/gs-usb/):
+  MIT 표기.
+- [PyUSB 공식 License](https://github.com/pyusb/pyusb/blob/master/LICENSE):
+  BSD 3조항. [PyUSB 배포1.3.1](https://pypi.org/project/pyusb/):
+  Python>=3.9 및 pre-built USB backend 필요.
+실제 설치본 License/NOTICE·전이 의존성/USB library 조건은 설치 승인 후 다시 확인해야 한다.
+프로젝트/팀 배포 라이선스 승인 미확정 상태는 유지한다.
+
+## 실제 Hardware Gate 결과
+
+| Gate / 항목 | 결과 |
+|---|---|
+| A 장치 식별 / 점유 | BLOCKED, USB 미연결 / CANable 미검출; 점유 미확인 |
+| B Backend·Channel·Driver 준비 | 미완료, UNKNOWN 및 미설치 의존성 |
+| C 실제 Live Connect / Disconnect / Shutdown | **NOT RUN** |
+| D 실제 Raw RX / ID·STD·EXT·DLC·timestamp·payload·출처 | **NOT RUN** |
+| E 실제 Repository DBC 선택·DLC/Signal Decode·Invalid/Reserved/Error | **NOT RUN** |
+| F 실제 Signal Graph / CSV·JSONL / Fault Frame / Flush | **NOT RUN** |
+| Cluster LCD와 PC 비교 / 실행 Firmware | **NOT RUN / NOT VERIFIED** |
+| Frame Loss / Jitter / Cycle / Fault 전파 지연 | **NOT MEASURED** |
+| Hardware PASS | **없음** |
+
+실 CAN application TX, 물리 Replay, Fault Injection, ECU 제어/Reset은 수행하지 않았다.
+Controller를 열지 않았으며, 향후 application TX0만으로 하드웨어 ACK가 없는
+완전한 Listen-only라고 주장하지 않는다.
+기존 Adapter/GUI는 별도 listen-only 강제를 적용하지 않는 계약을 유지한다.
+CAN/LIN ID·Signal·FaultCode·Timeout·DBC/Matrix/Route/Firmware 변경 없음.
+
+## 이번 Software 회귀 (Hardware와 분리)
+
+| 시험 | 실제 결과 |
+|---|---|
+| 전체 pytest | **517 passed in 58.98s**, 기존517 유지, 실패/skip 없음 |
+| CLI 별도 회귀 | **140 passed in 0.80s** |
+| pip check | No broken requirements found. |
+| Windows Native | **9종 PASS**, 실제 Windows 창 + 기존 Mock/Fake TEST ONLY |
+| Mock/Live Source 격리·오류·정리 | 기존 테스트/Fake Native PASS; 물리 Live 성공 의미 아님 |
+| Software GUI 종료·Writer flush | PASS (Mock/Fake). 실제 USB device release는 NOT RUN |
+
+Native 실제 결과:
+- Raw: 실제 창/3회 Start-Stop/Clear/active close, Mock4 해제.
+- Decode: TEST ONLY 명시 load/Raw/Cache/invalid/반복/close, Mock5 해제.
+- Vehicle: -10.0/test_unit/Valid/Age/오류/Reload/close, Mock4 해제.
+- ECU: 7카드/STD-EXT/Fault 관측/반복/Reload/close, Mock4 해제.
+- Logging: JSONL5/CSV5, 기존 CLI bytes equal, 파일 보호/error restart/close.
+- Fake Live: JSONL6/CSV7, CLI bytes equal, transport4 해제·application send0.
+- Graph: Pause/Resume/Clear·Logging 동시, JSONL6, transport3 해제·send0.
+- Fault: 필터/상세/기존 DBC Fake metadata/Source/Reload/close, JSONL11, transport3 해제·send0.
+- Automation: 기존 Fixture의 11개 PASSED, expected mismatch FAILED, cancel/close CANCELLED,
+  사용자 receiver/logger 유지, Live Source BLOCKED, send0.
+
+CLI 회귀의 Mock/VirtualBus send 시험과 실 CAN 송신은 구분한다.
+실기 송신은 하지 않았으며 Native Fake의 application send0을 실제 버스 측정으로 사용하지 않는다.
+이번 시험은 .test-tmp/phase3i1-8a59aa75의 새 basetemp/증적 경로,
+cacheprovider 비활성화·bytecode 비활성화 상태에서 실행했다.
+로그·스크린샷·임시 파일은 Git 제외 대상이며 Hardware capture가 아니다.
+
+## Hardware 준비 조건 및 추후 재개 절차
+
+1. **장치 식별부터 재개**:
+   CANable Pro USB를 실제 연결하고 Windows PnP의 VID/PID·장치명·Driver/Service/
+   현재 Firmware 근거·실제 COM 또는 USB device identity를 읽기 전용 확인한다.
+   USB-C 형태만으로 Backend를 정하지 않는다.
+2. **점유 및 Backend 준비**:
+   장치 점유 프로그램/포트 사용 상태를 확인하고 Firmware에 맞는 Backend를 선택한다.
+   확인된 Channel만 사용한다. 필요한 패키지 설치는 별도 사용자 승인 후 진행하고
+   현재 .venv import/pip check 및 실제 USB backend library/Driver 준비를 검증한다.
+   추가 설치와 Firmware/Driver 변경은 현재 지시에서 금지된 상태다.
+3. **물리 Gate C 사용자 확인**:
+   CAN_H/CAN_L, 각 CAN Transceiver, 실제 종단저항, 기준 GND·절연 구조,
+   ECU 전원, 실제 송신 노드, 각 노드 bitrate/Classical CAN/STD 설정을 확인한다.
+   제조사/실제 회로의 접지·절연 기준을 따라 확인하며 소프트웨어만으로 PASS하지 않는다.
+   Cluster에 실제 Flash된 Commit/버전과 실행 상태도 확보한다.
+4. **승인된 RX 연결**:
+   위 조건이 충족된 뒤 기존 GUI에서 Live·확인 Backend·확인 Channel·확인 bitrate로 연결한다.
+   자동 Mock 전환 없는 연결 성공/실패와 오류 원인을 기록한다.
+   application send·Replay·Fault Injection 없이 제한된 시간 수신한다.
+   실제 연결 후 수신0일 때만 RX=0을 실측으로 기록하고 송신 ECU/배선/설정 근거를 조사한다.
+5. **Raw → 명시 DBC → Graph/Logging**:
+   실제 RX ID/Format/DLC/timestamp/payload/출처를 확보하고 기존 Repository DBC를 명시적으로 로드한다.
+   실제 DLC·Signal/Scale/Unit/정의된 Invalid/Reserved와 Decode Error/Unknown을 대조한다.
+   unpack 성공은 Health/정책 승인 근거가 아니다. 근거 없는 Signal/Fault 의미를 만들지 않는다.
+   실제 Signal에만 명시 Graph 매핑, CSV/JSONL exclusive-create/flush/close를 검증한다.
+   실제 Frame이 없으면 후속 Graph/Logging은 NOT RUN.
+6. **Cluster / 종료 비교**:
+   동일 실 CAN Frame·확인된 Flash 버전일 때만 LCD와 PC를 비교한다.
+   Stop/Disconnect/Close의 Receiver/Writer/device release를 확인한다.
+   Fault Frame 부재를 시스템 No Fault로 판정하지 않는다.
+
+Jira 초안(외부 등록/Done 미실행):
+- **[HINT-48][Hardware Prep] CANable Pro 장치 식별/Backend Evidence** (PC/HW, 1일):
+  USB/PnP/Firmware/Driver·점유/Channel 및 선택 dependencies 승인 근거 확보.
+- **[HINT-48][Integration] CAN bus 준비 및 RX-only capture** (HW/송신 ECU/Cluster/PC, 1~2일):
+  배선·절연/종단/전원·동일 bitrate·실 송신 확인 후 Raw/DBC/LCD/Graph/Logging 대조와 종료 증거.
+- **[HINT-48][Interface Review] 실 Frame ↔ DBC/ECU 의미 정합성** (CAN/VCU/Gateway/Cluster/PC):
+  실제 불일치 발견 시 별도 Issue/상대 담당자 리뷰. 이번에 Interface 변경·승인 완료 없음.
+
+## 보존 및 협업 상태
+
+이번 Phase에서 VERIFICATION에 본 절만 추가했다. README는 Phase3H-3 내용 그대로다.
+기존 Phase3H-3 VERIFICATION 및 모든 이전 기록은 바이트를 보존해 뒤에 유지한다.
+Source·Fixture·기존517 테스트·pyproject·공통 DBC/Matrix/Routing/Requirements/Firmware,
+D: 원본25개, 다른 Worktree·리뷰 문서·모든 브랜치 참조는 SHA 기준으로 보존한다.
+현재 전체 Git 변경은 기존 문서2개뿐이며 Stage 비어 있음, HEAD/branch/이력 유지.
+추가 패키지/Driver/Firmware 설치·변경, Git add/Commit/Push/PR/Merge/
+Reset/Rebase/Fetch 및 Jira 등록/Done 미실행.
+Phase3H-3 Fixture 배포 미승인/NEEDS_REVIEW 상태도 변경하지 않는다.
+
+Hardware·실 CANable/ECU/Cluster·사용자 수동 Live·팀 담당자 코드 리뷰: **NOT VERIFIED**.
+팀 고정 버전·배포 라이선스 승인: 미확정.
+실기 Gate는 **BLOCKED / NOT RUN**, Software 회귀만 PASS이다.
+
+---
+
+# Phase 3H-3 Packaging / Fixture Distribution 검토 — 2026-10-14
+
+**최종 판정: NEEDS_REVIEW.** 사용자는 TEST ONLY DBC가 **미승인**이며 자동 포함을 보류하도록 확인했다.
+원 요청의 배포 승인 Gate를 적용하여 Package Data·Fixture 복사·importlib.resources 구현은 보류했다.
+현재 Wheel은 기존 설정의 누락 원인을 확인하기 위한 **로컬 진단 산출물**이며 승인된 팀 배포본이 아니다.
+
+기준 Branch PC-Diagnostic-Test / HEAD e5621aa9f156a0bcbc97190a64a1b0450eb237a8.
+시작 상태 clean·Stage 비어 있음. 이번 변경은 README.md / VERIFICATION.md만이며
+pyproject·Source·Fixture·Tests·공통 Interface·의존성은 변경하지 않았다.
+
+## Gate 및 Inventory
+
+- 사용자 확인: “아직 미승인 — 자동 포함을 보류하세요”.
+- tests/fixtures/test_only.dbc: 프로젝트 합성 TEST ONLY 표기, cde2ebf/DHK, tracked,
+  823bytes, SHA 9ff1750df33163d0b9591912f202be56dda2a61af9dd97fa398f5a2c2c13a93b.
+- gui/demo.py: 기존 Fixture 예제의 payload 상수, 69f904c/DHK, tracked,
+  675bytes, SHA db7899aa9545b8676f92322e493cf65756133c89ec1f43353e4507f434d8ef3b.
+- gui/automation.py: Catalog11/Expected/입력 조합, e5621aa/DHK, tracked,
+  9236bytes, SHA b222bafff19c299e839b8d0c30d9ef1fa02d09be488539ad57ff70b424707bc9.
+- 별도 Scenario/Expected 파일·외부 DBC·새 합성 Fixture 없음.
+- TEST ONLY 주석·Git author는 출처 근거이며 사용권/팀 재배포 승인 근거를 대체하지 않는다.
+  명시적 PC Tool LICENSE/SECURITY 또는 조직 배포 승인 Evidence는 확인되지 않았다.
+- 실제 소유·재배포 범위/담당자/날짜/Evidence 확보 전 자동 resource 포함 금지.
+  A/B/C 비교·승인 후 설계·Jira 초안은 README Phase3H-3에 기록했다.
+
+## 이번 실제 검증
+
+| 항목 | 실제 결과와 범위 |
+|---|---|
+| 기존 설정 Wheel Build | PASS, 기존 backend를 새 src/pyproject/README 복사본에서 실행 |
+| Wheel Inventory | **43파일 = Python38 + dist-info5**, DBC0. tests/가상환경/로그/screenshot/pyc 미포함 |
+| 명백한 개인 경로·인증정보 패턴 | Wheel 전체 텍스트 검사에서 발견 없음; 정식 보안/라이선스 승인과 구분 |
+| 승인된 Fixture 포함 | **보류 / 미구현**. 미승인 DBC를 복사/자동 포함하지 않음 |
+| 표준 package resource locator | **미구현**. 현행 fixture_path 계약 유지 |
+| 최종 외부 Clean Venv 기본 설치 | **PASS**, Python3.12.14, Wheel만 --no-index --no-deps로 설치, editable 아님 |
+| 외부 Clean CLI/GUI 모듈 --help | PASS, exit0. GUI 창 실행 의미 아님 |
+| 외부 Clean CLI/GUI 설치 entry --help | PASS, exit0. GUI 창 실행 의미 아님 |
+| 외부 Clean pip check | No broken requirements found. 기본 의존성 없는 설치만 확인 |
+| Worktree/CWD 독립 기본 import | PASS, -I 실행, site-packages에서 import; sys.path/module/CWD/resource 경로에 원 Worktree 없음 |
+| 설치본 Catalog | **11개 로드 확인**, 실제 실행은 미검증 |
+| 설치본 Fixture 누락 | **FileNotFoundError 재현**, 설치 환경의 Lib/tests/fixtures/test_only.dbc가 없음 |
+| 설치본 GUI 창/11개 Scenario | **NOT VERIFIED / 보류**, PySide6/cantools/python-can extras 미설치·Fixture 미포함 |
+| 팀원 PC 배포·사용자 수동 확인 | **NOT VERIFIED** |
+| 기존 개발 전체 pytest | **517 passed in 49.34s**, 기존517 유지, 실패/skip 없음 |
+| 기존 개발 CLI 별도 회귀 | **140 passed in 0.48s** |
+| 기존 개발 Windows Native | **9종 모두 PASS**, 실제 windows/노출 창, Mock/Fake. 독립 Wheel 검증 아님 |
+| 개발 .venv pip check | No broken requirements found. |
+| 신규 pytest/Resource 구현 시험 | 추가하지 않음. Gate 보류로 제품 구현도 미수행; 진단 probe 결과와 구분 |
+| Hardware·담당자 리뷰·팀 고정 버전·라이선스 승인 | **NOT VERIFIED / NOT VERIFIED / 미확정 / 미확정** |
+
+### Build / Clean Install 환경
+
+개발 .venv는 Python3.14.6/PySide6 6.10.3/python-can4.6.1/cantools44.2.1/pytest9.1.1을 유지한다.
+해당 환경에는 setuptools/wheel/build가 없음을 확인했으며 재설치하지 않았다.
+기존 Codex 작업 도구 환경의 Python3.12.14/setuptools84.0.0/wheel0.48.0을 사용해
+setuptools.build_meta.build_wheel을 실행했다. 새 backend/build 패키지 도입·다운로드 없음.
+Python 최소 버전 >=3.10, 기존 optional extras·entry point 및 package discovery를 유지했다.
+3.10/3.11/다른 Python의 실제 실행을 검증했다고 주장하지 않는다.
+
+먼저 프로젝트 제외 Temp의 새 Build 입력에서 Wheel을 생성하고 내부 기본 clean 설치를 진단했다.
+이후 Worktree 밖 별도 쓰기 경로의 완전히 새 venv/CWD에서도 재검증했다.
+sys.path에 원 Worktree/개발 src가 없고 설치된 site-packages의 pc_diagnostic임을 -I probe로 확인했다.
+빌드된 Wheel SHA:
+`efdcb2781601888d82c789460319dd63e2df0ae7f30ad6f994f5df500d8d5822`.
+기본 설치에는 PySide6/cantools/python-can/pytest extras를 넣지 않았으며
+GUI --help가 먼저 처리되는 것을 실제 확인했다. GUI runtime/Decode/Automation 실행 검증이 아니다.
+
+초기 외부 설치는 exit0였으나 sandbox 기본 Temp를 정리하지 못하는 pip 경고가 있었다.
+기존/타인의 Temp를 삭제하거나 설치된 개발 가상환경을 수정하지 않았다.
+완전히 새 clean-venv-verified와 쓰기 가능한 전용 TEMP/TMP/TMPDIR로 재실행:
+설치/진입점/pip check/isolated probe exit0, 경고 없음, 전용 Temp 비어 있음.
+이 경고를 Fixture 재배포 승인이나 제품 CAN/GUI 결함으로 해석하지 않았다.
+
+증적 식별:
+- 기존 설정 Build 및 개발 회귀: .test-tmp/phase3h3-review-50e40f7c/.
+- 개발 Native9종: 위 경로의 final-native/.
+- Worktree 밖 최종 clean 진단: 작업용 외부 경로의 phase3h3-review-3f1286b4/
+  clean-venv-verified 및 independent-cwd-verified.
+- 진단 Wheel/venv/로그/screenshot은 승인된 배포본 또는 Git 업로드 후보가 아니다.
+  문서·패키지에 개인 PC 절대 경로를 하드코딩하지 않았다.
+
+### 현행 Wheel 전체 파일 Inventory
+
+```text
+pc_diagnostic/__init__.py
+pc_diagnostic/__main__.py
+pc_diagnostic/cli.py
+pc_diagnostic/dbc_codec.py
+pc_diagnostic/dbc_loader.py
+pc_diagnostic/decode_service.py
+pc_diagnostic/decoded_message.py
+pc_diagnostic/frame.py
+pc_diagnostic/interfaces.py
+pc_diagnostic/logger.py
+pc_diagnostic/monitor.py
+pc_diagnostic/sender.py
+pc_diagnostic/state_cache.py
+pc_diagnostic/gui/__init__.py
+pc_diagnostic/gui/__main__.py
+pc_diagnostic/gui/app.py
+pc_diagnostic/gui/automation.py
+pc_diagnostic/gui/automation_view.py
+pc_diagnostic/gui/buffer.py
+pc_diagnostic/gui/connection.py
+pc_diagnostic/gui/connection_view.py
+pc_diagnostic/gui/decode_session.py
+pc_diagnostic/gui/demo.py
+pc_diagnostic/gui/ecu_observation.py
+pc_diagnostic/gui/fault_history.py
+pc_diagnostic/gui/fault_monitor_view.py
+pc_diagnostic/gui/graph_canvas.py
+pc_diagnostic/gui/graph_view.py
+pc_diagnostic/gui/logging_session.py
+pc_diagnostic/gui/logging_view.py
+pc_diagnostic/gui/message_statistics.py
+pc_diagnostic/gui/observation_view.py
+pc_diagnostic/gui/receiver.py
+pc_diagnostic/gui/scenario_runner.py
+pc_diagnostic/gui/signal_graph.py
+pc_diagnostic/gui/vehicle_status.py
+pc_diagnostic/gui/vehicle_view.py
+pc_diagnostic/gui/window.py
+gateway_pc_diagnostic-0.1.0.dist-info/METADATA
+gateway_pc_diagnostic-0.1.0.dist-info/WHEEL
+gateway_pc_diagnostic-0.1.0.dist-info/entry_points.txt
+gateway_pc_diagnostic-0.1.0.dist-info/top_level.txt
+gateway_pc_diagnostic-0.1.0.dist-info/RECORD
+```
+
+Wheel에는 Production DBC/Matrix/Routing/Firmware·외부 자료·Capture·실제 ECU Secrets를 넣지 않았다.
+기존 demo/automation.py의 Python 상수는 기존 모듈 내용으로만 포함됐다.
+Metadata에는 별도 PC Tool License 승인 정보를 넣지 않았다. 라이선스 승인 완료를 주장하지 않는다.
+
+### 개발 Native9종 이번 실행
+
+| Native | 실제 결과 |
+|---|---|
+| Raw | PASS, 실제 windows/3회 반복/Clear/active close, Mock4 해제 |
+| Decode | PASS, 명시 TEST ONLY/Raw/Cache/invalid/반복/close, Mock5 해제 |
+| Vehicle | PASS, -10.0/test_unit/Valid/Age/오류/Reload/close, Mock4 해제 |
+| ECU | PASS, 7카드/STD-EXT/Fault 관측/반복/Reload/close, Mock4 해제 |
+| Logging | PASS, JSONL4/CSV4, 각각 기존 CLI bytes equal, 파일 보호/error restart/close |
+| Fake Live | PASS, JSONL6/CSV8, CLI bytes equal, transport4 해제·application send0 |
+| Graph | PASS, Pause/Resume/Clear·Logging 동시, JSONL10, transport3 해제·send0 |
+| Fault | PASS, 필터/상세/기존 DBC Fake metadata/Source/Reload/close, JSONL9, transport3 해제·send0 |
+| Automation | PASS, 기존 Fixture로 11개 PASSED; expected mismatch FAILED, cancel/close CANCELLED, Live BLOCKED, 사용자 receiver/logger 유지, send0 |
+
+위 결과는 **기존 개발 Worktree + 기존 .venv**의 회귀이다.
+설치본 11개 Scenario PASS·물리 CAN 수신·HIL/Fault 상태 승인 근거로 사용하지 않는다.
+Mock/Live/Logger/Cache/Graph/Fault/Vehicle/ECU/Adapter·기존 Assertion 의미 변경은 없다.
+
+## 보존·Open 및 재개 조건
+
+변경 파일은 README.md / VERIFICATION.md 두 문서뿐이다.
+모든 기존 Source/Test/Fixture·pyproject·DBC/Matrix/Routing/Requirements/Firmware,
+D: 원본25개 및 다른 Worktree/리뷰 문서를 SHA 기준으로 보존한다.
+Stage 비어 있음, Branch/HEAD/기존 이력 유지.
+Git add/Commit/Push/PR/Merge/Reset/Rebase/Fetch/Jira 등록·Done 미실행.
+
+Open:
+1. TEST ONLY DBC 실제 사용권·팀 재배포 승인 Evidence — 사용자 미승인 확인, **NEEDS_REVIEW**.
+2. 승인 후 package data/표준 locator/context 수명/read-only/missing 안내 구현.
+3. 선택 extras 포함 clean GUI/11개 Scenario/PASS·FAIL·ERROR/Live 보호/종료 검증.
+4. 신규 resource/Archive/installed package/CWD 테스트 및 기존517/CLI140/Native9 회귀.
+5. 팀 고정 라이브러리·라이선스·팀원 PC·담당자 코드 리뷰·Production/HIL: 미확정/NOT VERIFIED.
+
+승인 전까지 Fixture 자동 포함을 하지 않는다.
+필요 시 B/C 방식도 별도 범위로 검토하지만 현재 제품이 지원한다고 주장하지 않는다.
+README의 Jira 후보만 작성했으며 외부 등록·상태 변경 없음.
+CAN/LIN Interface 변경은 없고 필요 시 상대 담당자 리뷰 필요 상태로 분리한다.
+Packaging 구현 완료·배포 완료는 **아니다**.
+
+---
+
 # Phase 3H-2 Test Automation GUI 검증 — 2026-10-14
 
 기준 Branch **PC-Diagnostic-Test**, HEAD **8f2b629c08f4754753d75c12cbd53647f12f0353**.
