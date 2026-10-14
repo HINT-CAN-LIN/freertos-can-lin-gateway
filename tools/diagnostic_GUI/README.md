@@ -918,3 +918,130 @@ python tests/gui_graph_native_smoke.py --output-dir $newExistingEvidenceDirector
 단일 Signal, 마지막1000개 rolling graph만 제공합니다. 다중 Signal·Graph Export·Cursor/Zoom·영구 선택 저장은 후속 범위입니다.
 **Hardware 및 이번 사용자 수동 확인 NOT VERIFIED**, 팀 고정 버전 미확정, 담당자 코드 리뷰 NOT VERIFIED.
 실행한 결과는 VERIFICATION의 Phase 3G 절을 참조하세요. Commit/Push/PR/Merge는 이번 작업에서 수행하지 않습니다.
+
+
+## Phase 3H-1 — Fault Monitor 관측 이력
+
+**Fault Monitor** 탭은 사용자가 명시적으로 연결한 DBC Message/Channel의 처리된 RX를 보관합니다.
+기존 ECU Health Observation → Fault Observation의 마지막 정상 Signal 화면은 유지합니다.
+실제 ECU Fault 감지·전체 Active Fault 복원·ECU 해제 기능이 아닙니다.
+DBC/Signal/Frame/Transport/Logger 계약을 변경하지 않았습니다.
+
+### 사용 방법
+
+1. 기존 GUI에서 Mock 또는 확인한 Live 수신 설정을 선택하고 **Select DBC...**로 파일을 직접 로드합니다.
+2. **Fault Monitor**에서 Source Channel과 **Exact DBC Message / ID / Format**을 선택합니다.
+3. 출처 확인을 체크하고 **Add observation source**를 누릅니다.
+   ID/IDE는 선택한 DBC 정의에서만 가져옵니다. Fault 이름/유사 문자열/0x310을 기본 자동 연결하지 않습니다.
+   여러 Message/Channel을 각각 추가할 수 있습니다. 출처 확인은 팀 Interface 승인이 아닙니다.
+4. Start 후 Order, RX Run, Raw Timestamp, Source, typed Channel, CAN ID/STD·EXT,
+   Message, 실제 FaultCode 값(존재할 때), Decode 상태와 **Status Unknown**을 확인합니다.
+5. FaultCode의 정확한 숫자, Channel, Message/ID/Format 및 **Decode Error only**로 필터링합니다.
+   필터는 retained history의 조회이며 수신/Decode/Logging에 영향을 주지 않습니다.
+   None Channel은 unknown Channel이며 All/wildcard가 아닙니다. 0과 '0'도 구별합니다.
+6. 행을 선택하면 Raw DLC/Payload/RTR, DBC/Source session, Receiver run, Timestamp 품질,
+   per-frame Signal/Unit/DBC Choice/Error와 별도 상태 해석 단계가 상세에 표시됩니다.
+7. **Remove source**는 향후 관측 연결만 제거합니다. 이미 저장한 이력은 유지합니다.
+   **Clear History**는 PC 이력/계수만 비우며 ECU Clear, 파일 삭제, CAN TX가 아닙니다.
+
+DBC가 없으면 **No DBC**, 정의/매핑은 있지만 수신 이력이 없으면 **No Data**입니다.
+DBC 없이 임의 ID를 Fault Frame으로 분류하지 않고 기존 Raw Monitor 수신은 계속합니다.
+선택 Message의 성공 결과는 **Observed**, 실패 결과는 **Decode Error**입니다.
+**Fault not observed ≠ No Fault**이며 실제 Fault 상태 해석은 **Status Unknown**입니다.
+FaultCode=0, RecoveryState=1, SystemState=NORMAL만으로 전체 Fault가 없거나 해제됐다고 추론하지 않습니다.
+DBC Choice ACTIVE/CLEARED/INVALID/NORMAL 문자열은 파일 metadata 그대로 보여줍니다.
+Current Fault, Severity, 발생/해제 쌍, Offline bit 판단과 ACTIVE/CLEARED 필터는 구현하지 않았습니다.
+
+### 모델·Buffer·Timestamp·Session
+
+ReceiveWorker → 기존 FrameBuffer → DecodeSession.process → FrameObservation → FaultHistoryModel → FaultMonitorView
+
+- 기존 per-frame Decode 결과와 immutable RawCanFrame만 사용합니다. 재Decode/bit 해석/Cache backfill 없음.
+- 기존 Fault Observation의 MessageMapping 검증을 재사용하고 metadata 후보가 여러 개면 Ambiguous로 거부합니다.
+- History는 기존 Raw 표 정책과 같은 **500개**입니다. 초과 시 oldest observation을 제거하고
+  **Oldest history omitted**를 표시합니다. Source 설정은 별도 PC 로컬 상한 **32개**입니다.
+  CAN/LIN 주기, Gateway Queue 크기, Fault Threshold가 아니며 초기값-수정 가능 PC 표시 정책입니다.
+- 반복 Frame도 독립 관측으로 보존합니다. Observed count는 처리된 선택 RX 수이며 Fault 발생 횟수/전체 CAN 수신량이 아닙니다.
+  History 제거, GUI Buffer drop, Logging Queue drop을 구분합니다. 실제 CAN 유실률/무손실 성능은 미검증입니다.
+- Raw Timestamp를 유지합니다. 누락은 unknown/Missing, 직전 동일 출처 관측보다 역전하면 Reversed입니다.
+  이력을 삭제하거나 PC 현재 시각으로 대체하지 않습니다. 시간으로 정렬하지 않고 수신 처리 순서로 표시합니다.
+  최신 관측 Timestamp는 최근 처리 항목의 Raw 값이며 최대 Timestamp가 아닙니다.
+- Mock/Live, Backend/설정 Channel/Bitrate 변경 및 성공·실패한 DBC Reload는 기존 DecodeSession generation에 맞춰
+  이력·매핑·필터·상세·채널 후보를 초기화합니다. 과거 결과를 새 DBC로 재해석하지 않습니다.
+- 같은 Source의 Stop/Start, Transport 오류 후 재접속은 이력을 유지하되 **RX Run**으로 Start 구간을 구별합니다.
+  새 Start 시 이전 Raw backlog가 있으면 그 구간의 RX Run은 **Unknown**입니다.
+  FrameObservation에는 transport run ID가 없으므로 원래 run을 추측하지 않습니다.
+  Stop 동안 누락된 이벤트를 복원하거나 과거 이력을 현재 ECU 상태라고 주장하지 않습니다.
+- Clear History 이후 순서 번호를 재사용하지 않으며 매핑은 유지합니다.
+  Clear는 GUI가 처리한 이력을 비우며 처리 대기 프레임이 이후 새 행으로 나타날 수 있습니다.
+  상단 Raw Clear는 Fault 이력을 지우지 않지만 기존 계약대로 Raw pending buffer를 비웁니다.
+- 추가 Worker/Timer 없이 기존 유한 GUI batch와 main-thread refresh를 재사용합니다.
+  revision 변경 때만 bounded QAbstractTableModel snapshot을 갱신합니다.
+  수신 중 선택한 Source/상세/스크롤을 유지하고 filter/eviction으로 행이 사라지면 상세를 비웁니다.
+  Receiver/Writer 종료 뒤 화면을 닫습니다. Qt 필수 override 명칭은 snake_case의 예외입니다.
+
+사용자 매핑 실패 원인은 **Last mapping error**로 정상 재시도/새 세션까지 보존합니다.
+정기 RX refresh가 이 안내를 지우지 않으며 Decode Error/실제 Fault와 구분합니다.
+새 Native 시험에서 Writer 종료 flag와 UI Source unlock의 비동기 차이를 재현했습니다.
+실제 controls 활성화를 이벤트 조건으로 기다리며 제품의 Source 잠금 정책은 유지합니다.
+
+### 실제 Fault 계약 조사 — 의미 승인과 구분
+
+| 근거 | 실제 확인 내용 / 상태 |
+|---|---|
+| network/can/CAN__DB_펌웨어 전 최종본_v0.1.dbc (본문 VERSION 0.4) | Fault_Status 0x310 STD DLC8, Gateway→Cluster/PC. Signal/Choice는 파일 정의로 확인. proposal 및 counterpart review gate 명시 |
+| docs/requirements/02__메시지_정의서_ver1.2.xlsx, CAN_Message_Definition 11/20, CAN_Signal_Definition 26~29 | ID/STD/DLC 및 bit 구성은 DBC와 일치. Team Encoding/FIX와 상대 담당자 리뷰 필요 표기가 함께 있음. 승인 완료 Evidence 미확인 |
+| 위 Workbook Value_Table 36~56 / Fault_Timeout_Policy POL-008 | FaultCode 0..6, Reserved7..254, Invalid255. ECUOffline은 4-bit node enum 0..7/Reserved8..14/Invalid15이며 bitmask가 아님. Recovery0=ACTIVE/1=CLEARED, SystemState는 대표 상태. 개별 전이 Event는 결정안/리뷰 대상 |
+| docs/archive/initial/FreeRTOS_CAN_LIN_Project_핸드북_kr_초기버전.pdf (본문 Handbook v1.0 pp14,27~28) | Fault_Status Event/전파 역할은 기술. bit layout, 재접속 Replay 세부 승인 근거는 아님 |
+| docs/architecture/system/03__CAN-LIN_D07_Fault_Failsafe_설계보고서_v1.0.pdf (본문 v0.9 pp9~10,13~14) | D07-9 per-transition Event 상세가 제안/미확정. 후속 설계와 문서 버전·결정 상태 동기화 검토 필요 |
+| network/routing/Gateway_Routing_Table_v0.4_CAN_to_LIN_Decision_Baseline.xlsx, Interface_Ref 28~33 | FaultSource/FaultSeverity/FaultState/FaultRecovery/FaultMultiFault 등이 OPEN. DBC의 ECUOffline/RecoveryState/SystemState와 명칭·상세 불일치. 임의 구현하지 않음 |
+| 사용자 Source of Truth: design/Gateway_FreeRTOS_Design_Final_Aligned.xlsx 02_RTOS_Object14 / 03_Health_Fault | ACTIVE/CLEARED 및 FaultManager 책임 기술. Event transport/order/retry/loss/resync는 OPEN/TBD |
+| 사용자 Source of Truth: design/gateway-sw-architecture-and-detailed-design_최종본.pdf pp18~19,25,28~30 | per-transition publication은 확정 정책. Node mapping 일부와 ordering/retry/loss/API/측정은 Open/Review/측정 후 확정. 이전 D07-9 미확정과 후속 결정 상태 구분 필요 |
+| 사용자 Source of Truth: design/Gateway_Routing_Table_v1.0_최종.xlsx | Fault/Recovery 전파 참조. route에 Review/Needs Review가 남음. 팀 승인 완료로 사용하지 않음 |
+| origin/Cluster_ECU 4633779f3f0fe989730181f6e48ef777b041076a, Core/Src/cluster_state.c:97~109, Core/Inc/cluster_state.h:44~49 | STD/DATA/DLC8, code/node 범위 검사, (code,node)별 ACTIVE/CLEARED latch. NONE은 reset-all이 아님. gap_seen/관측 불확실성 보존 |
+| origin/Gateway_ECU 542f50a2c3557c4c47dfa4f629be0a2a55150eeb, Core C/H9개 | 조사한 Core에 FaultManager/Fault_Status/RecoveryState/ECUOffline/0x310 publication 구현 근거 없음. E2E Fault 처리 완료 확인 불가 |
+
+Cluster/Gateway 분석은 **로컬 저장 origin 참조 Commit**의 코드이며 이번에 fetch하지 않았습니다.
+GitHub 최신 HEAD, Firmware Flash 상태, Runtime 전파는 별도 확인 필요입니다.
+
+수치 정의가 일치하는 부분이 있지만 산출물의 결정 상태/명칭이 모두 동기화된 것은 아닙니다.
+따라서 **관측 기능은 구현**, Production 의미 승인·Current Active Fault 재구성·발생/해제 매칭은 **검토 필요/Open**입니다.
+PC의 Frame 수신은 Gateway Detection/Action/Recovery/External Propagation DoD 완료의 증거가 아닙니다.
+
+### 검증·미확정·후속 Jira 초안
+
+기존 TEST ONLY DBC/Mock를 그대로 사용합니다. FaultCode/Recovery metadata 시험은 기존 저장소 DBC를
+시험자가 명시적으로 읽고 기존 Encoder로 만든 Fake TEST ONLY 수신입니다.
+Production DBC 기본 연결, 신규 CAN ID/Signal/Layout/Enum 정의는 없습니다.
+CSV/JSONL Raw Logger schema, exclusive-create/flush/close, Queue/Count 계약 및 CLI byte 출력을 유지합니다.
+새 Fault 전용 Export는 없습니다. 실제 결과는 VERIFICATION의 Phase3H-1 절에 기록합니다.
+
+    python -m pytest -q tests/test_fault_history.py tests/test_fault_monitor_view.py -p no:cacheprovider --basetemp $newWritableTemp
+    python tests/gui_fault_native_smoke.py --output-dir $newExistingEvidenceDirectory
+
+- 확정: 기존 수신/Decode/Cache/Raw Logger 계약, 파일에서 확인한 Raw/metadata, PC 관측과 상태 판정 책임 분리.
+- 초기값-수정 가능: PC History500/Source32 및 layout. Gateway Fault 정책과 무관.
+- 측정 후 확정: 실제 Timestamp 품질, CANable/Cluster E2E, 고부하·장시간 표시 성능/누락.
+- 검토 필요: lifecycle Freeze Evidence, D07/DBC/Matrix/Route/Cluster 결정 상태 동기화,
+  generic ALIVE_ERROR/QUEUE_DROP node mapping, Production Fault 의미.
+- TBD: publication transport primitive/depth/Full 처리 및 재접속 동기화 API.
+- Open: Event 순서/retry/loss/Replay/resync, Active Fault 완전성 및 발생/해제 쌍. 조건부 의미 기능 미구현.
+
+Jira 후보(외부 등록/상태 변경 미실행):
+1. **[HINT-48][Interface Review] Fault lifecycle 산출물 동기화** (1~2일).
+   Owner: Gateway/CAN/Cluster/PC. D07-9, Workbook Team Encoding, DBC proposal, Routing OPEN 차이 대조;
+   Freeze/Reviewer/Date/Evidence 확보. 상대 담당자 리뷰 필요.
+2. **[HINT-48][Interface Review] Fault event loss/replay/resync 계약** (1~3일).
+   Owner: Gateway/CAN/Cluster/PC/Test. 중복/순서/누락, 재접속 동기화, generic node 의미 결정.
+   PC observed count와 Gateway event count를 구분하는 검증 기준 필요.
+3. **[HINT-48][Test] Fault propagation HIL capture** (1~3일, 승인 계약/실장 후).
+   Owner: Gateway/Cluster/PC/Test. 승인 Fault 발생/복구를 동일 Bus Raw/DBC/LCD에서 비교;
+   실제 Timestamp/누락 증거 수집. 이번 Fake 결과를 Hardware PASS로 사용하지 않음.
+4. **[HINT-48][Bug draft] Fault source/detail selection resets during RX refresh**.
+   재현: source 여러 개/상세 선택 후 새 RX → 첫 source/상세 스크롤 초기화 가능.
+   로컬 수정에서 선택·immutable 상세 유지/eviction 정리를 적용하고 회귀 확인.
+   신규 모델의 removed-source timestamp 누적 가능성도 제거. 담당자 리뷰 NOT VERIFIED; 외부 등록 미실행.
+
+신규 패키지 설치/의존성 변경 없음. 팀 고정 버전·배포 라이선스 승인 미확정.
+담당자 코드 리뷰·사용자 수동 Fault GUI·CANable/ECU Hardware·고부하/장시간 성능 **NOT VERIFIED**.
+Git add/Commit/Push/PR/Merge/Jira Done 미실행.

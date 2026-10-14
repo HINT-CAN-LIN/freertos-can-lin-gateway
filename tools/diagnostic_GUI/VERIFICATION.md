@@ -1,3 +1,92 @@
+# Phase 3H-1 Fault Monitor 검증 — 2026-10-14
+
+기준 Branch PC-Diagnostic-Test, HEAD 96d2cbc4f2a1dee605bfa43173e3e8db46c2084f.
+아래는 이번 실제 실행이며 이전 Phase 기록과 구분한다.
+
+| 검증 | 실제 결과 |
+|---|---|
+| 최종 전체 pytest | **466 passed in 32.60s** — 기존410 + 신규56, skip 없음 |
+| 신규 Fault 모델·GUI 별도 | **56 passed in 3.72s** — 모델40 / UI16 |
+| 최종 CLI 별도 회귀 | **140 passed in 0.51s** |
+| Windows Fault Native Smoke | actual windows QApplication/창 노출, Mock/기존 DBC Fake TEST ONLY, 필터·상세·반복 Start/Stop·Source/DBC 격리 PASS |
+| Fault Timestamp/Decode | Missing/Reversed 이력 유지, Status Unknown, Decode Error Raw/DLC/Payload 보존 PASS |
+| Fault 동시 실행 | Graph/Logging 동시 진행, Clear History 후 Raw/Cache/Graph/Logging 유지 PASS |
+| Fault Native 해제 | Active Close Receiver/Writer 종료, Fake3 해제·application send0, GUI/Graph timer 정지 PASS |
+| Fault Native Raw Logging | 최종 Fake JSONL8개, 읽은 수=written, closed 확인 |
+| 기존 Windows Native7종 | Graph/Raw/Decode/Vehicle/ECU/Logging/Fake Live 전부 PASS |
+| Graph Native | Mock/변화하는 Fake Graph, Pause/Resume/Clear, JSONL9개, Fake3 해제·TX0 |
+| 기존 Logging Native | JSONL5/CSV4, CLI bytes equal, 파일 보호·error restart·active close PASS |
+| 기존 Fake Live Native | JSONL6/CSV11, CLI bytes equal, transport4 해제·TX0 |
+| CLI/GUI 모듈·설치 entry point | help4종 정상 |
+| pip check | No broken requirements found. |
+| git diff --check / 신규 Python 구문 | PASS (최종 점검) |
+| 사용자 수동 Fault GUI | **NOT VERIFIED** |
+| CANable Pro / Cluster / ECU, 고부하·장시간 | **NOT VERIFIED** |
+| 팀 고정 버전 / 담당자 리뷰 / 배포 라이선스 승인 | **미확정 / NOT VERIFIED / 미확정** |
+
+pytest는 기존 Worktree 가상환경, cacheprovider 비활성화와 Git 제외 대상
+.test-tmp/phase3h1-*의 새 쓰기 가능 basetemp에서 실행했다.
+기존410개 테스트·TEST ONLY DBC·공통 DBC/Matrix/Requirements/Route/ECU 및
+CLI/Codec/Cache/Adapter/Logger는 수정하지 않았다.
+새 Native는 기존 TEST ONLY Fixture를 사용하며 FaultCode 시험에서만 기존 저장소 DBC를 명시적으로 읽는다.
+Payload는 기존 Encoder로 만든 Fake TEST ONLY 값이며 실제 ECU Fault/CAN 검증이 아니다.
+Native screenshot에서 명시적 Fault_Status/0x310 STD, TEST ONLY Source, Order/RX Run,
+Timestamp unknown/역전, Decode Error, Status Unknown 및 상세 Raw/Decode 분리 화면을 확인했다.
+
+## 검증 범위
+
+- FrameObservation 결과 재사용 및 codec 호출 수=처리 프레임 수; refresh 재Decode 없음.
+- 명시적 typed 채널/Message/ID/STD·EXT/source 확인, 중복 metadata Ambiguous, 자동 연결 없음.
+- TX/error-mask/비선택 Message 제외; RTR/길이/processing 오류 Raw 유지, Cache backfill 없음.
+- 숫자·Unit·Choice·Payload·Timestamp/출처 immutable history, 반복 Frame 독립 순서 보존.
+- FaultCode0/Recovery1/INVALID255도 Status Unknown; No Data와 No Fault 구분.
+- FaultCode/Channel(0/'0'/None)/Message/Decode Error 필터, 상세 조회·eviction/필터 후 상세 정리.
+- History500/Source32, oldest eviction count, removed-source timestamp 정리, UI Buffer drop 별도.
+- Clear History는 모델만 초기화; Cache/Raw/Graph/파일·Writer 유지. 매핑·순서 번호 유지.
+- DBC Reload(실패 포함), Mock/Live/Backend/Channel 변경 시 이력/매핑/상세/필터 격리.
+- 같은 Source Start/Stop run 구분 및 이력 유지; prior backlog는 RX Run Unknown.
+- Fake transport 오류/재접속, 반복 Start 새 관측, 중복 Start 방지, active close cleanup.
+- RX 중 Source·immutable 상세 유지, 추가 Fault Thread/Timer 없음; Qt UI main-thread 사용.
+- 기존 Signal Graph·Raw/Signal/Cache·Vehicle/ECU·Logging·Mock/Live·CLI 전체 회귀.
+
+## 조사·미확정 범위
+
+근거 파일/행/참조 Commit과 확정/초기값-수정 가능/측정 후 확정/검토 필요/TBD/Open 분류는 README Phase3H-1에 기록했다.
+Fault_Status ID/STD/DLC/Signal은 DBC와 메시지 정의서 수치가 일치한다.
+D07-9 이전 미확정, Routing OPEN Fault Signal, DBC proposal/Workbook 리뷰 gate,
+후속 사용자 Gateway 설계의 확정 정책/Open transport 계약을 서로 다른 결정 상태로 구분했다.
+ACTIVE/CLEARED Choice는 metadata로만 표시; 현재 Fault 상태 머신/Severity/발생·해제 매칭/Replay 미구현.
+ECUOffline은 node enum이며 임의 bitmask로 해석하지 않는다.
+실제 최신 remote HEAD/실장/Flash/E2E는 이번에 검증하지 않았다.
+Cluster/Gateway는 README에 명시한 기존 로컬 origin 참조를 읽었으며 fetch/switch/checkout하지 않았다.
+
+## 실행 중 문제와 처리
+
+- 초기 모델/UI51개(3.90s), 전체461개(28.39s), CLI140개(1.00s), Fault Native PASS.
+- 화면/코드 검토 후 RX 시 source/상세 초기화 가능성을 보완하고 경계4개를 추가해55개로 확장.
+  bounded view/evicted detail/None Channel/backend 변경/선택 유지를 검증했다.
+  기존 테스트 실패·삭제·완화로 해결하지 않았으며 중간465개와 Native8종을 다시 실행했다.
+- 신규 모델의 중복 metadata 첫 후보 선택과 removed-source timestamp 누적 가능성도 방어/회귀에 포함.
+- 보완 명령1건은 Codex 자동 승인 검토 deadline timeout으로 실행되지 않았다.
+  안전 여부 거절이 아니며 승인된 내부 최소 수정으로 1회 재시도해 정상 실행됐다.
+  해당 지연을 테스트 통과 또는 제품 Hardware 결함으로 기록하지 않았다.
+
+- 최종 UI 리뷰에서 mapping 오류 안내가 다음 refresh에 사라지는 가능성을 보완하고 1개 회귀를 추가했다.
+  정상 재시도/새 session까지 오류 안내를 보존한다. 전체466/신규56/CLI140을 실제 재실행해 PASS.
+- 이후 Fault Native 1회가 Mock→Live 전환 직후 history isolation assertion에서 실패했다.
+  재현4회 중1회는 Receiver/Writer 종료 flag 확인 후에도 UI controls가 다음 Qt event까지 locked였다.
+  disabled control의 직접 변경을 기존 ConnectionView가 정상 거부한 시험 동기화 문제로 구분했다.
+  제품 Source 잠금 정책은 변경하지 않았고 신규 Native만 실제 can_change_source + Mode enabled를
+  wait_until 이벤트 조건으로 기다리도록 수정했다. 기존 isolation assertion/결과 검증은 유지했다.
+  동일 Fault 및 기존7종을 새 폴더에서 재실행해 최종8종 PASS. 실패 로그/중간 증적도 제외 Temp에 보존했다.
+
+환경: Python3.14.6 / PySide6 6.10.3 / python-can4.6.1 / cantools44.2.1 / pytest9.1.1.
+설치/버전/pyproject 변경 없음; 팀 승인 고정 버전으로 주장하지 않는다.
+CAN/LIN Interface 변경 시 상대 담당자 리뷰 필요. Jira 후보만 문서화하고 외부 등록/Done 미실행.
+Git add/Commit/Push/PR/Merge/Reset/Rebase 미실행; 기존 이력 유지.
+
+---
+
 # Phase 3G 검증 — 2026-10-13
 
 기준 Branch `PC-Diagnostic-Test`, HEAD `c8d20b6f33660b81575f6dd0adacd29308cb3fbd`.
