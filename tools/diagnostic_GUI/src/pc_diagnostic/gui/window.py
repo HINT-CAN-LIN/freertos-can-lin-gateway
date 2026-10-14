@@ -63,9 +63,10 @@ def configure_table(table, headers):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, interface_factory=MockCanInterface, *, clock=time, live_interface_factory=None):
+    def __init__(self, interface_factory=MockCanInterface, *, clock=time, live_interface_factory=None, automation_enabled=True):
         # Qt widget와 표시 타이머는 메인 스레드에서만 생성한다.
         super().__init__()
+        self.automation_view = None
         self._interface_factory = interface_factory
         self._live_interface_factory = live_interface_factory or open_live_interface
         self._source_text = MOCK_SOURCE_LABEL
@@ -153,6 +154,10 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.graph_view, "Signal Graph")
         self.fault_monitor_view = FaultMonitorView(self.decode_session, capacity=MAX_TABLE_ROWS, parent=self)
         self.tabs.addTab(self.fault_monitor_view, "Fault Monitor")
+        if automation_enabled:
+            from .automation_view import AutomationView
+            self.automation_view = AutomationView(self, self)
+            self.tabs.addTab(self.automation_view, "Test Automation")
         layout.addWidget(self.tabs, 1)
         layout.addWidget(QLabel("오류 메시지"))
         self.error_area = QPlainTextEdit()
@@ -178,6 +183,10 @@ class MainWindow(QMainWindow):
         self.table.itemSelectionChanged.connect(self.show_selection)
         self.connection_view.changed.connect(self.input_source_changed)
 
+    def automation_active(self):
+        # 별도 시험 실행 중 사용자 Source/DBC 편집만 잠그고 기존 Receiver/Logger는 유지한다.
+        return self.automation_view is not None and self.automation_view.runner.active
+
     def receiver_running(self):
         # Stop 요청/오류/종료 중에는 신규 Logging 시작을 허용하지 않는다.
         active = self.worker is not None and self.stop_button.isEnabled() and not self._failed and not self._closing
@@ -197,7 +206,7 @@ class MainWindow(QMainWindow):
 
     def can_change_source(self):
         # 잔여 표시 프레임과 파일 writer 해제까지 기다려 Source 혼합을 방지한다.
-        return (not self._closing and not self._selecting_dbc and self.worker is None
+        return (not self._closing and not self.automation_active() and not self._selecting_dbc and self.worker is None
                 and self.buffer.pending_count == 0 and not self.logging_session.snapshot().active
                 and not self._live_release_failed)
 
@@ -238,7 +247,7 @@ class MainWindow(QMainWindow):
 
     def can_change_dbc(self):
         # 정지한 worker의 잔여 프레임까지 기존 DBC로 처리한 뒤 교체한다.
-        return not self._closing and self.worker is None and self.buffer.pending_count == 0
+        return not self._closing and not self.automation_active() and self.worker is None and self.buffer.pending_count == 0
 
     def update_controls(self):
         # 파일 선택 nested event loop 및 종료 중에는 신규 동작을 차단한다.
@@ -247,6 +256,8 @@ class MainWindow(QMainWindow):
                                      and not self._live_release_failed)
         self.connection_view.set_locked(not self.can_change_source())
         self.dbc_button.setToolTip("Stop 후 Worker와 잔여 버퍼 정리가 완료되어야 DBC를 변경할 수 있습니다.")
+        if self.automation_view is not None:
+            self.automation_view.refresh()
 
     @Slot()
     def select_dbc(self):
@@ -490,6 +501,11 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         # Qt 필수 override 명칭은 snake_case 규칙의 예외이다.
         # 제한 시간 안에 종료되지 않으면 창을 유지하여 실행 중 QThread 파괴를 방지한다.
+        if self.automation_active():
+            self.automation_view.runner.request_close()
+            self.error_area.appendPlainText("Automation cleanup in progress; close follows isolated resource shutdown.")
+            event.ignore()
+            return
         self._closing = True
         self.logging_session.stop()
         self.logging_view.refresh()
@@ -540,4 +556,6 @@ class MainWindow(QMainWindow):
         self.logging_view.close_view()
         self.graph_view.close_view()
         self.fault_monitor_view.close_view()
+        if self.automation_view is not None:
+            self.automation_view.close_view()
         event.accept()

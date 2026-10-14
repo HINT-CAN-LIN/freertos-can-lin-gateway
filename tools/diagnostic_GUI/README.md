@@ -1045,3 +1045,133 @@ Jira 후보(외부 등록/상태 변경 미실행):
 신규 패키지 설치/의존성 변경 없음. 팀 고정 버전·배포 라이선스 승인 미확정.
 담당자 코드 리뷰·사용자 수동 Fault GUI·CANable/ECU Hardware·고부하/장시간 성능 **NOT VERIFIED**.
 Git add/Commit/Push/PR/Merge/Jira Done 미실행.
+
+## Phase 3H-2 — Test Automation GUI (Mock/Fake TEST ONLY)
+
+기존 MainWindow의 **Test Automation** 탭에서 고정된 내부 시나리오를 선택하고
+수신 파이프라인의 실제 관측 결과를 검사합니다. Frame을 주입했다는 이유만으로
+PASS하지 않습니다. 실제 CAN/HIL/ECU 시험 또는 Fault 상태 판정 기능이 아닙니다.
+
+### 사용법
+
+1. 기존 `python -m pc_diagnostic.gui` 또는 `can-diag-gui`로 실행하고 Mode=Mock을 선택합니다.
+2. Raw 시나리오를 제외한 시나리오는 Select DBC로 **기존 tests/fixtures/test_only.dbc**를
+   명시적으로 로드해야 합니다. Production DBC 기본 매핑/자동 연결은 없습니다.
+3. Test Automation에서 Scenario를 선택합니다. 입력 Frame과 고정 기대값이 미리 표시됩니다.
+4. CSV/JSONL 시나리오는 **Select test folder...**로 쓰기 가능한 시험 폴더를 명시적으로 선택합니다.
+   새 `hint48-mock-*` 하위 폴더만 사용하고 종료 시 정리합니다. 기존 파일은 덮어쓰지 않습니다.
+5. **Run isolated TEST ONLY**를 누르고 Assertion별 Expected / Actual observation / Result / Reason을
+   확인합니다. 잘린 항목의 전체 내용은 tooltip으로 확인할 수 있습니다.
+6. **Cancel / Retry cleanup**은 취소 또는 정리 재시도입니다. **Clear results**는 결과 메모리만 지웁니다.
+   실행/정리 미완료 중에는 새 Run·Clear 및 사용자 Source/DBC 편집을 차단합니다.
+   탭 전환은 가능하며 기존 사용자 Mock Receiver/Logger는 계속 동작합니다.
+
+사용자 Source가 Live이면 Run을 비활성화하며 직접 호출도 ERROR/BLOCKED로 거부합니다.
+현재 Receiver/Logger를 자동으로 중지하거나 Source를 전환하지 않습니다.
+일반 CAN Logging과 시험 결과를 구분하며 새로운 Report 포맷·자동 Report 저장은 없습니다.
+
+### 실제 계약과 입력 근거
+
+- 기존 `RawCanFrame`, `MockCanInterface` FIFO, ReceiveWorker, FrameObservation,
+  DecodeSession/DecodeService/SignalStateCache, 각 GUI View 및 LoggingSession/RawCanLogger를 재사용합니다.
+- 입력은 기존 gui/demo.py의 TEST_ONLY_ID/TEST_ONLY_PAYLOADS 및
+  tests/fixtures/test_only.dbc의 정의만 사용합니다. DBC는 변경하지 않았습니다.
+- Fixture SHA-256:
+  `9ff1750df33163d0b9591912f202be56dda2a61af9dd97fa398f5a2c2c13a93b`입니다.
+- 기존 TestOnlySample: 0x651 STD/DLC4, payload `28 00 01 07`;
+  Measurement=-10.0/test_unit, Mode=1, Counter=7.
+  기존 TestOnlyExtended: 같은 숫자 ID의 EXT/DLC2, payload `01 01`, Reading=515.
+  STD/EXT를 서로 다른 Source Message로 관측합니다.
+- 반복 시각 10.0/11.0과 AUTOMATION / TEST ONLY 채널은 **PC 시험 입력**입니다.
+  CAN 전송 주기·ECU Timeout·차량 측정값을 정의하지 않습니다.
+- 기존 Production DBC의 Fault_Status 정의, Message Definition의 리뷰 gate와 Routing OPEN 정의는
+  동기화/의미 승인 검토 대상입니다. 이번 Catalog의 Fault는 기존 TEST ONLY Message의
+  **History 관측 인프라**만 검사하고 FaultCode·ACTIVE/CLEARED 의미를 생성하지 않습니다.
+  이전 Phase3H-1의 조사 근거/미결정 사항은 그대로 유지합니다.
+- 외부 입력 자료·새 다운로드·사용자 Python 스크립트를 도입하지 않았습니다.
+  도구 범위의 명시적 LICENSE/SECURITY 정책 파일은 확인되지 않았으며 배포 라이선스 승인은 미확정입니다.
+
+### 고정 Catalog v1
+
+전체 ID는 `HINT48-MOCK-<아래 suffix>-v1`입니다.
+동일 ID는 동일 입력/기대값 계약을 의미하며 변경된 DBC를 그대로 사용하지 않습니다.
+
+| suffix | 입력 / 실제 기대 관측 |
+|---|---|
+| RAW | STD/EXT 2프레임, typed Channel/ID/DLC/DATA/시각/플래그가 Raw table에서 일치 |
+| DECODE | STD/EXT 모두 decoded; TestOnlySample(-10.0,1,7) 및 TestOnlyExtended(515) |
+| DECODE-ERROR | 정상 STD 후 DLC1 시험 입력; decoded/invalid, 실패 Signal은 비어 있고 Raw는 보존 |
+| CACHE | 동일 STD 2회; Cache Measurement=-10.0, 마지막 timestamp=11.0 |
+| VEHICLE | DBC Observation 명시 매핑; -10.0 / test_unit / Valid 표시 |
+| ECU | Gateway라는 시험 카드에 명시 매핑; State: Observed, count=2. 실제 Gateway Online/Health 아님 |
+| FAULT | 반복 관측 이력 2개, sequence1/2 및 -10.0; State=Observed, Fault status=Status Unknown |
+| GRAPH | 기존 Decode 결과의 두 점 (-10.0,10.0,test_unit), (-10.0,11.0,test_unit) |
+| JSONL | 기존 schema로 Raw 2개 기록/읽기 일치; closed/received/written/drop/unconfirmed=(True,2,2,0,0) |
+| CSV | 위 Raw 계약과 동일, 기존 CSV header/scalar 표현 유지 |
+| SOURCE | 격리 창에서만 Source 변경: Raw/Cache/Graph/Fault 및 매핑 reset, 새 generation·두 번째 채널만 관측 |
+
+모든 시나리오는 application TX=0, transport/worker/writer/timer 해제,
+사용자 Source 설정 보존도 검사합니다. 실제값은 Raw table의 FrameObservation, Cache,
+Vehicle 셀·ECU 관측·Fault History·Graph samples 및 종료된 Raw 파일에서 얻습니다.
+Decode 기대값은 고정 Fixture 계약으로 선언하고 실제 Decode 결과로 다시 계산하지 않습니다.
+누락/불일치 actual은 FAIL이며, 주입 성공이나 불완전한 관측을 PASS로 대체하지 않습니다.
+
+### 격리와 상태 전이
+
+Runner는 별도 숨겨진 기존 MainWindow를 생성합니다(재귀 Automation 탭 없음).
+ScenarioInput은 기존 MockCanInterface를 조합한 유한 FIFO이며,
+Fake factory를 기존 ReceiveWorker에 주입합니다.
+**실제 python-can Bus를 만들지 않고 Bus.send도 호출하지 않습니다.**
+hidden session의 Live 표시는 기존 수신 경로 재사용을 위한 Fake 설정이며 물리 연결이 아닙니다.
+사용자의 MainWindow·Worker·Cache·Logger를 시험 데이터로 대체하지 않습니다.
+
+`IDLE → RUNNING(PREPARING → OPENING → [WRITER_OPENING] → RECEIVING → STOPPING
+→ CLEANING) → PASSED/FAILED/ERROR/CANCELLED`.
+Source 시험은 격리 창에서만 두 번째 OPENING/RECEIVING을 수행합니다.
+
+- PASSED: 필요한 실제 관측과 자원 정리 Assertion 전부 일치.
+- FAILED: 실행은 완료했으나 기대값과 actual이 다르거나 필요한 관측이 누락.
+- ERROR: DBC/준비/수신/쓰기/실행 제한/정리 실패. 원인을 보존하며 성공으로 처리하지 않습니다.
+- CANCELLED: 관측 완료 전 취소. 해당 Assertion은 NOT EVALUATED이며 PASS가 아닙니다.
+- 정리 제한 초과: ERROR와 cleanup_complete=False, session 참조 보존 및 polling 중단.
+  Run/Clear는 계속 잠기고 Cancel/Close로 명시적으로 정리를 재시도합니다.
+  이미 발생한 ERROR를 취소 성공으로 숨기지 않습니다.
+
+UI 접근/상태 전이는 Qt main thread, 수신/기록은 기존 Worker/Writer입니다.
+GUI recv·Writer wait 또는 무한 polling을 추가하지 않습니다.
+PC 내부 초기 정책은 tick25ms / 실행5s / 정리3s, 입력8개·Assertion16개 이하,
+최신 결과10개 메모리 보관입니다. CAN Period/Fault Timeout/Threshold와 무관합니다.
+화면은 최신 결과 상세를 표시하며 이전 결과는 유한 메모리 모델에만 보관합니다.
+과거 결과 선택 UI·Export·외부 Script는 이번 MVP에 없습니다.
+
+Close는 먼저 격리 시험을 취소/정리한 뒤 기존 사용자 창의 종료 경로를 다시 실행합니다.
+Stop/Close 시 Queue drain과 flush/close는 기존 Logger 계약을 따릅니다.
+시험 임시 파일은 성공/실패/취소 후 소유 subfolder 경계를 확인해 정리합니다.
+파일 정리 실패도 ERROR로 표시하고 세션 참조를 유지합니다.
+일반 사용자 CAN log 및 기존 폴더 파일은 삭제하지 않습니다.
+
+### 검증과 Open 항목
+
+자동화 시험은 `test_automation.py`, `test_scenario_runner.py`, `test_automation_view.py`입니다.
+실제 Windows 자동 검증은 `tests/gui_automation_native_smoke.py --output-dir <새 시험 증적 폴더>`입니다.
+기존 466개 테스트와 Native8종을 보존합니다. 실제 결과는 VERIFICATION의 Phase3H-2 기록을 참고하세요.
+
+- 현재 Repository/editable 설치 MVP의 내부 tests/fixtures 위치를 사용합니다.
+  Fixture가 없는 독립 wheel/배포 설치는 ERROR이며 packaging/resource 정책 후속 검토가 필요합니다.
+- Production Fault 상태/Threshold, Active Fault 재구성, 실제 ECU 제어·TX·HIL Assertion은 미지원.
+  필요 시 별도 Jira와 **상대 담당자 리뷰 필요**로 분리합니다.
+- 고부하/장시간 성능·무손실 기록·실제 디스크/ACL 실패 검증, 실제 CANable/ECU: **NOT VERIFIED**.
+- 팀 고정 버전·배포 라이선스 승인: 미확정. 담당자 코드 리뷰·사용자 수동 Automation GUI: **NOT VERIFIED**.
+- Jira 후보(외부 등록/상태 변경 미실행):
+  1. **[HINT-48][Test] Automation Catalog v1 팀 계약 리뷰**: PC/Test 담당자,
+     입력/기대값/실패 검출/자원 정리 Evidence를 대조; 팀 리뷰 완료 근거 확보(1일).
+  2. **[HINT-48][Packaging] 내부 TEST ONLY Fixture resource 배포 정책**:
+     PC/배포 담당자, wheel에 fixture 포함 여부·위치/버전/라이선스 결정 후 설치본 시험(1~2일).
+  3. **[HINT-48][Troubleshooting] Automation 준비 취소의 임시 폴더 잔류**:
+     PREPARING signal에서 CSV 시험 취소 → 새 subfolder 잔류 재현.
+     이번 로컬 수정에서 CANCELLED 완료 전 cleanup을 수행하며 회귀로 검증; 담당자 리뷰 NOT VERIFIED.
+  4. **[HINT-48][Interface Review] Production/HIL Assertion 계약 확보**:
+     Gateway/CAN/Cluster/PC/Test와 Fault 산출물 동기화·승인·실 캡처 근거 확보 후 별도 구현(1~3일).
+
+신규 의존성·라이브러리 설치/버전 변경·공통 Interface 변경 없음.
+Git add/Commit/Push/PR/Merge/Jira Done 미실행.

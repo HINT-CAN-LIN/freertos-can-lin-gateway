@@ -1,3 +1,149 @@
+# Phase 3H-2 Test Automation GUI 검증 — 2026-10-14
+
+기준 Branch **PC-Diagnostic-Test**, HEAD **8f2b629c08f4754753d75c12cbd53647f12f0353**.
+아래는 이번 실제 실행이며 이전 Phase3H-1의 466개 결과와 구분한다.
+최종 판정은 **PASS (Mock/Fake software MVP)**이다. Hardware/담당자 리뷰 완료 의미가 아니다.
+
+| 검증 | 이번 실제 결과 |
+|---|---|
+| 전체 pytest | **517 passed in 62.31s** — 기존466 + 신규51, 실패/skip 없음 |
+| 신규 Automation 별도 | **51 passed in 15.37s** — 모델13 / Runner29 / GUI9 |
+| 기존 CLI 별도 | **140 passed in 1.12s**, 기존 Phase1/2 7개 테스트 모듈 |
+| CLI/GUI 모듈 --help | 두 모듈 exit0 |
+| 설치 can-diag.exe / can-diag-gui.exe --help | 두 진입점 exit0 |
+| pip check | **No broken requirements found.** |
+| 실제 Windows Automation Native | **PASS**, windows QApplication/노출 창; 고정11개 시나리오 Assertion 전부 PASSED |
+| Automation 음성/격리 검증 | 기대값 불일치 FAILED, 취소/Close CANCELLED, Live Source BLOCKED, 사용자 Mock Receiver/Logger 유지 |
+| Automation 자원/TX | 모든 시험 transport shutdown1회·해제, Receiver/Writer/Timer 정리, application send 호출0 |
+| 기존 Windows Raw Native | PASS, 3회 반복/Clear/active close, Mock4 해제 |
+| 기존 Windows Decode Native | PASS, 명시 TEST ONLY/Raw/Decode/Cache/오류·반복/active close, Mock5 해제 |
+| 기존 Windows Vehicle Native | PASS, -10.0/test_unit/3회 반복/Age/오류/Reload/active close, Mock4 해제 |
+| 기존 Windows ECU Native | PASS, 7카드/STD-EXT/Fault 관측/반복/Clear/Reload/active close, Mock4 해제 |
+| 기존 Windows Logging Native | PASS, JSONL5/CSV5, 각각 기존 CLI bytes equal, 파일 보호/error restart/active close |
+| 기존 Windows Fake Live Native | PASS, JSONL5/CSV4, 기존 CLI bytes equal, transport4 해제·send0 |
+| 기존 Windows Graph Native | PASS, Pause/Resume/Clear·Logging 동시, JSONL12, transport3 해제·send0 |
+| 기존 Windows Fault Native | PASS, 필터/상세/TEST ONLY·기존 DBC Fake metadata, Source/Reload/Graph·Logging/close, JSONL12, transport3 해제·send0 |
+| Native 전체 | **9종 PASS (신규 Automation1 + 기존8)**, 모두 실제 Windows 자동화 |
+| git diff --check / 신규 Python 구문 | PASS; 신규 untracked Python 공백 검사 포함 |
+| Credential 패턴 / Stage | 명백한 토큰·개인키 패턴 발견 없음, Stage 비어 있음 |
+| 사용자 수동 Automation GUI / Hardware | **NOT VERIFIED / NOT VERIFIED** |
+| 팀 고정 버전 / 담당자 리뷰 / 배포 라이선스 | **미확정 / NOT VERIFIED / 미확정** |
+
+실행 환경은 기존 Worktree .venv의 Python3.14.6 / PySide6 6.10.3 /
+python-can4.6.1 / cantools44.2.1 / pytest9.1.1이다.
+패키지 설치·재설치·버전 변경·pyproject 변경·신규 의존성은 없다.
+팀이 승인한 고정 버전으로 기록하지 않는다.
+
+## 시험 경로와 관측 근거
+
+시험은 git 제외된 **.test-tmp/phase3h2-19423d3b/**의 새 basetemp에서
+`-p no:cacheprovider`로 실행했다. 기존 테스트 Temp/기존 사용자 로그를 덮어쓰지 않았다.
+최종 Native9종은 위 경로의 **final-native/**에 시험 증적을 생성했다.
+Automation 임시 Raw capture용 새 `hint48-mock-*` 하위 경로는 시험 종료 후 제거됐으며
+증적 screenshot/기존 Native capture는 Git 추적/Commit 후보가 아니다.
+
+새 시험 입력은 변경 없는 기존 tests/fixtures/test_only.dbc와 gui/demo.py의 payload이다.
+Fixture SHA-256:
+`9ff1750df33163d0b9591912f202be56dda2a61af9dd97fa398f5a2c2c13a93b`.
+Frame은 ScenarioInput(MockCanInterface FIFO 조합) → 기존 ReceiveWorker → Buffer/
+FrameObservation → MainWindow Raw/DecodeSession/Cache/View/Logger 경로를 통과했다.
+별도 Signal Decode 알고리즘 또는 직접 service 호출로 GUI PASS를 만들지 않았다.
+
+고정 기대값은 Raw 입력/Fixture 정의 및 기존 GUI 계약으로 선언했다.
+actual은 처리된 Raw table, Cache, Vehicle 셀·ECU 관측·Fault History·Graph samples,
+종료된 CSV/JSONL 파일에서 수집했다.
+Expected와 Actual, Assertion result/reason, Scenario ID/start/end/state/error/cancelled,
+cleanup_complete/hardware를 분리한다. 미관측 항목은 FAIL/NOT EVALUATED이며 주입 성공이 PASS 근거가 아니다.
+Raw/Decode 실패 시 잘못된 프레임은 Raw에 남고 invalid Signal을 정상값으로 대체하지 않는다.
+
+Automation Native는 실제 Run/Cancel/Clear 버튼과 결과 셀을 검사했다.
+11개 Catalog 전부 PASSED, 기대값만 바꾼 Raw는 FAILED와 실제값/이유를 표시했다.
+사용자의 Mock 수신과 Logger를 실행한 채 Graph 시험을 수행해 기존 Worker/Writer 계속 동작을 확인했다.
+Live Source에서 버튼 비활성/direct 실행 ERROR, 실행 중 GUI Close에서 취소 후 정상 해제를 확인했다.
+Native screenshot에서 TEST ONLY/Hardware NOT VERIFIED·Scenario 입력/기대값·PASSED/FAILED 화면을 확인했다.
+사용자가 직접 확인한 결과는 이번에 없으며 **수동 Automation GUI는 NOT VERIFIED**다.
+
+기존 Fault Native만 기존 저장소 DBC를 시험자가 명시적으로 로드해 Fake metadata 시험에 사용한다.
+이번 Automation Catalog에는 Production FaultCode/ACTIVE/CLEARED lifecycle Assertion이 없으며
+Fault History는 **Status Unknown**을 기대한다. 실제 ECU Fault 전파 검증이 아니다.
+
+## 유한 실행·격리·정리 정책
+
+- 사용자 Live Source에서는 모든 Automation 실행을 차단한다. 실제 Bus 생성/Bus.send·Replay 없음.
+- 별도 hidden MainWindow(Automation 재귀 비활성), 유한 Mock/Fake input, 원래 Worker/Writer를 사용한다.
+  사용자 Source/Worker/Cache/Logger를 시험 세션으로 교체하지 않는다.
+- 사용자 Source/DBC 편집은 시험 중 잠기며 기존 Mock Receiver/Logger의 자동 중지/전환 없음.
+- PC 내부 tick25ms / 실행5s / 정리3s, 입력8·Assertion16 이하, 최신 결과10개 메모리 상한.
+  ECU Period/Timeout/Fault Threshold·CAN latency/jitter 측정값이 아니다.
+- IDLE/RUNNING 및 PREPARING/OPENING/WRITER_OPENING/RECEIVING/STOPPING/CLEANING/FINISHED를 구분한다.
+  최종 PASSED/FAILED/ERROR/CANCELLED; 취소된 Assertion은 NOT EVALUATED.
+- 정리 제한 초과는 ERROR/cleanup_complete=False로 session 참조를 유지하고 Timer polling을 중지한다.
+  Run/Clear 차단, Cancel/Close로 재시도; 이미 발생한 ERROR를 CANCELLED로 숨기지 않는다.
+- Queue drain/flush/close는 기존 Logger 계약. 두 Raw Logging 시나리오는 각 2개 기록,
+  closed/received/written/drop/unconfirmed=(True,2,2,0,0), 입력 Raw record와 파일 읽기 결과 일치.
+- 일반 CAN CSV/JSONL schema/exclusive create/Append 미지원/Count/Queue/Drop 계약은 수정하지 않았다.
+  시험 결과 Report 자동 저장·새 export schema 없음. 시험 임시 파일은 소유 폴더 경계를 검증해 정리한다.
+- 사용자 Close는 격리 session cancel/cleanup 완료 후 기존 사용자 종료 경로를 다시 실행한다.
+  UI 변경은 Qt main thread; blocking recv/write/Thread wait는 신규 GUI 처리에 추가하지 않았다.
+
+## 실행 중 발견·수정한 문제
+
+1. 초기 파이프라인 시험에서 Vehicle actual은 Ambiguous/No Data로 **FAILED**였다.
+   신규 Runner가 기존 Vehicle Signal combo의 문자열 계약에 findData를 사용한 것이 원인이었다.
+   Runner의 exact findText 선택만 수정하고 같은 기대값으로 11개 시나리오를 다시 통과했다.
+2. 첫 신규 모델/Runner pytest는 30 PASS/11 FAIL이었다.
+   11개 시나리오의 실제 Assertion/해제는 이미 PASS였으나 테스트가 deleteLater 후 삭제된
+   QTimer를 조회해 RuntimeError가 발생했다. 새 테스트에 QObject validity/Timer 해제 검사를 적용했다.
+   제품의 deleteLater 정리는 유지하며 기존 테스트를 변경/약화하지 않았다.
+3. 신규 UI 미리보기 시험 1개는 정수 기대값515에 "515.0" 표시를 요구해 실패했다.
+   실제 Catalog의 정수 표현을 확인하도록 새 시험만 보정했다. 값/관측 Assertion은 유지했다.
+4. PREPARING signal에서 CSV 시험을 취소하는 경계 시험이 새 임시 폴더 잔류를 재현했다.
+   CANCELLED 완료 전 cleanup_files를 수행하도록 신규 Runner 최소 수정.
+   동일 회귀와 GUI9개 **10 PASS**, 이후 전체517/신규51/Native9종을 재실행해 통과했다.
+
+기존 466개 테스트·Fixture/Common Interface가 실패했거나 이를 삭제/약화하여 해결한 것이 아니다.
+CPU/CAN delay/jitter/frame loss 또는 실제 디스크 고갈/ACL 오류를 측정했다고 주장하지 않는다.
+
+## 보존·Git·미완료 범위
+
+이번 변경은 tools/diagnostic_GUI 아래 **신규7 / 수정3 / 삭제0**뿐이다.
+
+신규:
+- src/pc_diagnostic/gui/automation.py
+- src/pc_diagnostic/gui/scenario_runner.py
+- src/pc_diagnostic/gui/automation_view.py
+- tests/test_automation.py
+- tests/test_scenario_runner.py
+- tests/test_automation_view.py
+- tests/gui_automation_native_smoke.py
+
+수정:
+- src/pc_diagnostic/gui/window.py
+- README.md
+- VERIFICATION.md
+
+작업 전후 SHA-256 비교로 D: 원본25개, 다른 Worktree의 tracked 파일·HEAD/status 및
+기존 리뷰 문서 보존을 확인했다. 리뷰 문서 SHA:
+`751ecd803fc1866cc12a51ba2df4a93a64bd41f2cc441456eb9ea49b3178b975`.
+기존466 테스트·Fixture·CLI/Adapter/Codec/Cache/Logger·공통 DBC/Matrix/Requirements/
+Routing/ECU 추적 파일 해시는 변경 없다. main/develop/다른 담당자 branch와 origin 참조도 변경 없다.
+현재 HEAD/branch 유지, Stage 비어 있음. Git add/Commit/Push/PR/Merge/Reset/Rebase/Fetch 및
+Jira 등록/Done은 이번 구현 단계에서 수행하지 않았다.
+
+미지원/Open:
+- Production Fault 상태 판정/Active Fault 재구성·Fault Clear·ECU 제어·실제 CAN Replay/HIL Assertion.
+- 외부 Script/사용자 파일 코드 실행/새 Report 포맷·Export·과거 결과 선택 화면.
+- Fixture 없는 독립 wheel/배포 설치: ERROR; resource 포함/버전·라이선스 정책 검토 필요.
+- 팀 고정 버전·배포 라이선스·Production Fault 의미 승인: 미확정/검토 필요.
+- 담당자 코드 리뷰·사용자 수동 Automation GUI·CANable/ECU·고부하/장시간·디스크/ACL 실측:
+  **NOT VERIFIED**. 테스트 통과를 팀 리뷰/Integration Merge/Jira Done으로 해석하지 않는다.
+
+README에 Catalog v1/기대값·Source 계약, 사용법, 상태/정리 정책과 후속 Jira 후보를 기록했다.
+CAN/LIN Interface 변경은 없으며 필요 시 별도 Jira와 **상대 담당자 리뷰 필요**로 분리한다.
+Commit·Push는 미실행이며 별도 사용자 승인 후 진행해야 한다.
+
+---
+
 # Phase 3H-1 Fault Monitor 검증 — 2026-10-14
 
 기준 Branch PC-Diagnostic-Test, HEAD 96d2cbc4f2a1dee605bfa43173e3e8db46c2084f.
