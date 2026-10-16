@@ -19,15 +19,19 @@ from .logging_view import LoggingView
 from .graph_view import SignalGraphView
 from .fault_monitor_view import FaultMonitorView
 from .driver_control_view import DriverControlView
+from .monitor_filter import MonitorFilter
+from .workspace import WorkspaceTabs, install_workspace, refresh_workspace
 
 # 아래 값은 GUI 표시 자원 제한이며 통신 규격 수치가 아니다.
 DISPLAY_REFRESH_MS = 50
 AGE_REFRESH_MS = 250
 MAX_TABLE_ROWS = 500
 MAX_ERROR_LINES = 50
-WINDOW_WIDTH = 1100
-WINDOW_HEIGHT = 850
+TABLE_CELL_PADDING = 18
+WINDOW_WIDTH = 1280
+WINDOW_HEIGHT = 920
 WINDOW_SCREEN_MARGIN = 60
+DRIVER_COMPACT_WIDTH = 1200
 SIGNAL_HEADERS = ["Message", "Signal", "Value", "Unit", "Last Update / Age (s)", "Decode Status"]
 
 
@@ -144,8 +148,13 @@ class MainWindow(QMainWindow):
         detail_layout.addWidget(self.cache_table)
         splitter.addWidget(details)
         # 기존 Monitor/Signal 화면을 보존하고 독립 Vehicle 조회 탭만 추가한다.
-        self.tabs = QTabWidget()
-        self.tabs.addTab(splitter, "CAN Monitor / Signals")
+        self.tabs = WorkspaceTabs()
+        self.monitor_page = QWidget()
+        monitor_layout = QVBoxLayout(self.monitor_page)
+        self.monitor_filter = MonitorFilter(self.table, self.monitor_page)
+        monitor_layout.addWidget(self.monitor_filter)
+        monitor_layout.addWidget(splitter, 1)
+        self.tabs.addTab(self.monitor_page, "CAN Monitor / Signals")
         self.vehicle_view = VehicleStatusView(self.decode_session, lambda: self._clock(), self)
         self.tabs.addTab(self.vehicle_view, "Vehicle Status")
         self.ecu_view = EcuObservationView(self.decode_session, lambda: self._clock(), self)
@@ -170,6 +179,7 @@ class MainWindow(QMainWindow):
         self.error_area.document().setMaximumBlockCount(MAX_ERROR_LINES)
         self.error_area.setMaximumHeight(80)
         layout.addWidget(self.error_area)
+        install_workspace(self, layout)
         self.timer = QTimer(self)
         self.timer.setInterval(DISPLAY_REFRESH_MS)
         self.timer.timeout.connect(self.refresh_frames)
@@ -187,6 +197,12 @@ class MainWindow(QMainWindow):
         self.dbc_button.clicked.connect(self.select_dbc)
         self.table.itemSelectionChanged.connect(self.show_selection)
         self.connection_view.changed.connect(self.input_source_changed)
+
+    def resizeEvent(self, event):
+        # Qt 필수 override. 화면 배치만 조정하며 수신/모델/Timer는 변경하지 않는다.
+        super().resizeEvent(event)
+        if self.driver_control_view is not None:
+            self.driver_control_view.set_compact_layout(event.size().width() < DRIVER_COMPACT_WIDTH)
 
     def automation_active(self):
         # 별도 시험 실행 중 사용자 Source/DBC 편집만 잠그고 기존 Receiver/Logger는 유지한다.
@@ -266,6 +282,7 @@ class MainWindow(QMainWindow):
             self.automation_view.refresh()
         if self.driver_control_view is not None:
             self.driver_control_view.refresh()
+        refresh_workspace(self)
 
     @Slot()
     def select_dbc(self):
@@ -355,6 +372,7 @@ class MainWindow(QMainWindow):
         self.connection_view.set_state("Error")
         self.connection_view.show_error(message)
         self.error_area.appendPlainText(message)
+        refresh_workspace(self)
 
     @Slot()
     def worker_finished(self):
@@ -406,10 +424,18 @@ class MainWindow(QMainWindow):
             self.table.insertRow(row)
             for column, value in enumerate(frame_cells(frame)):
                 item = QTableWidgetItem(value)
+                item.setToolTip(value)
+                if column == 2:
+                    # 실제 표시 문자열/글꼴 폭으로 계산하며 ID나 Format 값은 바꾸지 않는다.
+                    width = self.table.fontMetrics().horizontalAdvance(value) + TABLE_CELL_PADDING
+                    if self.table.columnWidth(column) < width:
+                        self.table.setColumnWidth(column, width)
                 if column == 0:
                     item.setData(Qt.ItemDataRole.UserRole, observation)
                 self.table.setItem(row, column, item)
             self._processed += 1
+        if frames:
+            self.monitor_filter.apply_filter()
         self.counter_label.setText(f"Received: {total}")
         self.drop_label.setText(f"표시 버퍼 제외: {dropped}")
         self.processed_label.setText(f"Raw/Decode processed: {self._processed}")

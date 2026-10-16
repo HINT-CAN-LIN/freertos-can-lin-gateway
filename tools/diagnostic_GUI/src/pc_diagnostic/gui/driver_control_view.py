@@ -1,8 +1,10 @@
 """Qt 메인 스레드의 Driver Control 표시. Mock 요청/ECU 관측을 분리한다."""
 from PySide6.QtCore import Qt, QSignalBlocker
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFormLayout,
-                              QHBoxLayout, QLabel, QLineEdit, QPushButton, QSlider,
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFormLayout, QGridLayout,
+                              QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSlider,
                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+from .theme import role
+from .ui_components import sync_driver_presentation
 from .driver_input import (DriverInputModel, DriverInputs, GEAR_CHOICES, HISTORY_CAPACITY,
                            LIVE_MODE, MOCK_MODE, InputState, ACCELERATOR_MIN, ACCELERATOR_MAX)
 
@@ -22,12 +24,15 @@ class DriverControlView(QWidget):
             "동시 Accelerator+Brake는 그대로 기록하며 제어 우선순위는 VCU 검토 필요입니다.")
         self.policy_label.setWordWrap(True)
         layout.addWidget(self.policy_label)
-        self.source_label = QLabel()
+        self.source_label = role(QLabel(), "badge")
+        self.source_label.setWordWrap(True)
         self.approval_label = QLabel(self.model.approval_status + " · PC 입력 CAN ID/Payload/주기/Timeout 미승인")
         self.approval_label.setWordWrap(True)
+        role(self.approval_label, "warning")
         layout.addWidget(self.source_label)
         layout.addWidget(self.approval_label)
-        form = QFormLayout()
+        driving_box = QGroupBox("Driving inputs — Mock only")
+        form = QFormLayout(driving_box)
         self.accelerator_edit = QLineEdit()
         self.accelerator_edit.setPlaceholderText("미설정 · Mock % (0..100)")
         self.accelerator_slider = QSlider(Qt.Orientation.Horizontal)
@@ -35,6 +40,10 @@ class DriverControlView(QWidget):
         accelerator = QHBoxLayout()
         accelerator.addWidget(self.accelerator_slider)
         accelerator.addWidget(self.accelerator_edit)
+        self.accelerator_edit.setMaximumWidth(120)
+        self.accelerator_edit.setAccessibleName("Accelerator Mock percent")
+        self.accelerator_value_label = role(QLabel("Not Configured"), "badge")
+        accelerator.addWidget(self.accelerator_value_label)
         form.addRow("Accelerator (Mock %)", accelerator)
         self.brake_combo = self._choices(("OFF", "ON"))
         self.gear_combo = self._choices(GEAR_CHOICES)
@@ -46,6 +55,8 @@ class DriverControlView(QWidget):
         self.window_close_button = QPushButton("Window Close")
         self.light_on_button = QPushButton("Light ON")
         self.light_off_button = QPushButton("Light OFF")
+        body_box = QGroupBox("Body intents — Mock only")
+        body_form = QFormLayout(body_box)
         for label, combo, buttons in (
             ("Window (Mock intent)", self.window_combo, (self.window_open_button, self.window_close_button)),
             ("Light (Mock intent)", self.light_combo, (self.light_on_button, self.light_off_button)),
@@ -54,14 +65,17 @@ class DriverControlView(QWidget):
             row.addWidget(combo)
             for button in buttons:
                 row.addWidget(button)
-            form.addRow(label, row)
-        layout.addLayout(form)
+            body_form.addRow(label, row)
+        self._input_boxes = (driving_box, body_box)
+        self._input_grid = QGridLayout()
+        layout.addLayout(self._input_grid)
+        self.set_compact_layout(True)
         self.torque_label = QLabel("TorqueRequest: VCU 계산 결과 관측 전용 · No Data\n"
                                   "실제 RX 값은 CAN Monitor / Signals, 명시 매핑한 Vehicle Status / Signal Graph에서 확인")
         self.torque_label.setWordWrap(True)
         layout.addWidget(self.torque_label)
         actions = QHBoxLayout()
-        self.apply_button = QPushButton("Apply Mock Input")
+        self.apply_button = role(QPushButton("Apply Mock Input"), "primary")
         self.reset_button = QPushButton("Reset Mock Inputs")
         self.live_tx_button = QPushButton("Live TX Blocked")
         self.live_tx_button.setEnabled(False)
@@ -69,13 +83,18 @@ class DriverControlView(QWidget):
             actions.addWidget(button)
         layout.addLayout(actions)
         self.state_label = QLabel()
+        self.state_label.setWordWrap(True)
         self.accepted_label = QLabel()
         self.accepted_label.setWordWrap(True)
         self.ecu_label = QLabel(self.model.ecu_response_status + " · Mock Accepted는 ECU 응답이 아닙니다.")
-        self.error_label = QLabel()
+        self.error_label = role(QLabel(), "error")
         self.error_label.setWordWrap(True)
+        self.ecu_label.setWordWrap(True)
+        result_box = QGroupBox("Request result / ECU response")
+        result_layout = QVBoxLayout(result_box)
         for label in (self.state_label, self.accepted_label, self.ecu_label, self.error_label):
-            layout.addWidget(label)
+            result_layout.addWidget(label)
+        layout.addWidget(result_box)
         self.history_table = QTableWidget(0, len(HISTORY_HEADERS))
         self.history_table.setHorizontalHeaderLabels(HISTORY_HEADERS)
         self.history_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -97,6 +116,16 @@ class DriverControlView(QWidget):
         self.reset_button.clicked.connect(self.reset_inputs)
         self._rendered_history = ()
         self.refresh()
+
+    def set_compact_layout(self, compact):
+        # 창 폭에 따라 입력 카드 배치만 바꾼다. 모델/선택/Signal은 유지한다.
+        if getattr(self, "_compact_layout", None) == compact:
+            return
+        self._compact_layout = compact
+        for box in self._input_boxes:
+            self._input_grid.removeWidget(box)
+        for index, box in enumerate(self._input_boxes):
+            self._input_grid.addWidget(box, index if compact else 0, 0 if compact else index)
 
     @staticmethod
     def _choices(choices):
@@ -193,6 +222,10 @@ class DriverControlView(QWidget):
         self.apply_button.setEnabled(enabled)
         self.reset_button.setEnabled(not self.owner._closing and not self.model.closed)
         self.live_tx_button.setEnabled(False)
+        text = self.accelerator_edit.text().strip()
+        self.accelerator_value_label.setText(f"{text} % Mock" if text else "Not Configured")
+        self.brake_combo.setAccessibleName("Brake Mock OFF or ON")
+        self.gear_combo.setAccessibleName("Gear Mock choice")
         self.source_label.setText(f"Input Source: {self.model.source} · {self.model.mode}")
         self.state_label.setText(f"Request State: {self.model.state.value} · Applied to Mock: {self.model.applied}")
         receipt = self.model.last_accepted
@@ -200,6 +233,7 @@ class DriverControlView(QWidget):
             f"Last Mock Accepted: PC #{receipt.command.sequence} @ {receipt.command.timestamp:.6f} · {receipt.command.inputs}"
             if receipt else "Last Mock Accepted: No Data")
         self.error_label.setText(self.model.error or "Live TX Blocked · Awaiting Interface Approval · No physical TX")
+        sync_driver_presentation(self)
         history = self.model.history
         if history == self._rendered_history:
             return

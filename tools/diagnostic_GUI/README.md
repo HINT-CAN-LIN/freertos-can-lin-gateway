@@ -1372,3 +1372,89 @@ Hardware 및 Driver GUI 사용자 수동 확인 NOT VERIFIED. Fixture Wheel 재�
 - **1~3일 / 승인 후 PC 송신 및 응답 분리 시험**: PC/VCU/Gateway/테스트 담당.
   앞선 Interface 승인 이후 별도 작업으로 Encoder/권한/수신 확인/실기 Gate를 설계한다.
   CANable/ECU 실측은 현재 Hardware 준비 조건 충족 전에는 진행하지 않는다.
+
+
+## Phase 3K-1 — UI/UX Workspace (2026-10-17)
+
+기존 PySide6/통신 계층을 유지한 화면 개선입니다. 실행 명령/선택 의존성은 그대로입니다.
+
+```powershell
+python -m pc_diagnostic.gui
+# 설치된 Windows GUI 진입점: can-diag-gui
+```
+
+- 사이드 Navigation과 화면 제목, Source/Hardware 배지, 공통 Start/Stop/Clear/Select DBC, Activity & Errors.
+- 초기 화면은 기존 CAN Monitor입니다. Dashboard는 첫 항목 또는 Alt+1, Driver Control은 Alt+2입니다.
+  기존 View와 탭 번호는 보존합니다. Navigation 방향키/Home/End와 Alt+1~9를 지원합니다.
+- Connection settings로 기존 Mock/Live 편집기를 펼칩니다. 펼치기만으로 연결하거나 Source를 바꾸지 않습니다.
+- Dashboard는 실제 기존 표시/Logging snapshot만 요약합니다. 매핑/수신이 없으면 No Data,
+  Fault는 Status Unknown, Hardware는 NOT VERIFIED를 유지합니다. Observed를 Healthy로 바꾸지 않습니다.
+- Driver의 Driving/Body/Request result를 그룹화했습니다. Accelerator 숫자·Brake/Gear 선택은 기존 Mock Validation을 사용합니다.
+  Mock Accepted와 ECU Response Not Verified는 별개입니다. Interface Pending / Live TX Blocked는 유지합니다.
+- CAN Monitor 검색/STD·EXT/Decode errors only는 이미 처리된 유한 표의 표시 필터입니다.
+  Received/Processed/Cache/Logger/Raw 보존에 영향을 주지 않습니다. Raw Pause 기능은 추가하지 않았습니다.
+- 화면마다 독립 스크롤을 사용합니다. 작은 폭에서는 Dashboard가 1열, Driver 입력은 세로로 배치됩니다.
+  긴 Message/오류/출처는 tooltip·기존 상세/스크롤로 확인합니다. 표는 숫자/단위·상태 문자를 보존합니다.
+- Network/KPI 및 실제 Fault Injection은 미구현입니다. 실제 차량 값·정상 상태·KPI를 합성하지 않습니다.
+  기존 Graph/Logging/Automation 11개 Scenario 및 CLI 동작은 유지합니다.
+
+[UI Inventory / Gap Analysis / 디자인 시스템 / Task 초안](docs/ui_ux_redesign.md)을 확인하세요.
+기존 리뷰 문서 2개는 보존하며 팀 고정 버전·Production 의미/매핑·담당자 코드 리뷰는 미확정/NOT VERIFIED입니다.
+이번 UI의 사용자 수동 검증과 CANable/ECU Hardware는 NOT VERIFIED입니다. 자동 Windows Smoke와 구분합니다.
+
+검증 예시 (tools/diagnostic_GUI 위치, 실행마다 새 테스트 전용 폴더):
+
+```powershell
+$uiEvidence = Join-Path '.test-tmp' ('ui-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $uiEvidence | Out-Null
+.\.venv\Scripts\python.exe -B -m pytest tests -q -p no:cacheprovider --basetemp "$uiEvidence/pytest"
+.\.venv\Scripts\python.exe -B tests/gui_workspace_native_smoke.py --dbc tests/fixtures/test_only.dbc --output-dir $uiEvidence
+```
+
+Native Smoke는 실제 Windows 창을 사용하지만 입력은 Mock TEST ONLY이며 실제 CAN backend 생성은 차단합니다.
+원래 Native Smoke 10종과 신규 UI Smoke는 별도로 실행합니다. 실제 결과는 VERIFICATION의 최신 절을 참조하세요.
+새 외부 UI 패키지 설치나 pyproject 의존성 변경은 없습니다.
+
+## Phase 3K-2 — Compact UI / Layout (2026-10-17)
+
+Phase 3K-1 파일과 Interface 리뷰 2개를 보존하면서 UI 표시만 개선했습니다.
+실행 방법·선택 의존성·CAN/Mock/CLI 계약은 그대로입니다.
+
+- 상단은 제목·안전 배지, 공통 액션, DBC/상태/Received의 세 줄입니다.
+  전체 Source/DBC 정책과 Processed/Drop 계수는 **Source / DBC / RX details**에서 확인합니다.
+  Mock/Live, Hardware NOT VERIFIED, Driver TX BLOCKED / Interface Pending은 항상 표시합니다.
+- Dashboard 상단은 Connection / Received / ECU / Fault 요약입니다.
+  넓은 화면은 4열, 좁은 화면은 2×2이며 Logging/Vehicle 상세는 아래에 배치합니다.
+  No Data, Status Unknown, Observed ≠ Healthy의 기존 의미는 유지합니다.
+- Driver는 기존 ComboBox/Validation을 사용하는 Brake·Gear 선택 버튼, Window·Light 버튼을 제공합니다.
+  Accelerator 입력값과 slider가 동기화되며 소수값을 정수로 저장하지 않습니다.
+  Apply/Reset을 먼저 표시하고 Mock Accepted와 ECU Response Not Verified를 구분합니다.
+  전체 요청·Source·미승인 Interface 정보는 Input source / approval / receipt details에 보존합니다.
+- Vehicle/ECU/Fault의 Mapping/Source 설정은 접을 수 있습니다. 기본값은 펼침이며
+  명시적 출처 확인과 Apply는 그대로 필요합니다. 접기만으로 매핑/승인이 바뀌지 않습니다.
+  800×600에서는 폼이 두 열로 재배치됩니다. 긴 표는 자체 가로 스크롤로 전체 값을 확인합니다.
+- Vehicle 표의 시각적 열 순서는 Value/Unit/State/Age를 앞에 놓습니다.
+  기존 데이터와 logical column 접근 계약은 유지합니다.
+- Monitor는 full raw Timestamp의 여섯 자리 소수·STD/EXT·선택 데이터를 유지하고 고정폭 폰트/폭을 확보합니다.
+  검색은 표시 필터이며 Raw/Decode/Cache/Logger 데이터를 삭제하지 않습니다.
+- Graph는 Canvas를 먼저 보여주고 전체 값·통계·정책은 Details에 둡니다.
+  Logging은 상태/파일/Format/Start·Stop과 오류를 먼저 표시하고 상세 통계는 접습니다.
+  Automation은 Scenario/Run·Cancel/Result/Assertion을 구분하며 설명을 펼쳐 읽을 수 있습니다.
+- 빈 Activity & Errors는 접힙니다. 수신/Writer/종료 등의 오류가 추가되면 즉시 펼칩니다.
+- Navigation 스크롤·방향키·Alt+1~9와 기존 View/Signal 연결을 유지합니다.
+  작은 창에서는 페이지 스크롤과 설정 접기로 하단 결과·표에 접근합니다.
+
+추가 레이아웃 자동 검증:
+
+```powershell
+$layoutEvidence = Join-Path '.test-tmp' ('layout-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $layoutEvidence | Out-Null
+.\.venv\Scripts\python.exe -B -m pytest tests/test_visual_polish.py -q -p no:cacheprovider --basetemp "$layoutEvidence/pytest"
+.\.venv\Scripts\python.exe -B tests/gui_polish_native_smoke.py --dbc tests/fixtures/test_only.dbc --output-dir $layoutEvidence
+```
+
+Windows Native 자동 검증은 Mock/Fake TEST ONLY입니다. 사람이 수동 확인하거나 Hardware를 검증한 결과가 아닙니다.
+새 라이브러리 설치·팀 버전 확정·CAN 송신 활성화·공통 Interface 변경은 없습니다.
+Network/KPI·실제 Fault Injection은 계속 미구현이며 Production 매핑/Driver TX는 승인 대기입니다.
+사용자 수동 UI 확인, 전체 DPI/Screen Reader, 실제 CANable/ECU는 NOT VERIFIED입니다.
+자세한 이번 실행 결과와 초기 실패/보완은 VERIFICATION의 Phase 3K-2 절을 확인하세요.

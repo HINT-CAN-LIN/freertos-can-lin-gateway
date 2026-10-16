@@ -1787,3 +1787,205 @@ Repository 루트에서 실행:
 독립 CAN capture/ECU 관찰 결과가 필요합니다. 해당 입력을 받기 전까지 위 Hardware
 항목은 NOT VERIFIED입니다. CAN/LIN interface 변경이 필요해지면 상대 담당자 리뷰를
 거쳐야 하며, 이 구현으로 TBD/Open 또는 Signal 정의가 확정되지는 않습니다.
+
+
+## Phase 3K-1 — UI/UX Workspace (2026-10-17)
+
+### Scope and environment
+
+기준: PC-Diagnostic-Test / 5c3e95db4ff53117afb575f5b7337f6265bcd327.
+기존 Interface 리뷰 Markdown 2개를 보존한 상태에서 UI 코드/신규 UI 테스트/문서만 변경했다.
+기능/계획 대조 및 미구현 범위는 [UI Gap Analysis](docs/ui_ux_redesign.md)에 기록했다.
+Python 3.14.6 / PySide6 6.10.3 / python-can 4.6.1 / cantools 44.2.1 / pytest 9.1.1을 실제 조회했다.
+이 값은 설치 환경이며 팀 승인 고정 버전이 아니다. 패키지 설치/재설치/pyproject 변경 없음.
+
+### Actual execution results
+
+| 검증 | 이번 실제 결과 |
+|---|---|
+| 기존 테스트 유지 | 기존 테스트 파일 SHA-256 동일, Assertion 삭제/완화 없음 |
+| UI 초기 변경 후 기존 suite | 569 passed / 69.89s |
+| 중간 UI 전체 suite | 593 passed / 60.26s; 최종 스크롤/ID 보완 전 기록 |
+| 최종 전체 pytest | **595 passed / 252.19s** — 기존569 + 신규 UI26, skip/fail 없음 |
+| CLI 별도 회귀 | **140 passed / 1.07s** — 기존 7개 test 모듈 |
+| CLI 모듈 / 설치 진입점 | python -m pc_diagnostic --help / can-diag.exe --help 종료0 |
+| GUI 모듈 / 설치 진입점 | python -m pc_diagnostic.gui --help / can-diag-gui.exe --help 종료0 |
+| pip check | 종료0, No broken requirements found |
+| Windows Native 기존 10종 | **Raw / Decode / Vehicle / ECU / Logging / Fake Live / Graph / Fault / Automation / Driver PASS** |
+| 신규 Windows UI Native | **PASS**, windows platform / 실제 창 노출 / 9개 Navigation / Mock 데이터 / Driver Mock·Live 차단 / 3회 Start·Stop / 활성 Worker Close |
+| 작은 창 | Windows Native 및 offscreen 800×600 / 1024×768 접근 확인, 1280×920 offscreen/기본 Native 실행 확인 |
+| Dashboard | No Data·Disconnected / 명시 TEST ONLY 매핑의 -10.0 test_unit·Observed / 오류 표시 / Source 전환·Clear·Reload 회귀 |
+| Raw 표시 필터 | 검색·STD/EXT·Decode Error 필터 후 원래 행/Received/Cache 보존, 필터 중 파일 byte 계약 유지 |
+| Graph/Logging/Automation 보호 | Native Graph Pause/Resume/Clear + Logging 동시 실행, CSV/JSONL CLI byte 동일, 11 Scenario PASSED 및 기대 불일치 FAILED·취소 CANCELLED 검증 |
+| 종료 | 기존 Close 오류/Worker/Writer/Timer 회귀 포함, 신규 Dashboard/필터는 추가 Timer 없음 |
+| 사용자 수동 UI 확인 | **NOT VERIFIED** — 이전 Phase 사용자 확인을 이번 UI 확인으로 재사용하지 않음 |
+| 실제 CANable/ECU/Hardware | **NOT VERIFIED / NOT RUN**, Mock/Fake Native는 실기 PASS 근거 아님 |
+
+전체 pytest는 cacheprovider를 끄고 매번 새 쓰기 가능한 .test-tmp/phase3k1-*/ 전용 basetemp로 실행했다.
+Windows Native는 QT_QPA_PLATFORM을 제거한 별도 프로세스에서 실행했고 실제 app.platformName()=="windows"를 검사했다.
+각 native 결과/캡처는 호출자가 지정한 외부 증적 폴더 native-final/results.json 및 하위 PNG/TXT에 저장했다.
+전체 pytest의 실행 시간은 이번 실행 기록이며 UI 성능 KPI/고부하 기준으로 해석하지 않는다.
+
+### Initial failures and retest
+
+- 새 작은 창 테스트는 Offscreen 글꼴의 Header 최소 폭990 때문에 800px 조건을 검출했다.
+  Header/배지 줄바꿈을 적용했으며 창 폭/실제 버튼 접근 Assertion을 유지했다.
+- show_error 직후 Dashboard 요약이 다음 갱신까지 이전 상태인 문제는 동일 오류 이벤트에서 UI 요약을 갱신했다.
+- 800×600 실제 캡처에서 탭 전체 외부 Scroll이 다른 페이지의 최소 폭/스크롤 위치를 Dashboard에 전달했다.
+  페이지별 Scroll로 바꾸고 1열/수평 overflow 없음/독립 스크롤 회귀를 추가했다.
+- EXT ID 표시 잘림은 실제 문자열·글꼴 폭 계산 및 tooltip으로 보완했다. ID/Format은 변경하지 않았다.
+- 신규 Native 시험의 첫 실행은 숨겨진 매핑 페이지에 Apply 클릭을 보내 Observed를 기다리다 실패했다.
+  시험에서 실제 페이지/버튼을 노출한 후 클릭하도록 수정했다. 기존 제품 통신 결함으로 분류하지 않았다.
+- 위 보완 후 최종 전체595 및 Native 기존10+신규1을 재실행해 통과했다.
+  초기 실패 기록은 초기 증적과 구분하며 최종 성공 기록으로 덮어 해석하지 않는다.
+
+### Visual evidence
+
+변경 직전: before-monitor.png / before-driver.png.
+최종: native-final/workspace/의 dashboard-no-data.png, dashboard-mock.png,
+driver-mock.png, driver-live-blocked.png, monitor-filter.png, monitor-decode.png,
+page-1.png~page-9.png, driver-800x600.png, dashboard-800x600.png,
+driver-1024x768.png, dashboard-1024x768.png.
+실제 Windows QWidget.grab() 캡처를 직접 확인했다. 최초 디자인 시안/사람 수동 검증/실제 차량 측정이 아니다.
+자동 생성된 화면·로그·테스트 파일은 소스 Commit 후보에 포함하지 않는다.
+
+### Preserved boundaries and remaining work
+
+기존 Driver model/Adapter/Validation/Live 차단, CAN Interface/CLI Sender/Codec/Cache/Logger,
+Graph sample1000·render200ms 및 Automation 11 Scenario는 변경하지 않았다.
+공통 DBC/Matrix/LDF/Routing/Requirements/ECU Firmware와 임시 Excel도 변경하지 않았다.
+기존 두 리뷰 문서·D: 원본25개·다른 Worktree 파일/HEAD/Status·Git refs의 SHA-256/상태 대조를 수행했다.
+Git Stage는 비어 있으며 Git add/Commit/Push/PR/Merge/Jira 등록·Done은 미실행이다.
+
+Network/KPI 및 실제 Fault Injection은 미구현이다. Raw Pause·Decoded/Event export schema는 후속 검토다.
+팀 고정 버전·배포/Fixture 승인·Production Signal/Health/Fault/Driver TX 계약은 미확정/검토 필요다.
+담당자 코드 리뷰·OS Screen Reader·전체 DPI/테마·사용자 수동 사용성·실제 Hardware는 NOT VERIFIED다.
+CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**이며 이번 UI 테스트 통과로 승인하지 않는다.
+
+## Phase 3K-2 — UI Visual Polish / Layout (2026-10-17)
+
+### Scope / actual environment
+
+기준: PC-Diagnostic-Test / 5c3e95db4ff53117afb575f5b7337f6265bcd327.
+3K-1 미커밋11개와 기존 Interface 리뷰2개를 보존하면서 UI만 변경했다.
+아래는 이번 실제 실행 결과이며 3K-1의595 PASS 기록을 재사용한 결과가 아니다.
+
+실제 조회: Windows / Python 3.14.6 / PySide6 6.10.3 / python-can 4.6.1 / cantools 44.2.1 / pytest 9.1.1.
+새 라이브러리 설치·재설치·의존성/pyproject 변경 없음. 팀 고정 버전은 미확정이다.
+
+### Final actual results
+
+| 검증 | 이번 실행 결과 |
+|---|---|
+| 기존 suite 중간 확인 | 595 passed / 204.86s — 4열 Dashboard 최종 보완 전 기록 |
+| 최종 전체 pytest | **616 passed / 212.36s** — 기존595 + 신규 레이아웃21, fail/skip 없음 |
+| 신규 레이아웃 단독 | 21 passed / 6.54s — Header·9페이지 액션·접기·선택 버튼·소수 입력·Live 차단·Timestamp·긴 이름 |
+| Dashboard 보완 후 UI 회귀 | 47 passed / 21.08s — 기존 Workspace26 + 신규21, 기존 Assertion 그대로 |
+| CLI 별도 회귀 | **140 passed / 0.84s**, 기존 7개 모듈 |
+| CLI/GUI 모듈 진입점 | python -m pc_diagnostic --help / python -m pc_diagnostic.gui --help 종료0 |
+| CLI/GUI 설치 진입점 | can-diag / can-diag-gui --help 종료0 |
+| pip check | 종료0, No broken requirements found |
+| Windows Native 기존11종 | **11 PASS** — Raw / Decode / Vehicle / ECU / Logging / Fake Live / Graph / Fault / Automation / Workspace / Driver |
+| 신규 Windows Layout Native | **PASS** — windows platform, 9페이지×3크기, 액션 전체 rect48건 접근, Alt+1~9, 방향키, 접기/펼치기, 38 PNG |
+| 반복/종료 | Mock 3회 Start/Stop마다 새로운 수신, Clear, 활성 Worker Close 및 기존 Timer 종료 PASS |
+| Driver | 기존 Combo/Validation/Adapter 사용, 37.5 소수값 유지, Brake/Gear/Window/Light 버튼, Mock Accepted/ECU Response 분리, Live TX 차단 PASS |
+| Monitor/Decode | 기존 fixture STD/EXT·Channel·full Timestamp·선택 프레임·정상 Cache 유지, Raw 필터 기존 회귀 PASS |
+| Graph/Logging | Pause/Resume/Clear, Logging 동시 실행, CSV/JSONL 기존 CLI byte 계약 및 기존 파일 보호 Native PASS |
+| Automation | 기존 고정11 Scenario PASSED, 기대 불일치 FAILED·취소 CANCELLED 경로 Native PASS. 실제 HIL 결과 아님 |
+| Git / whitespace | git diff --check 종료0, Stage 비어 있음. 신규 UI 파일 별도 Syntax/whitespace 검사 |
+| 사용자 수동 UI 확인 | **NOT VERIFIED** — 이번 UI에 대한 사람의 확인을 받지 않았음 |
+| CANable / ECU / Hardware | **NOT VERIFIED / NOT RUN** — Mock/Fake 시험을 실기 성공으로 해석하지 않음 |
+
+pytest는 프로젝트의 쓰기 확인된 새 .test-tmp/phase3k2-*/ 하위 basetemp와 -p no:cacheprovider를 사용했다.
+Native는 QT_QPA_PLATFORM 없는 별도 Windows 프로세스에서 실행했다.
+설치 버전 조회에는 프로젝트 .venv를 사용했으며 패키지를 변경하지 않았다.
+
+### Actual layout / visual evidence
+
+| Qt 논리 창 크기 | 변경 전 본문 시작 | 변경 후 본문 시작 | 변경 전 viewport 높이 | 변경 후 viewport 높이 |
+|---|---|---|---|---|
+| 1280×920 | 260 | 173 | 548 | 701 |
+| 1024×768 | 260 | 173 | 396 | 549 |
+| 800×600 | 260 | 173 | 228 | 381 |
+
+Header 본체는 93 logical px다. 본문 시작은 페이지 제목/상단 상세 버튼을 포함한 위치다.
+viewport 증가는 빈 Activity 축소·여백 변화도 포함한다.
+실제 Windows 배율은 devicePixelRatio=1.5이며 800×600 logical 창 캡처는 1200×900 physical px다.
+모든 DPI/해상도 조합을 검증했다는 뜻이 아니다.
+
+최종 외부 증적 폴더의 verified-native/results.json, verified-native/polish/results.json 및 PNG를 사용한다.
+9페이지 각각 1280×920 / 1024×768 / 800×600의 실제 QWidget.grab() 캡처를 생성했다.
+페이지 바깥 수평 overflow는 이 27개 기본 화면에서0이었다. 표 자체의 가로/세로 스크롤은 유지한다.
+
+필수 캡처 파일(verified-native/polish/):
+
+- dashboard-1280x920.png
+- dashboard-800x600.png
+- driver-mock-1280x920.png
+- driver-mock-800x600.png
+- can-monitor-mock-decode-1280x920.png
+
+추가: dashboard-1024x768.png, 9페이지 기본 캡처, Vehicle/ECU/Fault mapping 접기,
+Automation description 펼치기, 긴 Message/Signal 표시, Live TX blocked, Activity error 표시.
+긴 이름 검증은 기존 TEST ONLY 항목의 표시 문자열 모의이며 DBC 파일/Signal 정의를 수정하지 않았다.
+전체 이름은 선택 문자열/tooltip에 보존한다. 실제 긴 Production DBC 이름 전수 검증은 NOT VERIFIED다.
+자동 캡처는 소스 Git 후보 밖의 증적 디렉터리에 보관하며 Commit 후보에 포함하지 않는다.
+
+### Reproduced issues / final retest
+
+- 초기 Header 재배치 후 offscreen에서 상태/카운터가 버튼과 같은 줄의 최소 폭을999px로 키웠다.
+  상태/카운터를 DBC 요약 줄로 옮겨 800px 기존 Assertion을 유지했다.
+- Dashboard 4열 도입 후 중간 전체 실행은 **615 passed / 1 failed**였다.
+  실패는 기존 test_dashboard_small_width_and_scroll_are_independent_from_other_pages이며 단독으로 재현했다.
+  실제 viewport623px, 카드 폭952px, 수평 scroll329px였다. 단순 대기 시간을 늘리지 않았다.
+  실제 viewport 기준700px 전환과 최소 너비 고정 해제로 수정했다.
+  중간 국소 재검증 실패도 최종 PASS와 구분한다.
+- 위 수정 후 기존 Workspace26+신규21=47 PASS, 최종 전체616 PASS,
+  기존 Native11종+신규 Layout Native1종을 다시 실행해 모두 통과했다.
+  기존 테스트 삭제/조건 완화는 없다.
+
+### Preservation / boundaries / remaining review
+
+작업 전후 SHA-256 대조로 D: 원본25개, 기존 리뷰2개, 다른 Worktree의 파일/HEAD/Status,
+임시 Excel, Git refs 및 기존 tracked tests의 보존을 확인했다.
+3K-1 MainWindow·MonitorFilter·Workspace pytest/Native 파일도 그대로다.
+Driver 기존 메서드는 UI refresh hook 추가를 제외하고 AST 비교상 동일하다.
+기존 README/검증/설계 기록을 유지하고 이번 절을 추가했다.
+
+통신/DBC/Signal Cache/ECU/Fault/Graph/Logging/Automation/Driver Model·Adapter는 변경하지 않았다.
+공통 DBC/Matrix/LDF/Routing/Requirements/ECU Firmware와 CLI Sender도 변경하지 않았다.
+0x600 미승인, VCU_Command(0x100) PC 송신 금지, TorqueRequest VCU 책임,
+Driver Live TX Blocked / Interface Pending을 유지한다. CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**다.
+
+미완료: 사용자 수동 사용성, 전체 DPI/OS 테마/Screen Reader, 실제 긴 Production DBC,
+실제 CANable/ECU/고부하·장시간 환경은 NOT VERIFIED다.
+팀 고정 버전/배포 라이선스/Fixture 재배포 승인·Production 의미/Interface Freeze는 미확정 또는 검토 필요다.
+담당자 코드 리뷰 NOT VERIFIED, Integration Merge 미실행이다.
+Network/KPI/실제 Fault Injection·Raw Pause·Decoded/Event export 등 기존 미구현 범위는 이번에 구현하지 않았다.
+Git add/Commit/Push/PR/Merge/Jira 등록·Done은 미실행이다.
+
+### Interrupted session resume verification (2026-10-17)
+
+사용 한도 중단 후 현재 디스크를 짧은 읽기 전용 명령으로 조사했다.
+Branch/HEAD는 위 기준과 동일하며 예상 밖 파일은 없었다. Source/Test 재구현·수정은 하지 않았다.
+
+- 새 Temp와 cacheprovider 비활성화로 재실행: **616 passed / 252.94s**.
+- CLI 별도 재실행: **140 passed / 1.25s**.
+- CLI/GUI 모듈 및 설치 진입점 --help, pip check 재실행: 모두 종료0.
+- 기존 Windows Native11종과 신규 Layout Native1종은 이번 재개에서 재실행하지 않았다.
+  verified-native의12개 종료0 로그가 최종 코드 저장(01:54:38) 이후인01:55:48~01:56:47에 생성됨을 확인했다.
+  9페이지×3크기, 주요 액션48건, Alt+1~9, 긴 이름, Mock/Live 차단 및 캡처38개 증적을 재검사했다.
+- 소스/테스트/설정/Fixture94개 해시를 기록했고 재개 중 코드 변화가 없음을 확인했다.
+- D: 원본25개, 리뷰2개, 다른 Worktree 추적 파일446개·HEAD·Status 및 Git refs가 작업 전 기준과 일치했다.
+  기존 tracked 테스트 및 3K-1의 MainWindow/MonitorFilter/Workspace pytest·Native 파일도 보존됐다.
+- README/VERIFICATION의 기존 기록은 바이트 단위로 보존했다.
+  ui_ux_redesign.md의 기존 절은 LF 정규화 후 원래 SHA-256과 일치한다. 중단 전 CRLF 정규화가 있었으며 내용 손실은 없다.
+- Git은 수정4개/미추적13개(리뷰2개 포함), Stage는 비어 있다. git diff --check 종료0.
+  Git의 LF→CRLF 정책 경고는 확인했으며 Git 설정·Stage·이력은 변경하지 않았다.
+- 재개 증적은 외부 UI 증적 폴더의 resume-fcaf5cb2/full.log, cli.log, pytest-results.json,
+  entry-pip-results.json, code-sha256.json을 사용한다. 소스 Commit 후보에 포함하지 않는다.
+
+사용자 수동 UI 확인·실제 CANable/ECU Hardware·담당자 코드 리뷰는 NOT VERIFIED다.
+PC 입력 CAN Interface는 승인 대기, GUI Driver 실제 CAN TX는 BLOCKED다.
+CAN/LIN Interface 변경은 상대 담당자 리뷰 필요이며 이번 UI 자동 검증은 승인 증거가 아니다.
+Git add/Commit/Push/PR/Merge/Jira Done은 실행하지 않았다.
