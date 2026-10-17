@@ -1556,3 +1556,35 @@ Windows 시험은 tests/gui_fault_injection_native_smoke.py --output-dir <새 �
 사용자 수동 UI·실제 CANable/ECU·담당자 코드 리뷰 NOT VERIFIED, 팀 고정 버전 미확정.
 Fixture 재배포 미승인, Driver Live TX BLOCKED, PC 입력 Interface 승인 대기를 유지한다.
 CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**다.
+
+
+## Phase 3N-1 — Ignition / Driver Control Mock UI
+
+Driver Control(Alt+2)에 **Ignition OFF / ON / RUN** 입력을 추가했다.
+기존 Accelerator Slider/소수 입력, Brake, Gear P/N/D/R, Window/Light와 같은
+Input Validation → DriverInputs → 메모리 Mock Adapter → Mock Result/History 경로를 사용한다.
+
+- Ignition은 내부 `str | None`이며 CAN Enum Encoding이 아니다. 미설정과 OFF를 구분한다.
+  초기/Reset은 기존 미설정 정책이다. Reset은 실제 Ignition OFF/차량 정지 명령이 아니다.
+- Apply는 PC request/Mock Accepted만 기록한다. ECU Applied/실제 VCU 상태 전이가 아니다.
+  Source 전환/Close는 기존 입력·결과 격리와 Adapter 정리를 유지한다.
+- **0x600 PC → VCU**는 이번 사용자 전달 팀 합의 사항이다.
+  기존 리뷰의 과거 미승인 후보 기록은 보존했다. Payload/DLC/Encoding/주기/Timeout/Alive/Fail-safe와
+  승인 산출물·Freeze는 별도 TBD/검토 필요다. **Live TX BLOCKED**를 유지한다.
+- User Requested / Mock Accepted / CAN TX Sent: Not sent / CAN RX Source / ECU Applied NOT VERIFIED를 구분한다.
+  0x100 수신이나0x110 RPM 변화로 명령 수락/정상 적용을 자동 판정하지 않는다.
+  기존 명시 DBC Decode/Cache/Vehicle/ECU/Fault/Graph가 관측 경로다.
+- 신규0x601,자동 ACK/재명령,VCU 상태 머신,Interlock,TorqueRequest 계산은 구현하지 않았다.
+- 기존9개 Navigation과Alt+1..9 유지.800×600에서는 페이지/표 스크롤과 전체 입력 tooltip을 사용한다.
+  실제 Windows Before3장/After21장과 동일 해상도 비교는 외부 증적에 보존했다.
+
+[입력 자료형·Reset 근거·0x600 결정 이력·기존 메시지 비교·UI 비교·Open](docs/driver_ignition_ui.md).
+신규 자동 시험은 tests/test_driver_ignition.py,tests/test_driver_ignition_view.py,
+Windows Native는 tests/gui_ignition_native_smoke.py --output-dir <새 증적 경로>다.
+최종 전체761/CLI140/Native16종 실제 결과는 VERIFICATION 최신 절 참조.
+
+기존 Phase3M-2 Mock Fault UI/Scenario Runner는 보존했다.
+실제 Fault_Status fixture/Scenario,Event/Replay/Resync는 Open이다.
+팀 고정 버전 미확정,담당자 코드 리뷰/사용자 수동 UI/실제 CANable·ECU Hardware NOT VERIFIED.
+CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**이며 핸드북4.2/5.5 절차를 적용한다.
+Git add/Commit/Push/PR/Merge/Jira Done 미실행.

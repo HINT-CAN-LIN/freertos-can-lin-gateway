@@ -99,7 +99,7 @@ def polish_mapping(view, *, ecu=False):
 def polish_driver(view):
     # 입력 모델/Validation을 복제하지 않고 기존 ComboBox를 버튼 표시의 기준으로 쓴다.
     view.choice_strips = {}
-    for name, choices in (("brake", ("OFF", "ON")), ("gear", ("P", "N", "D", "R"))):
+    for name, choices in (("ignition", ("OFF", "ON", "RUN")), ("brake", ("OFF", "ON")), ("gear", ("P", "N", "D", "R"))):
         combo = getattr(view, name + "_combo")
         strip = ChoiceStrip(combo, choices, view)
         form = view._input_boxes[0].layout()
@@ -117,7 +117,7 @@ def polish_driver(view):
         row.addWidget(strip)
         view.choice_strips[name] = strip
     layout, items = reset_page(view)
-    caption(layout, "MOCK / TEST ONLY · Live TX BLOCKED · Interface Pending")
+    caption(layout, "MOCK / TEST ONLY · 0x600 PC → VCU · Payload Pending · Live TX BLOCKED")
     put_item(layout, items[5])  # 주요 Apply / Reset을 입력 및 이력보다 먼저 노출한다.
     put_item(layout, items[3])
     result_box = items[6].widget()

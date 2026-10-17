@@ -2378,3 +2378,93 @@ Firmware와 기존 Adapter/Codec/Cache/CLI Sender/Logger/Network/Driver 계약�
 실제 Fault_Status fixture/Scenario와 Event/Replay/Resync 계약은 후속 Jira 검토 초안으로 남겼다.
 CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**, 핸드북4.2/5.5 Interface Change 절차 적용.
 Git add/Commit/Push/PR/Merge/Jira 등록·Done 미실행.
+
+
+## Phase 3N-1 — Ignition / Driver Control UI (2026-10-17)
+
+### Phase 3M-2 finalization / inherited evidence
+
+이번 시작 시 Branch PC-Diagnostic-Test/HEAD14e31ca40a3196222087fdf3184ab8b26088e77d,
+수정3개+신규6개/Stage 비어 있음을 확인했다.
+기존3M-2 최종735 PASS/CLI140 PASS/Windows Native15종 PASS 로그·캡처·final-results.json을 재확인했다.
+기존109개 Python Syntax,README/VERIFICATION 기존 바이트 prefix와 원본/다른 Worktree SHA를 확인했다.
+동일3M-2 기록을 다시 추가하거나 기존 Fault UI/Runner/테스트를 재작성하지 않았다.
+3M-2 실제 Fault_Status fixture/Scenario 및 Event/Replay/Resync는 계속 Open이다.
+
+### Implementation / observed fixes
+
+Ignition: DriverInputs 마지막 필드 str|None,OFF/ON/RUN만 허용,초기/Reset None.
+기존5개 위치 인자와 기존 Adapter 재사용. ECU 상태/Enum/Frame/Interlock/Torque 계산 없음.
+Driver UI는 기존 ChoiceStrip,Apply/Reset/Source/Close 경계를 재사용한다.
+0x600 사용자 전달 팀 합의(PC→VCU/Driver Input)와 Payload TBD/승인 산출물 미확보를 구분했다.
+기존 리뷰2개 및 임시 Excel은 수정하지 않았다. 실제 Live TX BLOCKED,0x601/자동ACK/재명령 없음.
+
+첫 기존 Driver/레이아웃 시험에서 새 Label의 owner.source_label AttributeError가 발생했다.
+존재하는 Driver model.source로 수정한 뒤 기존 Assertion을 그대로 재실행했다.
+신규 단축키 시험의3개 실패는 창 활성화 전 key event 조건이었다.
+기존 Native와 같은 activateWindow/raise/qWaitForWindowActive 선행 조건을 추가하고
+Alt+1..9 Assertion을 유지했다. 새26개 모두 통과했다.
+실제 캡처의 긴 History 입력은 Ignition 우선 요약/전체 원본 tooltip으로 보완했다.
+이후 전체/Native 결과를 아래 최종값으로 기록한다.
+
+### Final actual software verification
+
+최종 소스 변경 후 재실행:
+- 전체 pytest: **761 PASS /140.28s** = 기존735개 + 신규26개. 실패/Skip0.
+- 기존 CLI 별도 회귀: **140 PASS /1.24s**. 초기 Phase1/2 Git tree의8개 테스트 파일을 그대로 실행.
+- 신규 Ignition: Model18개 + GUI8개. OFF/ON/RUN,invalid,기존 위치 인자,
+  Apply/Reset/Adapter/History,동시 입력 보존,Source,Live Slot/Model 직접 차단,
+  세 해상도 주요 액션/9개Navigation,Mock RX와 요청 독립성/종료·새 창 초기화 확인.
+- Windows Native: **기존15종+신규Ignition1종=16종 PASS**,각 프로세스 exit0.
+  Raw/Decode/Vehicle/ECU/Logging/Fake Live/Graph/Fault/Automation11/Workspace/
+  Driver/Polish/Raw Pause Export/Network/Fault Injection/Ignition.
+- Logging CSV/JSONL 기존 CLI byte 호환,Graph/Export/Network/Fault TEST ONLY,
+  Fault Injection 기존3Scenario/동일 Runner/격리 History와 사용자 RX·Logging 보존 회귀 확인.
+- Ignition Native: OFF/ON/RUN,37.5%/Brake ON/Gear R/Window CLOSE/Light ON,
+  Apply/History,Live Slot·Model 차단,3회Start/Stop,활성Close와새 창초기화 확인.
+  관측한 물리 CAN Open 경계 **0회**,CAN TX 경계 **0회**.
+  can.Bus/BusABC.send/MockCanInterface.send/PythonCanInterface.send/RawCanSender.send를 trap으로 감시했다.
+  실제 Hardware Bus에 접속했다는 뜻이 아니다.
+- CLI/GUI 모듈 --help 및 설치 can-diag/can-diag-gui --help 모두 exit0.
+- pip check: exit0,No broken requirements found. 패키지 설치/재설치 없음.
+- Qt offscreen pytest/캐시 비활성화,전용 writable basetemp .test-tmp/phase3n1-final.
+  Native는 Windows platform 실제 창으로 별도 실행했다.
+- Python3.14.6/PySide66.10.3/python-can4.6.1/cantools44.2.1/pytest9.1.1 기존 환경 유지.
+  위 설치 버전은 팀 승인 고정 버전이 아니다.
+
+### Actual Windows captures / evidence
+
+외부 증적 hint48-phase3n1-20261017:
+- before/: **소스 수정 전**800×600/1024×768/1280×920 Driver Control3장.
+- native-verified/ignition/:최종OFF/ON/RUN/전체 입력/Mock Accepted/History/Live Blocked
+  7상태×3개 해상도=21장,result.json.
+- before_after.md:동일 해상도 Before/After 비교.
+- verified-tests-final/pytest-all.txt,cli140.txt,pytest-results.json:최종761/140.
+- native-verified/results.json 및16개 로그:최종Native16종.
+- entry-pip-results.json:모듈/설치 진입점/의존성 검사.
+- interface-source-rows.json,source-doc-sha256.json:읽기 전용 메시지 표/Routing 근거.
+- source-test-sha256.json,preservation.json,git-final.json:최종 코드/보존/Git 증적.
+- after-first/:History 표시 보완 전 중간캡처,최종과구분.
+
+Before/After actual QWidget.grab()를 시각 점검했다.
+800×600에서Apply/Reset/Ignition/Brake/Gear 접근 가능,Body/관측결과/History는기존스크롤 사용.
+큰 창에서는Driving/Body 분리 카드,새0x600안내/요청·수락·미송신·관측 경계 표시를 확인했다.
+History 전체 원본은 tooltip에 보존한다. 표가좁으면 scroll이 필요하며 모든행·필드가동시에보인다는주장없음.
+실제 logical size와PNG픽셀은Windows DPI배율에따라다르다.
+
+### Interface / review / preservation status
+
+현재 로컬 핸드북/02메시지 정의/DBC/Routing의0x120 송신자 Gateway 일치.
+Gateway_Status 설명의GatewayHealth/SystemState와실제DBC GatewayAlive/QueueUsage차이는검토필요.
+0x100 수신/0x110 RPM관측을0x600수락/성공으로상관시키지않는다.
+자세한Receiver/Signal/근거와Jira등록초안은 docs/driver_ignition_ui.md.
+원격 최신 Firmware/실제 Flash/버스 실측은 이번에검증하지않았다.
+팀 고정버전/배포승인/Production Payload/VCU초기값·Interlock·수락계약/Freeze 미확정.
+사용자 수동UI·담당자코드리뷰·실제CANable/ECU Hardware **NOT VERIFIED**.
+실제CAN TX **BLOCKED**. 새0x601미구현. 실제Fault_Status시험/Event Export/Replay/Resync Open유지.
+공통Matrix/DBC/LDF/Routing/Requirements/Firmware·기존테스트·기존Adapter/Codec/Cache/Sender/Logger미변경.
+기존리뷰2개·임시Excel·D:원본25개·다른Worktree446개/HEAD/Status/refs보존은최종SHA대조증적으로확인.
+README/VERIFICATION 기존바이트이력은보존해append했다.
+Git diff --check/Syntax/Markdown상대링크/변경목록/빈Stage최종점검.
+CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**,핸드북4.2/5.5 및CONTRIBUTING§5절차 적용.
+Git add/Commit/Push/PR/Merge/Jira등록·Done 미실행.

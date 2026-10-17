@@ -9,6 +9,7 @@ from time import time
 ACCELERATOR_MIN = 0.0
 ACCELERATOR_MAX = 100.0
 GEAR_CHOICES = ("P", "N", "D", "R")
+IGNITION_CHOICES = ("OFF", "ON", "RUN")  # 내부 문자열이며 CAN Enum Encoding은 TBD다.
 WINDOW_CHOICES = ("OPEN", "CLOSE")
 LIGHT_CHOICES = ("ON", "OFF")
 HISTORY_CAPACITY = 128  # PC 메모리 표시 상한; CAN 주기/Timeout과 무관하다.
@@ -33,6 +34,7 @@ class DriverInputs:
     gear: str | None = None
     window: str | None = None
     light: str | None = None
+    ignition: str | None = None  # 기존 위치 인자를 보존하기 위해 마지막에 추가한다.
 
     def validated(self):
         # 미선택과 OFF/0을 구분하고, 범위 밖 값을 조용히 보정하지 않는다.
@@ -43,7 +45,8 @@ class DriverInputs:
             raise ValueError("Accelerator must be a finite number in Mock range 0..100%.")
         if self.brake is not None and type(self.brake) is not bool:
             raise ValueError("Brake must be an explicit Mock ON/OFF value.")
-        for name, choices in (("gear", GEAR_CHOICES), ("window", WINDOW_CHOICES), ("light", LIGHT_CHOICES)):
+        for name, choices in (("gear", GEAR_CHOICES), ("window", WINDOW_CHOICES), ("light", LIGHT_CHOICES),
+                              ("ignition", IGNITION_CHOICES)):
             value = getattr(self, name)
             if value is not None and (type(value) is not str or value not in choices):
                 raise ValueError(f"Unsupported Mock {name} choice.")

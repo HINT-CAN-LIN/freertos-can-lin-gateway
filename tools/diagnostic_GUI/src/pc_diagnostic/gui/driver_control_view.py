@@ -5,10 +5,12 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFormLayout, QGridL
                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 from .theme import role
 from .ui_components import sync_driver_presentation
-from .driver_input import (DriverInputModel, DriverInputs, GEAR_CHOICES, HISTORY_CAPACITY,
+from .driver_input import (DriverInputModel, DriverInputs, GEAR_CHOICES, IGNITION_CHOICES, HISTORY_CAPACITY,
                            LIVE_MODE, MOCK_MODE, InputState, ACCELERATOR_MIN, ACCELERATOR_MAX)
 
 HISTORY_HEADERS = ("PC Time", "Source", "Action", "Inputs", "Result / Error")
+HISTORY_COLUMN_WIDTHS = (140, 160, 110, 360, 240)  # PC 표시 폭이며 CAN 수치와 무관하다.
+HISTORY_ROW_HEIGHT = 72
 
 
 class DriverControlView(QWidget):
@@ -20,19 +22,22 @@ class DriverControlView(QWidget):
         layout = QVBoxLayout(self)
         self.policy_label = QLabel(
             "DEMO / TEST ONLY · 메모리 Mock 입력만 처리 · 물리 CAN 송신 없음\n"
-            "0–100% / Brake ON·OFF / P·N·D·R / OPEN·CLOSE / ON·OFF는 Mock 정책입니다.\n"
+            "Ignition OFF·ON·RUN / 0–100% / Brake ON·OFF / P·N·D·R / OPEN·CLOSE / ON·OFF는 Mock 정책입니다.\n"
             "동시 Accelerator+Brake는 그대로 기록하며 제어 우선순위는 VCU 검토 필요입니다.")
         self.policy_label.setWordWrap(True)
         layout.addWidget(self.policy_label)
         self.source_label = role(QLabel(), "badge")
         self.source_label.setWordWrap(True)
-        self.approval_label = QLabel(self.model.approval_status + " · PC 입력 CAN ID/Payload/주기/Timeout 미승인")
+        self.approval_label = QLabel(self.model.approval_status + " · 0x600 PC → VCU: 사용자 전달 팀 합의 / Payload·주기·Timeout TBD")
         self.approval_label.setWordWrap(True)
         role(self.approval_label, "warning")
         layout.addWidget(self.source_label)
         layout.addWidget(self.approval_label)
         driving_box = QGroupBox("Driving inputs — Mock only")
         form = QFormLayout(driving_box)
+        self.ignition_combo = self._choices(IGNITION_CHOICES)
+        self.ignition_combo.setAccessibleName("Ignition Mock OFF ON RUN")
+        form.addRow("Ignition (Mock choice)", self.ignition_combo)
         self.accelerator_edit = QLineEdit()
         self.accelerator_edit.setPlaceholderText("미설정 · Mock % (0..100)")
         self.accelerator_slider = QSlider(Qt.Orientation.Horizontal)
@@ -92,6 +97,9 @@ class DriverControlView(QWidget):
         self.ecu_label.setWordWrap(True)
         result_box = QGroupBox("Request result / ECU response")
         result_layout = QVBoxLayout(result_box)
+        self.observation_label = QLabel()
+        self.observation_label.setWordWrap(True)
+        result_layout.addWidget(self.observation_label)
         for label in (self.state_label, self.accepted_label, self.ecu_label, self.error_label):
             result_layout.addWidget(label)
         layout.addWidget(result_box)
@@ -99,14 +107,17 @@ class DriverControlView(QWidget):
         self.history_table.setHorizontalHeaderLabels(HISTORY_HEADERS)
         self.history_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.history_table.horizontalHeader().setStretchLastSection(True)
+        for column, width in enumerate(HISTORY_COLUMN_WIDTHS):
+            self.history_table.setColumnWidth(column, width)
+        self.history_table.verticalHeader().setDefaultSectionSize(HISTORY_ROW_HEIGHT)
         layout.addWidget(QLabel(f"PC 내부 입력 이력 · 최대 {HISTORY_CAPACITY}건 · CAN Logger/ECU 수신 기록과 별도"))
         layout.addWidget(self.history_table, 1)
-        self._widgets = (self.accelerator_edit, self.accelerator_slider, self.brake_combo, self.gear_combo,
+        self._widgets = (self.ignition_combo, self.accelerator_edit, self.accelerator_slider, self.brake_combo, self.gear_combo,
                          self.window_combo, self.light_combo, self.window_open_button, self.window_close_button,
                          self.light_on_button, self.light_off_button)
         self.accelerator_slider.valueChanged.connect(self.slider_changed)
         self.accelerator_edit.textChanged.connect(self.edit_inputs)
-        for combo in (self.brake_combo, self.gear_combo, self.window_combo, self.light_combo):
+        for combo in (self.ignition_combo, self.brake_combo, self.gear_combo, self.window_combo, self.light_combo):
             combo.currentIndexChanged.connect(self.edit_inputs)
         self.window_open_button.clicked.connect(lambda: self.choose_body(self.window_combo, "OPEN"))
         self.window_close_button.clicked.connect(lambda: self.choose_body(self.window_combo, "CLOSE"))
@@ -164,7 +175,7 @@ class DriverControlView(QWidget):
         brake = self.brake_combo.currentData()
         return DriverInputs(accelerator, None if brake is None else brake == "ON",
                             self.gear_combo.currentData(), self.window_combo.currentData(),
-                            self.light_combo.currentData())
+                            self.light_combo.currentData(), ignition=self.ignition_combo.currentData())
 
     def edit_inputs(self):
         # 메인 스레드의 편집을 독립 모델에 전달하고 실제 ECU Cache는 갱신하지 않는다.
@@ -193,7 +204,7 @@ class DriverControlView(QWidget):
         blockers = [QSignalBlocker(widget) for widget in self._widgets]
         self.accelerator_edit.clear()
         self.accelerator_slider.setValue(int(ACCELERATOR_MIN))
-        for combo in (self.brake_combo, self.gear_combo, self.window_combo, self.light_combo):
+        for combo in (self.ignition_combo, self.brake_combo, self.gear_combo, self.window_combo, self.light_combo):
             combo.setCurrentIndex(0)
         del blockers
 
@@ -226,6 +237,12 @@ class DriverControlView(QWidget):
         self.accelerator_value_label.setText(f"{text} % Mock" if text else "Not Configured")
         self.brake_combo.setAccessibleName("Brake Mock OFF or ON")
         self.gear_combo.setAccessibleName("Gear Mock choice")
+        # RX 카운트는 관측 사실만 표시하며 요청 수락/ECU 적용과 연관 짓지 않는다.
+        requested = any(record.action == "request" for record in self.model.history)
+        self.observation_label.setText(
+            f"User Requested: {'Yes / Mock only' if requested else 'No Data'} · CAN TX Sent: Not sent\n"
+            f"CAN RX: {self.owner.buffer.total_received} frames · {self.model.source}\n"
+            "ECU Applied: NOT VERIFIED · VCU/Motor/Fault: 명시 매핑 관측 화면에서 확인 · 요청과 자동 연관 없음")
         self.source_label.setText(f"Input Source: {self.model.source} · {self.model.mode}")
         self.state_label.setText(f"Request State: {self.model.state.value} · Applied to Mock: {self.model.applied}")
         receipt = self.model.last_accepted
@@ -241,12 +258,26 @@ class DriverControlView(QWidget):
         self.history_table.setRowCount(len(history))
         for row, record in enumerate(history):
             cells = ("unknown" if record.timestamp is None else f"{record.timestamp:.6f}",
-                     record.source, record.action, str(record.inputs) if record.inputs else "Not Configured",
+                     record.source, record.action, input_summary(record.inputs),
                      record.state.value + (f" · {record.error}" if record.error else ""))
             for column, cell in enumerate(cells):
-                self.history_table.setItem(row, column, QTableWidgetItem(cell))
+                item = QTableWidgetItem(cell)
+                item.setToolTip(str(record.inputs) if column == 3 and record.inputs else cell)
+                self.history_table.setItem(row, column, item)
 
     def close_view(self):
         # 종료 후 재진입을 막고 메모리 Adapter를 정리한다. 추가 Thread/Timer는 없다.
         self.model.close()
         self.refresh()
+
+
+def input_summary(inputs):
+    # 이력의 입력을 사람이 읽을 수 있게 표시하며 원본 불변 객체는 tooltip에 보존한다.
+    if inputs is None:
+        return "Not Configured"
+    ignition = inputs.ignition if inputs.ignition is not None else "Not Configured"
+    accelerator = f"{inputs.accelerator:g}%" if inputs.accelerator is not None else "Not Configured"
+    brake = "Not Configured" if inputs.brake is None else ("ON" if inputs.brake else "OFF")
+    return (f"Ignition={ignition} · Accelerator={accelerator}\n"
+            f"Brake={brake} · Gear={inputs.gear or 'Not Configured'}\n"
+            f"Window={inputs.window or 'Not Configured'} · Light={inputs.light or 'Not Configured'}")
