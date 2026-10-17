@@ -23,7 +23,7 @@ class ExportSnapshot:
     @property
     def row_count(self):
         # Signal 수만 세며 직렬화/파일 I/O는 Writer에 맡긴다.
-        if self.kind == "fault":
+        if self.kind in ("fault", "network"):
             return len(self.records)
         return sum(max(1, len(decoded_signals(record.observation))) for record in self.records)
 
@@ -78,6 +78,10 @@ def export_rows(snapshot):
             for name, value in signals.items() if signals else ((None, None),):
                 yield {**base, "source_mode": record.source_mode, "signal_name": name,
                        "decoded_value": value, "unit": observation.units.get(name)}
+    elif snapshot.kind == "network":
+        # Network 모델이 고정한 유한 flat metadata를 그대로 기록한다.
+        for record in snapshot.records:
+            yield dict(record)
     elif snapshot.kind == "fault":
         for entry in snapshot.records:
             base = base_record(entry.frame, kind="fault_observation", source=entry.source,
@@ -101,7 +105,8 @@ class SnapshotFileWriter:
     def write(self, snapshot):
         # 기존 LoggingSession writer에서만 실행한다. 부분 실패는 정상 완료로 계수하지 않는다.
         if self.format == "csv":
-            fields = DECODED_FIELDS if snapshot.kind == "decoded" else FAULT_FIELDS
+            fields = (tuple(snapshot.records[0]) if snapshot.kind == "network" else
+                      DECODED_FIELDS if snapshot.kind == "decoded" else FAULT_FIELDS)
             writer = csv.DictWriter(self.stream, fieldnames=fields)
             writer.writeheader()
         for row in export_rows(snapshot):
@@ -130,7 +135,7 @@ class ObservationExport:
         # 이미 진행 중이면 불변 snapshot을 바꾸지 않고 중복 Export를 거부한다.
         if self.writer.snapshot().active:
             return False
-        if snapshot.kind not in ("decoded", "fault") or not snapshot.records:
+        if snapshot.kind not in ("decoded", "fault", "network") or not snapshot.records:
             raise ValueError("No Data: export snapshot is empty or unsupported.")
         self.snapshot = snapshot
         if not self.writer.start(path, format=format):

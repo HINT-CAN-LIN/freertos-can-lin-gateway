@@ -1,6 +1,7 @@
 """기존 화면 snapshot의 읽기 전용 요약. ECU Health/Fault/KPI를 판정하지 않는다."""
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QLayout, QSizePolicy, QVBoxLayout, QWidget
 from .theme import role
+from .network_view import NetworkView
 from .ui_components import Disclosure
 from PySide6.QtWidgets import QWidgetItem
 
@@ -60,8 +61,11 @@ class DashboardView(QWidget):
             self._boxes.append(box)
         layout.addLayout(self.summary_grid)
         layout.addLayout(self.grid)
+        self.network_view = NetworkView(owner, self)
+        self.network_section = Disclosure(self, layout, "Network / KPI — observed RX",
+                                         [QWidgetItem(self.network_view)])
         self.scope_label = role(QLabel(
-            "Network / KPI: Not Implemented · 실제 Fault Injection: Not Implemented\n"
+            "Network / KPI: observed RX panel above · 실제 Fault Injection: Not Implemented\n"
             "Driver Control: Mock only / Live TX Blocked / Interface Pending"), "warning")
         self.scope_label.setWordWrap(True)
         layout.addWidget(self.scope_label)
@@ -97,6 +101,7 @@ class DashboardView(QWidget):
     def refresh(self):
         # 기존 표시/immutable snapshot만 읽는다. CAN/DBC 해석이나 ECU 추론은 하지 않는다.
         owner = self.owner
+        self.network_view.refresh()
         self.source_label.setText(owner.selected_source_text())
         self.cards["connection"][0].setText(owner.status_label.text())
         self.cards["connection"][1].setText("선택 Source와 연결 성공은 별개 · " + owner.connection_view.status_label.text())

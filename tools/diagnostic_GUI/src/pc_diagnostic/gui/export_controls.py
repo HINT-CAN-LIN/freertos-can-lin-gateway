@@ -1,6 +1,6 @@
 """명시적 파일 선택과 Export 상태 표시. 수신/Decode/Logger를 중지하지 않는다."""
 from PySide6.QtWidgets import QComboBox, QFileDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
-from .observation_export import ObservationExport, decoded_snapshot, fault_snapshot
+from .observation_export import ObservationExport, ExportSnapshot, decoded_snapshot, fault_snapshot
 from .logging_session import LOG_CLOSE_SECONDS
 from .theme import role
 from .ui_components import ElidedLabel
@@ -15,7 +15,8 @@ class ExportControls:
         self.notice = None
         self.close_notice = None
         self.widgets = {}
-        for kind, page in (("decoded", owner.monitor_page), ("fault", owner.fault_monitor_view)):
+        for kind, page in (("decoded", owner.monitor_page), ("fault", owner.fault_monitor_view),
+                           ("network", owner.dashboard_view.network_view)):
             widget = QWidget(page)
             layout = QVBoxLayout(widget)
             layout.setContentsMargins(0, 0, 0, 0)
@@ -26,7 +27,8 @@ class ExportControls:
             combo.addItem("CSV", "csv")
             combo.setMaximumWidth(100)
             combo.setAccessibleName(kind + " export format")
-            button = QPushButton("Export Decoded..." if kind == "decoded" else "Export Fault History...")
+            button = QPushButton({"decoded": "Export Decoded...", "fault": "Export Fault History...",
+                                  "network": "Export Network KPI..."}[kind])
             button.setAccessibleName(kind + " export")
             state = ElidedLabel()
             row.addWidget(combo)
@@ -47,6 +49,11 @@ class ExportControls:
             return decoded_snapshot(self.owner.raw_history, self.owner.decode_session)
         if kind == "fault":
             return fault_snapshot(self.owner.fault_monitor_view.model)
+        if kind == "network":
+            records = self.owner.network_model.snapshot_records(self.owner.decode_session.loader)
+            if not records:
+                raise ValueError("No Data: no retained Network identities.")
+            return ExportSnapshot("network", records)
         raise ValueError("unsupported export kind")
 
     def export_to(self, kind, path, *, format="jsonl"):
@@ -96,10 +103,13 @@ class ExportControls:
                 count, rows, detail = 0, 0, str(exc)
             else:
                 count, rows = len(snapshot.records), snapshot.row_count
-                detail = "current DBC session RX" if kind == "decoded" else "all retained Fault observations"
+                detail = {"decoded": "current DBC session RX", "fault": "all retained Fault observations",
+                          "network": "processed RX identity aggregates / current statistics interval"}[kind]
             button.setEnabled(bool(count) and not self.selecting and not state.active and not self.owner._closing)
             combo.setEnabled(not self.selecting and not state.active and not self.owner._closing)
-            extra = " | Event store: Not Implemented; no reconstructed events" if kind == "fault" else " | all retained frames; display filters ignored"
+            extra = (" | Event store: Not Implemented; no reconstructed events" if kind == "fault" else
+                     " | Hardware NOT VERIFIED; Jitter Definition Pending" if kind == "network" else
+                     " | all retained frames; display filters ignored")
             scope.setText(f"{count} records / {rows} rows · {detail}" + extra)
             summary = f"Export: {state.state.value}"
             if state.error:

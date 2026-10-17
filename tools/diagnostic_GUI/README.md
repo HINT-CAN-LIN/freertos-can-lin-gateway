@@ -1491,3 +1491,35 @@ Windows 시험은 tests/gui_pause_export_native_smoke.py --output-dir <새 증�
 사용자 수동 UI, 실제 ACL/디스크 고갈·고속 장시간, CANable/ECU Hardware는 NOT VERIFIED.
 팀 고정 버전은 미확정이며 담당자 코드 리뷰 NOT VERIFIED다. Driver Live TX BLOCKED /
 Interface Pending 유지. 공통 CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**다.
+
+
+## Phase 3L-2 — CAN Network / KPI Observation (2026-10-17)
+
+Dashboard에서 **Network / KPI — observed RX**를 펼치면 CAN 관측 통계를 확인할 수 있다.
+기존9개 Navigation/Alt+1~9, 실행 명령·의존성·CAN 송신 차단 정책은 유지한다.
+
+- 처리된 RX Count, 보관 ID/STD·EXT/Channel별 Count, 첫/마지막 Timestamp,
+  수신 간격 평균·최소·최대·마지막, 관측 span 및 interval 기반 Frame Rate.
+- Source와 Channel/ID/STD·EXT/RTR/Error를 분리한다. Mock/Fake Live는 TEST ONLY다.
+  기존 Raw500행과 별개로 최대512 identity를 상수 공간으로 집계한다.
+- 실제 로드한 DBC의 Cyclic/GenMsgCycleTime metadata만 Expected Period로 사용한다.
+  정의서와 현재 DBC의6개 메시지를 비교했다. Fault_Status는 Event로 Expected Period를 적용하지 않는다.
+  TEST ONLY fixture의 미정의 주기를 추정하지 않는다. 비교 차이는 공식 Jitter/Threshold PASS가 아니다.
+- Timestamp 누락·중복·역전, GUI Drop/키 상한 제외에는 timing N/A를 표시하고 실제 Count는 보존한다.
+  Stop/Start 미관측 구간은 간격에서 제외한다. Clear/Source/DBC reload는 기존 ECU 통계처럼 새 구간이다.
+- **Jitter Definition Pending, Bus Load N/A, Controller state Unsupported**.
+  CAN Error Frame은 Backend가 제공한 처리 RX flag만 세며 ECU/Bus Health를 판정하지 않는다.
+- Export Network KPI...에서 CSV/JSONL 새 파일을 명시적으로 선택한다.
+  한 행은 보관 identity별 집계이며 전체 Bus capture가 아니다.
+  기존 Observation Export의 파일 보호·부분 실패·비동기 Writer·종료 재시도를 재사용한다.
+  덮어쓰기/Append 미지원, No Data는 파일을 만들지 않는다.
+
+[계산 정의·Timestamp 조사·Expected 근거·schema·수명주기·Open 항목](docs/network_kpi_observation.md)을 확인한다.
+신규 tests/test_network_statistics.py, tests/test_network_view.py와
+tests/gui_network_native_smoke.py --output-dir <새 증적 폴더>는 Mock/Fake TEST ONLY 시험이다.
+기존 전용 basetemp 및 -p no:cacheprovider를 사용한다. 실제 실행 결과는 VERIFICATION 최신 절을 참조한다.
+
+실제 CANable/ECU·사용자 수동 UI·담당자 코드 리뷰 NOT VERIFIED. 팀 고정 버전 미확정.
+송신 Task Jitter/Hardware Performance/무손실 수신으로 해석하지 않는다.
+PC 입력 Interface 승인 대기, Driver 실제 CAN TX BLOCKED, Event Export Open을 유지한다.
+CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**다.

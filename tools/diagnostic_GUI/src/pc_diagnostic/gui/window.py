@@ -9,6 +9,7 @@ from ..dbc_loader import DbcLoadError
 from ..interfaces import MockCanInterface
 from .buffer import FrameBuffer
 from .monitor_history import ObservationHistory
+from .network_statistics import NetworkStatisticsModel
 from .export_controls import ExportControls
 from .connection import LIVE_MODE, MOCK_MODE, MOCK_SOURCE_LABEL, open_live_interface
 from .connection_view import ConnectionView
@@ -85,6 +86,7 @@ class MainWindow(QMainWindow):
         self.raw_history = ObservationHistory(MAX_TABLE_ROWS)
         self.raw_paused = False
         self.decode_session = DecodeSession()
+        self.network_model = NetworkStatisticsModel()
         self.logging_session = LoggingSession()
         self.worker = None
         self._failed = False
@@ -183,6 +185,7 @@ class MainWindow(QMainWindow):
         self.error_area.document().setMaximumBlockCount(MAX_ERROR_LINES)
         self.error_area.setMaximumHeight(80)
         layout.addWidget(self.error_area)
+        self.reset_network_statistics()
         install_workspace(self, layout)
         raw_actions = QHBoxLayout()
         self.pause_button = QPushButton("Pause Raw display")
@@ -229,6 +232,18 @@ class MainWindow(QMainWindow):
         active = self.worker is not None and self.stop_button.isEnabled() and not self._failed and not self._closing
         # Mock admission 계약은 유지하되 Live 기록은 실제 open 완료 후만 허용한다.
         return active and (self.connection_view.mode_combo.currentText() == MOCK_MODE or self.worker.ready.is_set())
+
+    def reset_network_statistics(self):
+        # 기존 ECU 통계처럼 Clear/Source/DBC 변경을 새 구간으로 구분한다.
+        mode = self.connection_view.mode_combo.currentText()
+        injected = mode == LIVE_MODE and self._live_interface_factory is not open_live_interface
+        kind = "Mock / TEST ONLY" if mode == MOCK_MODE else ("Injected Live / TEST ONLY" if injected else "Live RX / Hardware NOT VERIFIED")
+        stamp = ("demo.make_demo_frame / time.time() seconds; wall clock may adjust"
+                 if mode == MOCK_MODE else
+                 "Injected frame.timestamp seconds; clock unspecified" if injected else
+                 "python-can Message.timestamp passthrough seconds; backend clock/accuracy unverified")
+        self.network_model.clear(source=self._source_text, source_kind=kind,
+                                 timestamp_source=stamp, dropped_baseline=self.buffer.dropped)
 
     def selected_source_text(self):
         # 주입된 시험 backend는 모든 주요 화면에서 TEST ONLY로 식별한다.
@@ -334,6 +349,7 @@ class MainWindow(QMainWindow):
             status = self.decode_session.loader.status
             self.dbc_label.setText(f"DBC: {status.path.name} | Loaded ({status.message_count} messages) | Decode enabled · {self.dbc_source_text()}")
             success = True
+        self.reset_network_statistics()
         self.show_selection()
         self.vehicle_view.refresh()
         self.ecu_view.refresh()
@@ -353,6 +369,7 @@ class MainWindow(QMainWindow):
             return
         factory = self._interface_factory if settings.mode == MOCK_MODE else lambda: self._live_interface_factory(settings)
         self.fault_monitor_view.begin_receiver(pending_prior=self.buffer.pending_count > 0)
+        self.network_model.begin_receiver(pending_prior=self.buffer.pending_count > 0)
         self._failed = False
         self.error_area.clear()
         self.worker = ReceiveWorker(self.buffer, factory, self,
@@ -425,9 +442,11 @@ class MainWindow(QMainWindow):
         if self._closing:
             return
         frames, total, dropped = self.buffer.drain()
+        self.network_model.note_buffer_drop(dropped)
         self.graph_view.note_buffer_drop(dropped)
         self.fault_monitor_view.note_buffer_drop(dropped)
         for frame in frames:
+            self.network_model.record(frame)
             self.vehicle_view.observe_channel(frame.channel)
             observation = self.decode_session.process(frame)
             self.ecu_view.record(observation)
@@ -582,6 +601,7 @@ class MainWindow(QMainWindow):
             return
         self.buffer.clear()
         self.raw_history.clear()
+        self.reset_network_statistics()
         self.table.setRowCount(0)
         self._processed = 0
         self.counter_label.setText("Received: 0")

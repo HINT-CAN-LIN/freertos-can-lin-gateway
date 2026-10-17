@@ -2107,3 +2107,139 @@ Firmware, CLI Sender/Adapter/Codec/Cache/Logger 계약과 의존성은 변경하
 CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**다.
 Event 저장소·Event schema/원천/시각/상태 계약은 후속 팀 결정 필요이며 이번에 새로 구현하지 않았다.
 Git add/Commit/Push/PR/Merge/Jira 등록·Done은 실행하지 않았다.
+
+
+## Phase 3L-2 — CAN Network / KPI Observation (2026-10-17)
+
+### Scope / source evidence
+
+기준 PC-Diagnostic-Test / cdc3598dd1a896b9927373cab11708f5b0baf94b, 시작 Working Tree clean.
+기존 Raw Pause/Decode/Fault Export를 보존하고 NetworkStatisticsModel, Dashboard 내부 패널,
+identity 집계 CSV/JSONL Export를 추가했다. 기존9개 Navigation/Alt+1~9/탭 index는 그대로다.
+상세 정의/근거/전체 schema/Open은 docs/network_kpi_observation.md에 기록했다.
+
+조사 근거는 코드와 문서로 구분했다:
+- 코드: Worker frame_sink→GUI buffer512/drop-oldest→drain100→Decode/Cache/Graph/Fault/Raw500;
+  Network는 동일 drain의 Raw 객체를 한 번 계수한다. Raw Logger는 GUI Drop 이전 경로로 독립 기록한다.
+- 코드: demo.make_demo_frame=time.time() 초, PythonCanInterface는 message.timestamp passthrough.
+  설치 python-can4.6.1 slcan.py:328은 host time.time(), gs_usb.py:150~151은 하위 frame.timestamp 전달이다.
+  실제 장치 clock/epoch/정확도는 NOT VERIFIED. FakeLive fixture의 반복 Timestamp도 실기값이 아니다.
+- 문서: 메시지 정의서 CAN_Message_Definition B6:G11과 현재 DBC BO_/SourceTxType/GenMsgCycleTime의
+  VCU0x100/10ms, Motor0x110/10ms, Vehicle0x120/20ms, Body0x200/100ms,
+  Gateway0x300/100ms, Fault0x310/Event가 이 비교 범위에서 일치한다. 모두 STD/DLC8이다.
+- 문서: 핸드북11.2/12.4(p29/32)는 Jitter 권장 예시 목표와 기록 항목을 제시하지만
+  공식 산식/표본 창/clock/판정 기준은 확정하지 않는다. 요구사항 SYS_REQ_036은 목표/실제 결과 구분을 요구한다.
+- Routing v0.4의 Interface_Ref/CAN_to_LIN은 참고 비교했다. LIN slot/명령 주기를 CAN 관측 KPI로 바꾸지 않았다.
+
+Expected Period는 프로그램에 프로젝트 ID/수치를 하드코딩하지 않고 **사용자가 로드한 실제 DBC**
+Cyclic+양수 GenMsgCycleTime에서만 읽는다. TEST ONLY fixture에는 주기가 없어 Definition Pending이다.
+Fault_Status는 Event라서 Expected/편차 null이다. Interface 승인/Freeze 완료를 뜻하지 않는다.
+
+### Implemented behavior and limits
+
+Network는 Source·Channel 타입·ID·STD/EXT·RTR/Error를 구분하고 Processed RX/보관 ID/identity Count,
+첫/마지막 시각과 양수 연속 간격의 평균/최소/최대/마지막, 관측 span, interval 기반 Rate를 제공한다.
+최대512 identity/키당 상수 공간이며 Raw500행 이후에도 집계를 유지한다.
+
+Stop/Start Count는 유지하고 run 경계에서 간격 연결만 끊어 미관측 정지시간을 포함하지 않는다.
+span=sum(valid within-run deltas), Rate=interval_count/span이다. 전역 mixed-channel span/Rate는 계산하지 않는다.
+Clear/Source/DBC reload는 기존 ECU 통계처럼 새 구간이다. Raw Pause 중 집계/Decode/Cache/Graph/Logging은 계속된다.
+Timestamp 누락/중복/역전/overflow, GUI Drop/키 상한 제외/분리 못한 이전 run backlog에는 timing N/A다.
+Count/원본 Timestamp와 이상 계수는 남긴다. GUI Drop을 실제 Bus packet loss로 계산하지 않는다.
+
+Jitter Definition Pending, Bus Load N/A/null, Controller state/Bus-Off/Error Passive Unsupported.
+Error Frame은 Backend 제공 flag의 처리 RX 수만 센다. Error0/Observed를 Healthy로 해석하지 않는다.
+관측 평균-Expected는 산술 차이이며 Jitter/Threshold PASS가 아니다.
+Hardware 및 clock accuracy는 항상 NOT VERIFIED다.
+
+기존 ObservationExport/LoggingSession Writer의 exclusive-create, UTF-8 CSV/JSONL, null,
+불변 snapshot, 부분 파일/오류, 첫 Error Close 창 유지·재시도 계약을 재사용했다.
+Raw Logger/CLI CSV·JSONL 계약과 Thread/Timer 정책은 변경하지 않았다.
+Decoded/Fault/Network Export는 공통 단일 작업 잠금을 사용한다. Event Export는 계속 Open이다.
+
+### Actual environment and final runs
+
+기존 .venv 조회: Python3.14.6 / PySide6 6.10.3 / python-can4.6.1 / cantools44.2.1 / pytest9.1.1.
+패키지 설치/재설치·pyproject 변경 없음. 팀 고정 승인 버전은 미확정이다.
+
+| 검증 | 이번 실제 결과 |
+|---|---|
+| 신규 모델/GUI 단독 중간 | 39 passed /14.72s — Raw500 이후 집계 시험1개 추가 전 |
+| 최종 전체 pytest | **699 passed /85.79s**, 기존659 + 신규40, fail/skip 없음 |
+| 기존 Phase1/2 CLI 별도 | **140 passed /0.69s**, 초기 Commit tree의 기존 테스트 파일 사용 |
+| CLI/GUI 모듈 --help | 각각 종료0 |
+| can-diag / can-diag-gui 설치 진입점 --help | 각각 종료0 |
+| pip check | 종료0, No broken requirements found |
+| Windows Native 기존13종 | **13 PASS** — Raw/Decode/Vehicle/ECU/Logging/Fake Live/Graph/Fault/Automation/Workspace/Driver/Polish/Pause Export |
+| 신규 Network Windows Native 최종 | **PASS** — Mock/Fake TEST ONLY,3크기/주기·Event/Export/Drop/종료 |
+| 기존9페이지 UI | 3크기·주요 액션48건·Alt+1~9·긴 이름·Live TX Blocked 재검증 PASS |
+| Hardware / 사용자 수동 UI | **NOT VERIFIED / NOT RUN** |
+
+pytest는 쓰기 확인한 .test-tmp/phase3l2-final/ 아래 별도 basetemp와 -p no:cacheprovider,
+QT_QPA_PLATFORM=offscreen을 사용했다. Native는 QT_QPA_PLATFORM 없는 실제 windows platform 프로세스다.
+신규40개는 모델/GUI2개 pytest 모듈이다. 신규 Native script는 별도1종이며 pytest 수에 포함하지 않는다.
+
+핵심 검증:
+- 첫 Frame N/A, 반복/서로 다른 간격의 독립 계산값, Channel int0/str"0"/null 분리,
+  동일 숫자ID STD/EXT·RTR·Error 분리, TX 제외/실제 Error flag Count.
+- Timestamp 누락/중복/역전/누적 overflow, 매우 작은 양수 간격 reciprocal의 Infinity 방지.
+  원래 시각/Count 보존, 부적합 시간 통계 null, JSON NaN/Infinity 없음.
+- 512 buffer에서520개를 주입해 실제8개 drop 재현, 처리512와 Received520 구분,
+  timing N/A 및 Raw500 유지. Drop 없는600개 처리에서도 Count600/interval599/Raw500 유지.
+- Stop/Start gap 제외, 이전 run pending N/A, Clear/Source/DBC reload, immutable snapshot 격리.
+- 현재 Repository DBC6개 Message의 실제 cycle/Event 비교, TEST ONLY metadata 부재 및 No DBC.
+- Raw Pause 중 Network/Cache/Graph/기존 Logger 독립, 기존 Automation11 Scenario 및 Driver Validation/TX 차단 회귀.
+- Network CSV/JSONL 값/행 수, Empty/명시적 경로/모달 Source 변경, 기존 파일 보호,
+  Write 부분 실패/Close 오류 첫 창 유지 및 재시도.
+- 기존 Native의 Raw Logging CSV/JSONL CLI byte 호환성 및 Fake Live 송신 호출0/해제 검증.
+- 새 Native: CSV/JSONL 각2 identity 행, Fake/Mock 분리, 실제 CAN backend 호출0,
+  active Close에서 Receiver/기존 Timer/Writer 종료. 실제 Hardware KPI 결과가 아니다.
+
+### Initial failures and correction
+
+새 단위 시험의 overflow 입력에 음수 Timestamp를 사용해 기존 RawCanFrame이 먼저 거부했다.
+기존 Frame 계약을 바꾸지 않고 유효한 비음수 Timestamp의 누적 overflow 시퀀스로 신규 시험만 수정했다.
+새 GUI Fake 시험도 기존 window_factory가 지원하지 않는 keyword를 사용했다.
+기존 select_live(window,factory) 도우미를 사용하도록 신규 시험만 보완했다. 기존 테스트는 수정하지 않았다.
+
+최초 전체 실행은 **586 passed /113 setup errors /77.94s**였다.
+실행 명령이 basetemp 상위 .test-tmp/phase3l2-final을 만들지 않아 WinError3가 발생했다.
+제품/테스트 결함으로 단정하지 않았다. 새 상위 폴더를 생성하고 exclusive write-probe로 쓰기를 확인한 뒤
+코드/Assertion 변경 없이 전체를 재실행해699 PASS, CLI140 PASS를 얻었다.
+실패 로그는 증적 루트에 남기고 최종 재실행은 verified-tests에 분리했다.
+
+### Evidence / Windows visual check
+
+외부 증적 폴더 hint48-phase3l2-20261017:
+- verified-tests/pytest-all.txt, cli140.txt, pytest-results.json — 최종 성공 결과
+- entry-pip-results.json — 진입점/의존성/설치 버전 조회
+- native-final/results.json 및14개 로그 — 기존13 + 신규1 모두 종료0
+- native-final/network/ — 최종 Network9개 PNG 및 CSV/JSONL
+- network-native/ — 초기 독립 Network Native 성공 증적
+- source-test-sha256.json, preservation.json, git-final.json — 최종 보존/변경 검사
+
+실제 Windows 캡처 native-final/network/:
+network-mock-800x600.png, network-table-800x600.png,
+network-mock-1024x768.png, network-table-1024x768.png,
+network-mock-1280x920.png, network-table-1280x920.png,
+network-explicit-dbc-period-event.png, network-expected-status-columns.png,
+network-fake-live-test-only.png.
+800×600 표 및 일반 크기 Network 화면을 시각 점검했고3크기 버튼/표 rect 접근을 자동 검증했다.
+표 전체 열은 가로 스크롤, 정확한 값/출처는 선택 상세에서 읽는다.
+사용자 수동 UI/전체 DPI·Screen Reader 검증과 구분한다.
+
+### Preservation / collaboration status
+
+작업 전후 SHA-256 비교로 D: 원본25개, 다른 Worktree 추적446개·HEAD·Status,
+Interface 리뷰2개, 임시 Excel 및 Git refs를 보존했다.
+기존 pytest/Native/Fixture를 수정하지 않았고 README/VERIFICATION은 기존 바이트를 append로 보존했다.
+공통 Matrix/DBC/LDF/Routing/Requirements/Firmware, 기존 Interface/Adapter/Codec/Cache/CLI Sender/Logger,
+의존성과 기존500행/Queue 정책은 변경하지 않았다.
+git diff --check, 신규 Python AST/공백 검사 및 정확한 변경 파일 범위를 확인했다. Stage는 비어 있다.
+
+팀 고정 버전·배포/Fixture 재배포 승인·Production Interface Freeze는 미확정 또는 검토 필요다.
+담당자 코드 리뷰·사용자 수동 UI·CANable/ECU Hardware·실제 timestamp 정확도·고속/장시간·실제 파일 I/O 장애는 NOT VERIFIED.
+0x600 미승인 후보, VCU_Command(0x100) PC 송신 금지, Driver Live TX BLOCKED 유지.
+Jitter 공식/threshold, Bus Load/packet loss 모델은 후속 팀 리뷰 필요.
+CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**, 핸드북4.2/5.5 Interface Change 절차 적용.
+Git add/Commit/Push/PR/Merge/Jira 등록·Done 미실행.
