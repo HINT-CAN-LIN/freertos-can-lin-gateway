@@ -79,7 +79,7 @@ def install_workspace(owner, layout):
     title_row.addWidget(owner.app_title, 1)
     owner.source_badge = role(QLabel(), "badge")
     owner.hardware_badge = role(QLabel("Hardware NOT VERIFIED"), "warning")
-    owner.tx_badge = role(QLabel("Driver TX BLOCKED · Interface Pending"), "warning")
+    owner.tx_badge = role(QLabel("UART TX DISABLED · Protocol Pending"), "warning")
     for label in (owner.source_badge, owner.hardware_badge, owner.tx_badge):
         label.setWordWrap(True)
         title_row.addWidget(label)
@@ -182,6 +182,8 @@ def install_workspace(owner, layout):
     for edit in owner.findChildren(QLineEdit):
         edit.setMinimumWidth(60)
     apply_theme(owner)
+    # 공통 30px 행 높이 대신 Driver 이력의 입력 3줄 요약을 읽을 수 있게 복구한다.
+    owner.driver_control_view.configure_history_table_display()
     # CAN ID 전체 숫자와 STD/EXT/RTR을 함께 읽을 수 있는 표시 폭을 확보한다.
     owner.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
     owner.table.setColumnWidth(2, 180)

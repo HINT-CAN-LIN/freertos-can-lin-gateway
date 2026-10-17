@@ -180,7 +180,7 @@ def main():
         assert not driver.apply_button.isEnabled() and not driver.live_tx_button.isEnabled()
         assert all(not b.isEnabled() for s in driver.choice_strips.values() for b in s.buttons.values())
         assert driver.apply_mock() is None
-        capture("driver-live-tx-blocked-800x600.png")
+        capture("driver-uart-tx-disabled-800x600.png")
         window.connection_view.mode_combo.setCurrentText("Mock")
         window.show_error("TEST ONLY layout error visibility")
         assert window.error_area.isVisible() and window.activity_section.button.isChecked()

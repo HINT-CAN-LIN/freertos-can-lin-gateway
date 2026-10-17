@@ -2468,3 +2468,30 @@ README/VERIFICATION 기존바이트이력은보존해append했다.
 Git diff --check/Syntax/Markdown상대링크/변경목록/빈Stage최종점검.
 CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**,핸드북4.2/5.5 및CONTRIBUTING§5절차 적용.
 Git add/Commit/Push/PR/Merge/Jira등록·Done 미실행.
+
+
+
+## Phase 3N-4 — UART transition preparation (actual verification)
+
+- 현재 변경 범위: `DriverTransport` protocol 계약, 비활성 UART 상태 패널, Driver Control의 UART 상태/Mock 경계 문구, 관련 자동화 및 native smoke.
+- UART 상태: `NOT CONFIGURED` / `PENDING APPROVAL` / `UART TX DISABLED` / `UART RX NOT VERIFIED`. Connect/Disconnect 비활성. VCU Response `NOT IMPLEMENTED / NOT VERIFIED`; 자동 ACK·재전송 없음.
+- Driver Mock 입력의 모델/검증/Adapter/History 및 Apply/Reset 동작은 유지. Window/Light는 별도 Mock Body intent이며 UART payload에 연결되지 않음. Mock Accepted와 VCU 응답은 구분.
+- CAN Monitor는 기존 독립 CAN Interface/Worker를 사용. 새 UART 상태 패널은 CAN 상태를 공유하지 않으며 CAN RX를 UART 응답으로 표시하지 않는다. Phase 3N-4 native smoke에서 CAN Open/TX 호출은 각각 0회.
+- 새 UART 모듈에는 실제 Serial open/read/write 구현이 없다. GUI는 DriverTransport를 생성하거나 호출하지 않는다. Serial port 탐색, Baudrate, protocol/framing, payload, ACK, timeout, fail-safe 및 VCU firmware 지원은 미정.
+- 최종 전체 pytest: **767 passed / 374.05 s**. 기존 Phase 1/2 CLI 회귀: **140 passed / 1.46 s**. UART/상단 상태 회귀 집중 실행: **27 passed / 15.45 s**.
+- Windows Native: **기존 16종 PASS + Phase 3N-4 UART panel smoke PASS**. 확인 범위에는 800×600/1024×768/1280×920 창, 9페이지/Alt+1..9, Mock Apply/Reset, CAN Mock RX와 UART 상태 독립성, Connect/Disconnect 비활성, CAN Open/TX 0회가 포함된다. 새 UART smoke에서 `platform=windows`.
+- CLI 및 GUI 설치 진입점 `--help`: PASS. `pip check`: `No broken requirements found`. Python 3.14.6, PySide6 6.10.3, python-can 4.6.1, cantools 44.2.1, pytest 9.1.1 확인. 패키지 설치/재설치와 `pyproject.toml` 변경 없음. 위 버전은 팀 승인 고정 버전이 아니다.
+- Before는 Phase 3N-1 작업 전 Windows 화면, After는 3N-4 최종 Windows native 캡처이며 같은 Driver Control 창 크기를 사용했다. 가로 스크롤을 유발하던 비활성 사유의 한 줄 배치를 분리한 뒤 최종 캡처를 다시 생성했다.
+- 사용자 수동 GUI 확인, 실제 USB-UART/VCU 연결, UART RX/TX, CANable/ECU Hardware, 담당자 코드 리뷰는 **NOT VERIFIED**. UART protocol 및 physical mapping은 **상대 담당자 리뷰 필요**. 실제 CAN TX와 실제 UART TX는 구현하지 않았고 BLOCKED 상태다.
+- 0x600 후보는 UART Packet ID로 재사용하지 않았다. CAN Matrix/DBC/LDF/Routing/Requirements/Firmware 및 기존 UART/CAN 설계 문서는 변경하지 않았다. Git Stage/Commit/Push/PR/Merge/Jira Done은 미실행.
+
+### Windows screenshot evidence
+
+- Before 800×600: `hint48-phase3n1-20261017/before/driver-before-800x600.png`
+- Before 1024×768: `hint48-phase3n1-20261017/before/driver-before-1024x768.png`
+- Before 1280×920: `hint48-phase3n1-20261017/before/driver-before-1280x920.png`
+- After 800×600: `hint48-phase3n4-20261017/native-final/driver-uart-800x600.png`
+- After 1024×768: `hint48-phase3n4-20261017/native-final/driver-uart-1024x768.png`
+- After 1280×920: `hint48-phase3n4-20261017/native-final/driver-uart-1280x920.png`
+
+Evidence is stored outside the Repository. It is native Windows Qt capture and does not demonstrate physical UART/CAN hardware operation.

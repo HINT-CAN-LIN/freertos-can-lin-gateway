@@ -36,7 +36,7 @@ def test_compact_header_preserves_content_and_safety(window_factory, qt_app, siz
         assert widget.isVisible()
         assert window.rect().contains(widget.mapTo(window, widget.rect().center()))
     assert "NOT VERIFIED" in window.hardware_badge.text()
-    assert "BLOCKED" in window.tx_badge.text() and "Pending" in window.tx_badge.text()
+    assert "UART TX DISABLED" in window.tx_badge.text() and "Protocol Pending" in window.tx_badge.text()
 
 
 @pytest.mark.parametrize("row", range(9))

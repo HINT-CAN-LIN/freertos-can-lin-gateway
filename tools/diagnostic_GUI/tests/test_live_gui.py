@@ -51,7 +51,9 @@ def test_default_mock_and_no_automatic_device_open(window_factory):
     assert "Disconnected" in view.status_label.text()
     assert not view.channel_edit.isEnabled()
     window.start_monitor()
-    wait_until(lambda: window.table.rowCount() > 0)
+    # 프레임 표시는 queued opened Slot보다 먼저 끝날 수 있어 연결 상태 갱신도 기다린다.
+    wait_until(lambda: window.table.rowCount() > 0
+               and view.status_label.text() == "Connection: Mock running")
     assert "Mock running" in view.status_label.text()
 
 
@@ -84,7 +86,9 @@ def test_live_does_not_generate_mock_and_preserves_raw_fields(window_factory, mo
         original_refresh()
     monkeypatch.setattr(window.vehicle_view, "refresh", checked_refresh)
     window.start_monitor()
-    wait_until(lambda: window.table.rowCount() >= 2)
+    # Raw 수신과 queued 연결 알림은 별개이므로 Live 연결 표시까지 함께 기다린다.
+    wait_until(lambda: window.table.rowCount() >= 2
+               and view.status_label.text() == "Connection: Connected (application RX only)")
     assert "Connected" in view.status_label.text()
     assert window.selected_observation() is None
     assert window.table.item(0, 1).text() == FAKE_CHANNEL

@@ -1,16 +1,21 @@
 """Qt 메인 스레드의 Driver Control 표시. Mock 요청/ECU 관측을 분리한다."""
+from datetime import datetime
 from PySide6.QtCore import Qt, QSignalBlocker
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFormLayout, QGridLayout,
-                              QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSlider,
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFormLayout, QGridLayout, QHeaderView,
+                              QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QPushButton, QSlider,
                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 from .theme import role
 from .ui_components import sync_driver_presentation
+from .uart_connection_view import UartConnectionView
 from .driver_input import (DriverInputModel, DriverInputs, GEAR_CHOICES, IGNITION_CHOICES, HISTORY_CAPACITY,
                            LIVE_MODE, MOCK_MODE, InputState, ACCELERATOR_MIN, ACCELERATOR_MAX)
 
 HISTORY_HEADERS = ("PC Time", "Source", "Action", "Inputs", "Result / Error")
-HISTORY_COLUMN_WIDTHS = (140, 160, 110, 360, 240)  # PC 표시 폭이며 CAN 수치와 무관하다.
+HISTORY_COLUMN_WIDTHS = (270, 160, 110, 360, 240)  # 로컬 PC 시각/입력 표시 폭이며 CAN 수치와 무관하다.
 HISTORY_ROW_HEIGHT = 72
+HISTORY_INPUTS_COLUMN = 3
+HISTORY_DETAIL_MIN_HEIGHT = 130
+HISTORY_DETAIL_MAX_HEIGHT = 180
 
 
 class DriverControlView(QWidget):
@@ -21,14 +26,15 @@ class DriverControlView(QWidget):
         self.model = model if model is not None else DriverInputModel(clock=owner._clock)
         layout = QVBoxLayout(self)
         self.policy_label = QLabel(
-            "DEMO / TEST ONLY · 메모리 Mock 입력만 처리 · 물리 CAN 송신 없음\n"
-            "Ignition OFF·ON·RUN / 0–100% / Brake ON·OFF / P·N·D·R / OPEN·CLOSE / ON·OFF는 Mock 정책입니다.\n"
-            "동시 Accelerator+Brake는 그대로 기록하며 제어 우선순위는 VCU 검토 필요입니다.")
+            "DEMO / TEST ONLY · in-process Mock 입력만 처리 · 물리 CAN/UART 송신 없음\n"
+            "Window/Light는 별도 Mock Body 입력이며 UART Driver Input payload에 포함되지 않습니다.")
         self.policy_label.setWordWrap(True)
         layout.addWidget(self.policy_label)
+        self.uart_connection_view = UartConnectionView(self)
+        layout.addWidget(self.uart_connection_view)
         self.source_label = role(QLabel(), "badge")
         self.source_label.setWordWrap(True)
-        self.approval_label = QLabel(self.model.approval_status + " · 0x600 PC → VCU: 사용자 전달 팀 합의 / Payload·주기·Timeout TBD")
+        self.approval_label = QLabel("Driver Input: PC ↔ VCU UART · protocol details pending approval")
         self.approval_label.setWordWrap(True)
         role(self.approval_label, "warning")
         layout.addWidget(self.source_label)
@@ -82,7 +88,7 @@ class DriverControlView(QWidget):
         actions = QHBoxLayout()
         self.apply_button = role(QPushButton("Apply Mock Input"), "primary")
         self.reset_button = QPushButton("Reset Mock Inputs")
-        self.live_tx_button = QPushButton("Live TX Blocked")
+        self.live_tx_button = QPushButton("Live UART TX Disabled")
         self.live_tx_button.setEnabled(False)
         for button in (self.apply_button, self.reset_button, self.live_tx_button):
             actions.addWidget(button)
@@ -106,12 +112,25 @@ class DriverControlView(QWidget):
         self.history_table = QTableWidget(0, len(HISTORY_HEADERS))
         self.history_table.setHorizontalHeaderLabels(HISTORY_HEADERS)
         self.history_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.history_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.history_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.history_table.setWordWrap(True)
         self.history_table.horizontalHeader().setStretchLastSection(True)
         for column, width in enumerate(HISTORY_COLUMN_WIDTHS):
             self.history_table.setColumnWidth(column, width)
         self.history_table.verticalHeader().setDefaultSectionSize(HISTORY_ROW_HEIGHT)
         layout.addWidget(QLabel(f"PC 내부 입력 이력 · 최대 {HISTORY_CAPACITY}건 · CAN Logger/ECU 수신 기록과 별도"))
         layout.addWidget(self.history_table, 1)
+        self.history_detail_text = QPlainTextEdit()
+        self.history_detail_text.setReadOnly(True)
+        self.history_detail_text.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+        self.history_detail_text.setMinimumHeight(HISTORY_DETAIL_MIN_HEIGHT)
+        self.history_detail_text.setMaximumHeight(HISTORY_DETAIL_MAX_HEIGHT)
+        self.history_detail_text.setPlaceholderText(
+            "행을 선택하면 전체 입력값과 PC 처리 결과를 표시합니다. Mock 기록은 ECU 응답이 아닙니다.")
+        self.history_detail_text.setAccessibleName("Selected driver input history details")
+        layout.addWidget(self.history_detail_text)
+        self.history_table.itemSelectionChanged.connect(self.update_history_detail)
         self._widgets = (self.ignition_combo, self.accelerator_edit, self.accelerator_slider, self.brake_combo, self.gear_combo,
                          self.window_combo, self.light_combo, self.window_open_button, self.window_close_button,
                          self.light_on_button, self.light_off_button)
@@ -137,6 +156,14 @@ class DriverControlView(QWidget):
             self._input_grid.removeWidget(box)
         for index, box in enumerate(self._input_boxes):
             self._input_grid.addWidget(box, index if compact else 0, 0 if compact else index)
+
+    def configure_history_table_display(self):
+        # 공통 테마가 기본 행 높이를 적용한 뒤 이 표의 3줄 입력 요약 높이를 복구한다.
+        header = self.history_table.horizontalHeader()
+        header.setSectionResizeMode(HISTORY_INPUTS_COLUMN, QHeaderView.ResizeMode.Interactive)
+        self.history_table.setWordWrap(True)
+        self.history_table.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.history_table.verticalHeader().setDefaultSectionSize(HISTORY_ROW_HEIGHT)
 
     @staticmethod
     def _choices(choices):
@@ -240,30 +267,56 @@ class DriverControlView(QWidget):
         # RX 카운트는 관측 사실만 표시하며 요청 수락/ECU 적용과 연관 짓지 않는다.
         requested = any(record.action == "request" for record in self.model.history)
         self.observation_label.setText(
-            f"User Requested: {'Yes / Mock only' if requested else 'No Data'} · CAN TX Sent: Not sent\n"
+            f"User Requested: {'Yes / Mock only' if requested else 'No Data'} · UART TX: Disabled · Not sent · no physical UART TX\n"
             f"CAN RX: {self.owner.buffer.total_received} frames · {self.model.source}\n"
             "ECU Applied: NOT VERIFIED · VCU/Motor/Fault: 명시 매핑 관측 화면에서 확인 · 요청과 자동 연관 없음")
         self.source_label.setText(f"Input Source: {self.model.source} · {self.model.mode}")
-        self.state_label.setText(f"Request State: {self.model.state.value} · Applied to Mock: {self.model.applied}")
+        request_state = "UART TX DISABLED" if self.model.state.value == "Live TX Blocked" else self.model.state.value
+        self.state_label.setText(f"Request State: {request_state} · Applied to Mock: {self.model.applied}")
         receipt = self.model.last_accepted
         self.accepted_label.setText(
             f"Last Mock Accepted: PC #{receipt.command.sequence} @ {receipt.command.timestamp:.6f} · {receipt.command.inputs}"
             if receipt else "Last Mock Accepted: No Data")
-        self.error_label.setText(self.model.error or "Live TX Blocked · Awaiting Interface Approval · No physical TX")
+        error_text = self.model.error
+        if self.model.state.value == "Live TX Blocked":
+            error_text = "UART TX DISABLED · Interface approval absent"
+        self.error_label.setText(error_text or "UART TX DISABLED · Protocol pending approval · no physical UART TX")
         sync_driver_presentation(self)
+
         history = self.model.history
         if history == self._rendered_history:
             return
         self._rendered_history = history
         self.history_table.setRowCount(len(history))
         for row, record in enumerate(history):
-            cells = ("unknown" if record.timestamp is None else f"{record.timestamp:.6f}",
+            cells = (format_pc_local_timestamp(record.timestamp),
                      record.source, record.action, input_summary(record.inputs),
                      record.state.value + (f" · {record.error}" if record.error else ""))
             for column, cell in enumerate(cells):
                 item = QTableWidgetItem(cell)
-                item.setToolTip(str(record.inputs) if column == 3 and record.inputs else cell)
+                if column == 0:
+                    raw_timestamp = "unavailable" if record.timestamp is None else repr(record.timestamp)
+                    item.setToolTip(f"{cell}\nUnix timestamp: {raw_timestamp}")
+                elif column == HISTORY_INPUTS_COLUMN:
+                    item.setToolTip(cell)
+                else:
+                    item.setToolTip(cell)
                 self.history_table.setItem(row, column, item)
+        if history:
+            # 신규 행이 생기면 최신 PC 기록을 선택해 상세 내용을 바로 보여준다.
+            self.history_table.selectRow(len(history) - 1)
+        else:
+            self.update_history_detail()
+
+    def update_history_detail(self):
+        # 선택 행의 같은 불변 Model snapshot을 사용해 상세 표시를 만든다.
+        history = self.model.history
+        row = self.history_table.currentRow()
+        if row < 0 or row >= len(history):
+            self.history_detail_text.setPlainText(
+                "행을 선택하면 전체 입력값과 PC 처리 결과를 표시합니다. Mock 기록은 ECU 응답이 아닙니다.")
+            return
+        self.history_detail_text.setPlainText(format_history_detail(history[row]))
 
     def close_view(self):
         # 종료 후 재진입을 막고 메모리 Adapter를 정리한다. 추가 Thread/Timer는 없다.
@@ -272,12 +325,32 @@ class DriverControlView(QWidget):
 
 
 def input_summary(inputs):
-    # 이력의 입력을 사람이 읽을 수 있게 표시하며 원본 불변 객체는 tooltip에 보존한다.
+    # 모든 Mock 입력을 표시하며 float도 왕복 가능한 문자열로 보존한다.
     if inputs is None:
         return "Not Configured"
     ignition = inputs.ignition if inputs.ignition is not None else "Not Configured"
-    accelerator = f"{inputs.accelerator:g}%" if inputs.accelerator is not None else "Not Configured"
+    accelerator = f"{inputs.accelerator}%" if inputs.accelerator is not None else "Not Configured"
     brake = "Not Configured" if inputs.brake is None else ("ON" if inputs.brake else "OFF")
     return (f"Ignition={ignition} · Accelerator={accelerator}\n"
             f"Brake={brake} · Gear={inputs.gear or 'Not Configured'}\n"
             f"Window={inputs.window or 'Not Configured'} · Light={inputs.light or 'Not Configured'}")
+
+
+def format_pc_local_timestamp(timestamp):
+    # PC epoch을 로컬 시각으로 표시하되 비정상 범위는 조용히 대체하지 않는다.
+    if timestamp is None:
+        return "unknown"
+    try:
+        return datetime.fromtimestamp(timestamp).astimezone().isoformat(timespec="milliseconds")
+    except (OverflowError, OSError, ValueError):
+        return "unavailable"
+
+
+def format_history_detail(record):
+    # 요청/Mock 결과의 출처와 입력 및 결과를 함께 보여주며 ECU 응답으로 승격하지 않는다.
+    raw_timestamp = "unavailable" if record.timestamp is None else repr(record.timestamp)
+    error = record.error or "None"
+    return (f"PC input history · Mock result is not an ECU response\n"
+            f"Local time: {format_pc_local_timestamp(record.timestamp)} · Unix timestamp: {raw_timestamp}\n"
+            f"Source: {record.source} · Action: {record.action} · State: {record.state.value}\n"
+            f"Inputs:\n{input_summary(record.inputs)}\nResult / Error: {error}")

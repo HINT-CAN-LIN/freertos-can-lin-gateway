@@ -97,7 +97,7 @@ def polish_mapping(view, *, ecu=False):
 
 
 def polish_driver(view):
-    # 입력 모델/Validation을 복제하지 않고 기존 ComboBox를 버튼 표시의 기준으로 쓴다.
+    # 기존 입력 모델과 ChoiceStrip을 재사용하고 UART 상태는 연결 가능 여부만 표시한다.
     view.choice_strips = {}
     for name, choices in (("ignition", ("OFF", "ON", "RUN")), ("brake", ("OFF", "ON")), ("gear", ("P", "N", "D", "R"))):
         combo = getattr(view, name + "_combo")
@@ -117,22 +117,24 @@ def polish_driver(view):
         row.addWidget(strip)
         view.choice_strips[name] = strip
     layout, items = reset_page(view)
-    caption(layout, "MOCK / TEST ONLY · 0x600 PC → VCU · Payload Pending · Live TX BLOCKED")
-    put_item(layout, items[5])  # 주요 Apply / Reset을 입력 및 이력보다 먼저 노출한다.
-    put_item(layout, items[3])
-    result_box = items[6].widget()
+    caption(layout, "UART Driver Input · PC ↔ VCU · MOCK ONLY · Protocol PENDING · UART TX/RX Disabled")
+    put_item(layout, items[6])  # Mock Apply/Reset은 좁은 화면에서도 앞에 둔다.
+    put_item(layout, items[1])  # UART 비활성 상태를 Driver 페이지에서 항상 식별한다.
+    put_item(layout, items[4])
+    result_box = items[7].widget()
     result_layout = result_box.layout()
     result_layout.removeWidget(view.accepted_label)
     view.receipt_summary = QLabel()
     result_layout.insertWidget(1, view.receipt_summary)
-    put_item(layout, items[6])
-    fold(view, layout, "Input source / approval / receipt details",
-         items[:3] + [items[4], QWidgetItem(view.accepted_label)])
     put_item(layout, items[7])
+    fold(view, layout, "Mock input source / approval / receipt details",
+         [items[0], items[2], items[3], items[5], QWidgetItem(view.accepted_label)])
+    put_item(layout, items[8])
+    caption(layout, "Selected PC input history · full values / result; ECU response remains unverified")
+    put_item(layout, items[10])
     view.history_table.setMinimumHeight(HISTORY_MIN_HEIGHT)
-    put_item(layout, items[8], 1)
+    put_item(layout, items[9], 1)
     sync_driver_presentation(view)
-
 
 def polish_graph(view):
     # 그래프 Sample/Timer/Pause 정책을 변경하지 않고 캔버스 표시 공간을 확보한다.

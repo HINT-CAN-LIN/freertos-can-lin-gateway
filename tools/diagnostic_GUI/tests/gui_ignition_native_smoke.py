@@ -8,6 +8,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 from pc_diagnostic.gui.window import MainWindow
 from pc_diagnostic.gui.driver_input import DriverInputs, InputState, IGNITION_CHOICES
+from pc_diagnostic.gui.driver_control_view import HISTORY_INPUTS_COLUMN, HISTORY_ROW_HEIGHT, input_summary
 from pc_diagnostic.interfaces import MockCanInterface, PythonCanInterface
 from pc_diagnostic.sender import RawCanSender
 from gui_native_smoke import wait_until, NATIVE_WAIT_MS
@@ -74,7 +75,7 @@ def main():
                 QTest.mouseClick(button, Qt.MouseButton.LeftButton)
                 assert view.model.draft.ignition == ignition and view.model.last_accepted is None
                 capture(f"driver-ignition-{ignition.lower()}-{width}x{height}.png")
-            view.accelerator_edit.setText("37.5")
+            view.accelerator_edit.setText("53.12345678901234")
             view.brake_combo.setCurrentText("ON")
             view.gear_combo.setCurrentText("R")
             view.window_combo.setCurrentText("CLOSE")
@@ -85,15 +86,33 @@ def main():
             expose(view.apply_button)
             QTest.mouseClick(view.apply_button, Qt.MouseButton.LeftButton)
             receipt = view.model.last_accepted
-            assert receipt.command.inputs == DriverInputs(37.5, True, "R", "CLOSE", "ON", "RUN")
+            expected_inputs = DriverInputs(53.12345678901234, True, "R", "CLOSE", "ON", "RUN")
+            assert receipt.command.inputs == expected_inputs
             expose(view.observation_label)
             assert "ECU Applied: NOT VERIFIED" in view.observation_label.text()
-            assert "CAN TX Sent: Not sent" in view.observation_label.text()
+            assert "UART TX: Disabled" in view.observation_label.text()
             capture(f"driver-accepted-{width}x{height}.png")
             expose(view.history_table)
             assert view.history_table.rowCount() == len(view.model.history)
-            assert "Ignition=RUN" in view.history_table.item(view.history_table.rowCount()-1, 3).text()
+            latest_row = view.history_table.rowCount() - 1
+            input_item = view.history_table.item(latest_row, HISTORY_INPUTS_COLUMN)
+            expected_summary = input_summary(expected_inputs)
+            assert input_item.text() == expected_summary and input_item.toolTip() == expected_summary
+            assert view.history_table.rowHeight(latest_row) >= HISTORY_ROW_HEIGHT
+            for value in ("Ignition=RUN", "53.12345678901234%", "Brake=ON", "Gear=R",
+                          "Window=CLOSE", "Light=ON"):
+                assert value in input_item.text()
+            view.history_table.selectRow(latest_row)
+            assert all(value in view.history_detail_text.toPlainText()
+                       for value in ("Source: Mock / DEMO / TEST ONLY", "53.12345678901234%",
+                                     "Brake=ON", "Gear=R", "Window=CLOSE", "Light=ON"))
             capture(f"driver-history-{width}x{height}.png")
+            if width == 1280:
+                view.history_table.setColumnWidth(HISTORY_INPUTS_COLUMN, 640)
+                assert view.history_table.columnWidth(HISTORY_INPUTS_COLUMN) == 640
+                capture("driver-history-expanded-1280x920.png")
+                expose(view.history_detail_text)
+                capture("driver-history-details-1280x920.png")
             old_adapter = view.model._adapter
             window.connection_view.mode_combo.setCurrentText("Live")
             assert old_adapter.closed and view.model.state == InputState.LIVE_BLOCKED
