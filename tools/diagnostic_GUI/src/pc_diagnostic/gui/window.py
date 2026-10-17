@@ -1,13 +1,15 @@
 """Raw 관찰/선택 결과/마지막 정상 Cache를 표시하는 thin Qt 화면."""
 from pathlib import Path
 from time import time
-from PySide6.QtCore import QTimer, Qt, Slot
+from PySide6.QtCore import QTimer, Qt, Slot, QSignalBlocker
 from PySide6.QtWidgets import (QAbstractItemView, QFileDialog, QHBoxLayout, QHeaderView,
                               QLabel, QMainWindow, QPlainTextEdit, QPushButton,
                               QSplitter, QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 from ..dbc_loader import DbcLoadError
 from ..interfaces import MockCanInterface
 from .buffer import FrameBuffer
+from .monitor_history import ObservationHistory
+from .export_controls import ExportControls
 from .connection import LIVE_MODE, MOCK_MODE, MOCK_SOURCE_LABEL, open_live_interface
 from .connection_view import ConnectionView
 from .decode_session import DecodeSession
@@ -80,6 +82,8 @@ class MainWindow(QMainWindow):
         self._receiver_error_notice = False
         self._clock = clock
         self.buffer = FrameBuffer()
+        self.raw_history = ObservationHistory(MAX_TABLE_ROWS)
+        self.raw_paused = False
         self.decode_session = DecodeSession()
         self.logging_session = LoggingSession()
         self.worker = None
@@ -180,6 +184,17 @@ class MainWindow(QMainWindow):
         self.error_area.setMaximumHeight(80)
         layout.addWidget(self.error_area)
         install_workspace(self, layout)
+        raw_actions = QHBoxLayout()
+        self.pause_button = QPushButton("Pause Raw display")
+        self.pause_button.setAccessibleName("Pause or resume Raw display only")
+        self.raw_pause_label = QLabel()
+        self.raw_pause_label.setWordWrap(True)
+        raw_actions.addWidget(self.pause_button)
+        raw_actions.addWidget(self.raw_pause_label, 1)
+        self.monitor_page.layout().insertLayout(1, raw_actions)
+        self.pause_button.clicked.connect(self.toggle_raw_pause)
+        self.export_controls = ExportControls(self)
+        self.update_raw_pause_label()
         self.timer = QTimer(self)
         self.timer.setInterval(DISPLAY_REFRESH_MS)
         self.timer.timeout.connect(self.refresh_frames)
@@ -190,6 +205,7 @@ class MainWindow(QMainWindow):
         self.age_timer.timeout.connect(self.ecu_view.refresh)
         # Receiver 종료 뒤 비동기 writer drain 완료도 Source 잠금에 반영한다.
         self.age_timer.timeout.connect(self.update_controls)
+        self.age_timer.timeout.connect(self.export_controls.refresh)
         self.age_timer.start()
         self.start_button.clicked.connect(self.start_monitor)
         self.stop_button.clicked.connect(self.stop_monitor)
@@ -237,6 +253,7 @@ class MainWindow(QMainWindow):
         if not self.can_change_source():
             return
         self._source_text = self.selected_source_text()
+        self.raw_paused = False  # 새 Source에서 과거 Raw 표시를 재생하지 않는다.
         self.decode_session.reset_observations()
         self.buffer.clear()
         self.clear_monitor()
@@ -418,27 +435,18 @@ class MainWindow(QMainWindow):
             self.fault_monitor_view.record(observation)
             if observation.processing_error:
                 self.error_area.appendPlainText(observation.processing_error)
-            if self.table.rowCount() >= MAX_TABLE_ROWS:
-                self.table.removeRow(0)
-            row = self.table.rowCount()
-            self.table.insertRow(row)
-            for column, value in enumerate(frame_cells(frame)):
-                item = QTableWidgetItem(value)
-                item.setToolTip(value)
-                if column == 2:
-                    # 실제 표시 문자열/글꼴 폭으로 계산하며 ID나 Format 값은 바꾸지 않는다.
-                    width = self.table.fontMetrics().horizontalAdvance(value) + TABLE_CELL_PADDING
-                    if self.table.columnWidth(column) < width:
-                        self.table.setColumnWidth(column, width)
-                if column == 0:
-                    item.setData(Qt.ItemDataRole.UserRole, observation)
-                self.table.setItem(row, column, item)
+            self.raw_history.record(observation, self._source_text,
+                                    self.connection_view.mode_combo.currentText())
+            if not self.raw_paused:
+                self.append_raw_observation(observation)
             self._processed += 1
-        if frames:
+        if frames and not self.raw_paused:
             self.monitor_filter.apply_filter()
         self.counter_label.setText(f"Received: {total}")
         self.drop_label.setText(f"표시 버퍼 제외: {dropped}")
         self.processed_label.setText(f"Raw/Decode processed: {self._processed}")
+        self.update_raw_pause_label()
+        self.export_controls.refresh()
         self.refresh_cache()
         self.vehicle_view.refresh()
         self.ecu_view.update_coverage(received=total, buffer_dropped=dropped,
@@ -448,6 +456,57 @@ class MainWindow(QMainWindow):
         self.update_controls()
         if self.worker is None and not frames:
             self.timer.stop()
+
+    def append_raw_observation(self, observation):
+        # 이미 처리한 immutable 결과만 표에 붙인다. 수신/Decode를 다시 호출하지 않는다.
+        if self.table.rowCount() >= MAX_TABLE_ROWS:
+            self.table.removeRow(0)
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+        for column, value in enumerate(frame_cells(observation.frame)):
+            item = QTableWidgetItem(value)
+            item.setToolTip(value)
+            if column == 2:
+                # 실제 표시 문자열/글꼴 폭으로 계산하며 ID나 Format 값은 바꾸지 않는다.
+                width = self.table.fontMetrics().horizontalAdvance(value) + TABLE_CELL_PADDING
+                if self.table.columnWidth(column) < width:
+                    self.table.setColumnWidth(column, width)
+            if column == 0:
+                item.setData(Qt.ItemDataRole.UserRole, observation)
+            self.table.setItem(row, column, item)
+
+    def update_raw_pause_label(self):
+        # 표시 Pause와 Receiver Stop은 서로 다른 상태다.
+        self.pause_button.setText("Resume Raw display" if self.raw_paused else "Pause Raw display")
+        self.raw_pause_label.setText(
+            ("Paused" if self.raw_paused else "Live display") +
+            f" · RX/Decode/Logging independent · latest {len(self.raw_history.records)}/{MAX_TABLE_ROWS}")
+
+    def set_raw_paused(self, paused):
+        # Resume은 GUI main thread에서 최신 500행 snapshot을 한 번 교체한다.
+        if self._closing or self.raw_paused == paused:
+            return
+        self.raw_paused = paused
+        if not paused:
+            selected = self.selected_observation()
+            blocker = QSignalBlocker(self.table)
+            self.table.setRowCount(0)
+            selected_row = None
+            for record in self.raw_history.snapshot():
+                self.append_raw_observation(record.observation)
+                if record.observation is selected:
+                    selected_row = self.table.rowCount() - 1
+            if selected_row is not None:
+                self.table.selectRow(selected_row)
+            del blocker
+            self.monitor_filter.apply_filter()
+            self.show_selection()
+        self.update_raw_pause_label()
+
+    @Slot()
+    def toggle_raw_pause(self):
+        # 버튼은 표시 정책만 변경하며 Worker/Timer/Logging 제어를 호출하지 않는다.
+        self.set_raw_paused(not self.raw_paused)
 
     def selected_observation(self):
         # 행에 보관한 immutable 결과를 사용하여 후속 수신과 프레임 연관성을 보존한다.
@@ -522,6 +581,7 @@ class MainWindow(QMainWindow):
         if self._closing:
             return
         self.buffer.clear()
+        self.raw_history.clear()
         self.table.setRowCount(0)
         self._processed = 0
         self.counter_label.setText("Received: 0")
@@ -530,6 +590,8 @@ class MainWindow(QMainWindow):
         self.show_selection()
         self.vehicle_view.refresh()
         self.ecu_view.clear_observations()
+        self.update_raw_pause_label()
+        self.export_controls.refresh()
         self.update_controls()
 
     def closeEvent(self, event):
@@ -538,6 +600,9 @@ class MainWindow(QMainWindow):
         if self.automation_active():
             self.automation_view.runner.request_close()
             self.error_area.appendPlainText("Automation cleanup in progress; close follows isolated resource shutdown.")
+            event.ignore()
+            return
+        if not self.export_controls.prepare_close():
             event.ignore()
             return
         self._closing = True

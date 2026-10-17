@@ -1458,3 +1458,36 @@ Windows Native 자동 검증은 Mock/Fake TEST ONLY입니다. 사람이 수동 �
 Network/KPI·실제 Fault Injection은 계속 미구현이며 Production 매핑/Driver TX는 승인 대기입니다.
 사용자 수동 UI 확인, 전체 DPI/Screen Reader, 실제 CANable/ECU는 NOT VERIFIED입니다.
 자세한 이번 실행 결과와 초기 실패/보완은 VERIFICATION의 Phase 3K-2 절을 확인하세요.
+
+
+## Phase 3L-1 — Raw Pause / Decoded & Fault Snapshot Export (2026-10-17)
+
+기존 Phase 기록은 해당 시점의 범위다. 이번 단계에서 Raw 표시 Pause/Resume과
+CSV/JSONL 관측 snapshot Export를 추가했다. 실행 명령·의존성·CAN/CLI 계약은 그대로다.
+
+- CAN Monitor에서 **Pause Raw display**는 Raw 표만 고정한다.
+  수신·Decode·Cache·Graph·Vehicle/ECU/Fault·기존 Logging과 Rx 카운터는 계속 동작한다.
+- **Resume Raw display**는 사용자 결정대로 최신 최대500 처리 행으로 한 번 교체한다.
+  이후 실시간 표시를 재개하며 전체 History Replay나 제외된 과거 프레임 복원은 없다.
+- Clear는 Raw 표시 이력을 비우고 Pause를 유지한다. 정상 Cache 보존 등 기존 Clear 정책은 유지한다.
+  Stop/다음 Start도 Pause를 유지한다. Source 변경은 기존 전환 조건에서 이력/표를 비우고 Pause를 해제한다.
+- **Export Decoded...**: 명시적으로 로드한 현재 DBC session의 보관된 RX 최대500 frame.
+  정상 Signal별 값·Unit·Raw Timestamp·Message·Source·Decode 상태를 저장한다.
+  실패 관측에는 null 값을 남기고 이전 Cache 정상값을 대신 쓰지 않는다. 표시 필터는 무시한다.
+- **Export Fault History...**: 실제 보관된 Fault 관측 최대500개, 기존 Signal/DBC choice/Status Unknown 보존.
+  ECUOffline Node Enum을 bitmask로 바꾸거나 FaultCode0을 Clear로 판단하지 않는다.
+  **Event store는 Not Implemented / Open**이다. 실제 Event를 합성하지 않는다.
+- JSONL/CSV와 새 파일 경로를 명시적으로 선택한다. **덮어쓰기·Append 미지원**이다.
+  No DBC/No Data는 파일을 만들지 않는다. 파일 Writer 오류는 Activity & Errors에 표시하며
+  부분 파일이 남을 수 있다. Export 오류가 Receiver/Raw Logger를 중지하지 않는다.
+- 기존 파일 Session Worker와 GUI timer를 재사용한다. Export 중 I/O 지연/Close 오류는
+  창을 유지하며 원인 확인 후 종료 재시도가 가능하다. Raw Logger CSV/JSONL 계약은 그대로다.
+
+[범위·상태·파일 schema·오류·수명주기 상세](docs/observation_export.md)를 참조한다.
+테스트는 기존 전용 Temp 및 cacheprovider 비활성화 방식을 사용한다.
+신규 자동 시험은 tests/test_raw_pause.py, tests/test_observation_export.py, tests/test_export_controls.py,
+Windows 시험은 tests/gui_pause_export_native_smoke.py --output-dir <새 증적 폴더>다.
+
+사용자 수동 UI, 실제 ACL/디스크 고갈·고속 장시간, CANable/ECU Hardware는 NOT VERIFIED.
+팀 고정 버전은 미확정이며 담당자 코드 리뷰 NOT VERIFIED다. Driver Live TX BLOCKED /
+Interface Pending 유지. 공통 CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**다.

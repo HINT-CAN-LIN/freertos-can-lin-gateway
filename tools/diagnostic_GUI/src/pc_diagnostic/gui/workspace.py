@@ -166,7 +166,7 @@ def install_workspace(owner, layout):
     def update_error_tray():
         # 새 오류는 즉시 펼쳐 보여 종료 실패의 원인을 숨기지 않는다.
         has_error = bool(owner.error_area.toPlainText().strip())
-        owner.activity_section.button.setText("Activity & Errors" + (" · Error" if has_error else " · Empty"))
+        owner.activity_section.button.setText("Activity & Errors" + (" · Entries" if has_error else " · Empty"))
         owner.activity_section.set_expanded(has_error)
     owner.error_area.textChanged.connect(update_error_tray)
     update_error_tray()

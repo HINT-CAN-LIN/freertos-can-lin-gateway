@@ -1989,3 +1989,121 @@ Branch/HEAD는 위 기준과 동일하며 예상 밖 파일은 없었다. Source
 PC 입력 CAN Interface는 승인 대기, GUI Driver 실제 CAN TX는 BLOCKED다.
 CAN/LIN Interface 변경은 상대 담당자 리뷰 필요이며 이번 UI 자동 검증은 승인 증거가 아니다.
 Git add/Commit/Push/PR/Merge/Jira Done은 실행하지 않았다.
+
+
+## Phase 3L-1 — Raw Pause / Observation Export (2026-10-17)
+
+### Scope and current decisions
+
+기준 PC-Diagnostic-Test / db11a9fdb0a0a5f7c208ec9f8aeb54cad98a8ce5.
+이번 작업은 Raw GUI 표시 Pause/Resume, Decoded 및 실제 Fault 관측 snapshot CSV/JSONL Export다.
+이전 Phase 기록은 그대로 보존했다. Source/Test 변경을 포함하는 이번 실행 결과이며 이전 PASS 재사용이 아니다.
+
+사용자가 Resume을 **최신 최대500행 snapshot으로 한 번 교체**하도록 결정했다.
+기존 수신 버퍼512/drop-oldest, drain100, 표500행은 유지한다.
+추가 처리 이력은 immutable 참조500개로 제한하며 전체 History Replay/제외된 과거 프레임 복원은 없다.
+Clear는 Pause 유지/Raw 이력 초기화/기존 정상 Cache 보존, Stop·다음 Start는 Pause 유지,
+Source 전환은 기존 Gate에서 이력과 Pause 초기화, DBC reload는 기존 Raw 역사/Cache session 정책 유지다.
+
+Decoded는 현재 DBC session의 보관 RX만 Signal별 행으로 저장한다. 실패는 값/Signal null,
+이전 Cache backfill 없음. Channel 타입·STD/EXT·Source·Raw timestamp와 실제 Decode 상태 보존.
+Fault는 기존 보관 관측 이력/Signal/unit/DBC choice/Status Unknown을 그대로 저장한다.
+ECUOffline은 기존 Node Enum이며 FaultCode0을 Clear로, DBC Choice ACTIVE/CLEARED를 Event로 해석하지 않는다.
+**기존 Event 저장소 부재로 Event Export는 Open / Not Implemented**다. 가상 Event를 합성하지 않았다.
+범위/schema/파일 정책은 docs/observation_export.md에 기록했다.
+
+### Actual environment / final execution
+
+프로젝트 기존 .venv: Python3.14.6, PySide6 6.10.3, python-can4.6.1, cantools44.2.1, pytest9.1.1.
+새 패키지 설치·재설치·pyproject 변경 없음. 위 설치 버전은 팀 승인 고정 버전이 아니며 미확정 상태다.
+
+| 검증 | 실제 이번 실행 결과 |
+|---|---|
+| 기존 GUI/Decode/Logging/Workspace/Layout 국소 회귀 | 100 passed / 23.18s |
+| 신규 pytest 단독 최종 | 43 passed / 33.96s |
+| 전체 pytest 최종 | **659 passed / 231.70s**, 기존616 + 신규43, fail/skip 없음 |
+| 기존 Phase1/2 CLI 별도 회귀 | **140 passed / 0.78s**, 초기 Commit tree의 기존 테스트 목록 사용 |
+| CLI/GUI 모듈 --help | 각각 종료0 |
+| 설치 can-diag / can-diag-gui --help | 각각 종료0 |
+| pip check | 종료0, No broken requirements found |
+| Windows Native 기존12종 | **12 PASS** — Raw/Decode/Vehicle/ECU/Logging/Fake Live/Graph/Fault/Automation/Workspace/Driver/Polish |
+| 신규 Pause/Export Windows Native | **PASS** — windows platform, Mock 수신·Pause 독립성·Resume snapshot·CSV/JSONL·Fault enum·3크기·Source/Close |
+| 사용자 수동 UI | **NOT VERIFIED** |
+| CANable / ECU Hardware | **NOT VERIFIED / NOT RUN** |
+
+pytest는 쓰기 확인된 새 .test-tmp/phase3l1-*/ 하위 basetemp와 -p no:cacheprovider,
+QT_QPA_PLATFORM=offscreen을 사용했다. Native는 QT_QPA_PLATFORM 없는 별도 Windows 프로세스에서 실행했다.
+실제 CAN backend는 신규 Native에서 차단했고 호출0회다. Mock/Fake를 실기 검증으로 해석하지 않는다.
+
+### Tested contracts / actual files
+
+- Pause 표/선택 고정 중 Rx·processed·Decode/Cache·Vehicle·Graph·Fault 정상 갱신.
+  Raw Logger CSV/JSONL 파일은 실제 admission 프레임으로 만든 기존 Logger 참조와 byte 일치.
+- 755개 관측 중 Resume 최신500개의 순서/중복 없음/제외된 선택 제거,
+  다음 신규 행 반영, 누락·역전 Timestamp 원문 유지. Timestamp 정렬/재Decode 없음.
+- 반복 Pause/Resume, Clear/DBC reload/Source 전환, 실제 Mock 반복 Start/Stop 및 활성 Close 자원 정리.
+- Source는 per-record 고정. 모달 파일 선택 중 새 수신/Source 전환이 이전 snapshot을 바꾸지 않음.
+- STD/EXT, int0/str"0"/null Channel, 실패·unknown·processing error·Timestamp 누락/역전 보존.
+- TEST ONLY Measurement=-10.0/test_unit, 기존 DBC FaultCode0/ECUOffline1(VCU)/RecoveryState0(ACTIVE) 보존.
+  Status Unknown 유지. 기존 DBC는 명시적 시험용 읽기 전용 사용이며 실제 ECU 응답이 아님.
+- CSV UTF-8/CRLF 및 JSONL 행별 JSON 확인. Fault map/choice는 JSON object(CSV에서는 JSON 문자열).
+- No DBC/No Data/Cancel은 새 파일 없음. 기존 파일 exclusive-create로 보호, overwrite/Append 미지원.
+- 느린 Writer 중 GUI 처리 계속, 중복 Export 거부, Open/Write/Close 오류/부분 파일/Unconfirmed 검증.
+  첫 Error Close에서 창 유지·원인 표시, 다음 Close 정상 종료. 미종료 I/O는 강제 취소하지 않음.
+- Export Error는 Receiver/Raw Logger Error와 독립. 성공/실패는 Activity & Errors에서 확인 가능.
+- 기존 LoggingSession writer 구현과 GUI timer를 재사용. 별도 Thread 구현/Timer 추가 없음.
+  Export 작업 계수0/1과 Signal 행 수를 구분해 closed/no error일 때만 행 수 완료 메시지 표시.
+- 기존 Automation11 Scenario, Driver Validation/Live TX 차단, CAN/CLI 계약은 기존 테스트와 Native 회귀 PASS.
+
+### Initial findings and retests
+
+신규 pytest 첫 실행은42 PASS/1 FAIL이었다.
+Raw Logger written>=3만 기다린 시점에 GUI processed=2일 수 있었다. Writer/GUI는 독립 경로이므로
+제품 오류가 아니라 신규 테스트의 동기화 오류였다. 실제 GUI processed>=3도 기다리도록 보완했다.
+기존 Assertion 삭제/완화는 없고 신규43개 재실행 및 최종659개 전체 PASS다.
+
+새 Native 첫 실행은 Source를 Mock / TEST ONLY라는 잘못된 문자열로 고정 비교해 실패했다.
+실제 기존 Source는 Mock / DEMO ONLY다. 저장 값은 실제 Source와 일치했다.
+새 Native를 관측 당시 실제 Source와 비교하도록 수정 후 새 출력 폴더에서 재실행해 PASS했다.
+제품 Source 값/계약을 변경하지 않았다. 기존 Native12종은 모두 첫 실행 PASS였다.
+
+신규 Native에서 저장한 예: Decoded CSV/JSONL 각15행, Fault CSV/JSONL 각4행.
+수신 snapshot 시점에 따라 행 수는 달라질 수 있다. 실제 기록행과 snapshot.row_count 일치를 검사했다.
+추가 fault-contract.jsonl은 기존 DBC의 실제 Node Enum/Status Unknown 보존 시험이다.
+기존 Logger Native에서도 CSV/JSONL byte 호환성, 파일 보호/오류 후 재시작/활성 Close PASS다.
+
+### Evidence / visual verification
+
+외부 증적 폴더: hint48-phase3l1-20261017.
+pytest-all.txt, cli140.txt, pytest-results.json, entry-pip-results.json,
+native-final의 기존12개 로그 및 native-pause-export-recheck/result.txt를 사용한다.
+native-final/results.json에는 신규 Native의 최초 실패도 남아 있다.
+최종 통합 결과는 final-results.json에서 기존12개 PASS + 신규 재실행 PASS를 구분한다.
+
+신규 Native 실제 QWidget.grab() 캡처:
+- native-pause-export-recheck/paused-monitor-800x600.png
+- native-pause-export-recheck/paused-monitor-1024x768.png
+- native-pause-export-recheck/paused-monitor-1280x920.png
+- native-pause-export-recheck/fault-export-800x600.png
+- native-pause-export-recheck/fault-export-1024x768.png
+- native-pause-export-recheck/fault-export-1280x920.png
+- native-pause-export-recheck/live-not-connected-tx-blocked.png
+
+800×600 Monitor 및 일반 크기 Fault 캡처를 시각 점검했다.
+새 Pause/Export 버튼을3크기에서 스크롤하여 전체 rect 접근 가능함을 Native에서 확인했다.
+기존 Polish Native는9페이지×3크기/주요 액션48건/Alt+1~9/긴 이름/Live TX Blocked도 다시 통과했다.
+사용자 수동 사용성 확인이나 전체 DPI 검증으로 주장하지 않는다.
+
+### Preservation / pending review
+
+SHA-256 대조: D: 원본25개, 다른 Worktree 추적446개·HEAD·Status, 리뷰2개,
+임시 Excel 및 Git refs가 작업 전과 동일하다. 기존 tracked pytest/Native 소스도 그대로다.
+기존 README/VERIFICATION은 append로 보존한다. 공통 CAN/DBC/LDF/Matrix/Routing/Requirements,
+Firmware, CLI Sender/Adapter/Codec/Cache/Logger 계약과 의존성은 변경하지 않았다.
+
+팀 고정 버전/배포 라이선스/Fixture 재배포·Production Interface 의미/Freeze는 미확정 또는 검토 필요.
+담당자 코드 리뷰, 사용자 수동 UI, 실제 ACL/디스크 고갈, 고부하·장시간 무손실은 NOT VERIFIED다.
+0x600 미승인 후보, Driver Live TX BLOCKED, VCU_Command(0x100) PC 송신 금지 유지.
+CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**다.
+Event 저장소·Event schema/원천/시각/상태 계약은 후속 팀 결정 필요이며 이번에 새로 구현하지 않았다.
+Git add/Commit/Push/PR/Merge/Jira 등록·Done은 실행하지 않았다.
