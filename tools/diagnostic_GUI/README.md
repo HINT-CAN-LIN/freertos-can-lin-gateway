@@ -1523,3 +1523,36 @@ tests/gui_network_native_smoke.py --output-dir <새 증적 폴더>는 Mock/Fake 
 송신 Task Jitter/Hardware Performance/무손실 수신으로 해석하지 않는다.
 PC 입력 Interface 승인 대기, Driver 실제 CAN TX BLOCKED, Event Export Open을 유지한다.
 CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**다.
+
+
+## Phase 3M-2 — Fault Injection / Mock TEST ONLY (2026-10-17)
+
+Fault Monitor(Alt+6) 하단의 **Fault Injection / Mock TEST ONLY**를 펼친다.
+기존9페이지/단축키와 Test Automation11개 정의는 유지한다. 실행 명령/의존성 변경은 없다.
+
+- user Source=Mock에서 기존 tests/fixtures/test_only.dbc를 명시적으로 로드한 뒤 Run한다.
+  별도 hidden Fake 창에서 기존 FIFO RX→Decode→Fault History→Assertion 경로만 실행한다.
+- 기존 Fault History infrastructure / DBC Decode failure / Isolated Source transition
+  **3개 Scenario 객체와 같은 Automation Runner**를 참조한다. 새 Scenario ID/Runner/Thread/Timer는 없다.
+- Expected/Actual/Assertion PASS·FAIL, ERROR/CANCELLED와 격리 시험의 실제 Fault History를 표시한다.
+  결과는 Mock software assertions이며 실제 ECU Fault 발생·Recovery PASS가 아니다.
+- Run / Cancel·Retry cleanup / Reset test results와 최대10개 시험 이력을 제공한다.
+  Reset은 자신의 시험 결과만 지우며 사용자 Fault History나 기존 Automation history를 지우지 않는다.
+- 실제 user Live Source에서는 버튼·Slot·Model·기존 Runner guard로 실행을 차단한다.
+  기존 Source 편집 잠금/원복을 유지하며 실제 강제 설정 변경 시 자기 trial만 안전 취소한다.
+  사용자 수신·Logging·Graph·Cache·Network는 별도로 계속된다.
+- Fixture에는 FaultCode/ECUOffline/RecoveryState/SystemState가 없다.
+  실제 Fault_Status 주입/Timeout/Alive/ECU Recovery 시험은 **Open**이다.
+  Production DBC를 테스트 입력으로 자동 연결하거나 Fixture를 임의 확장하지 않는다.
+- Status Unknown, ECUOffline Node Enum, FaultCode0 자동 Clear 금지,
+  ACTIVE/CLEARED 승인 대기, Event 저장소·Replay·Resync Open을 유지한다.
+
+[Scenario 근거·격리·guard·관측/시험 이력·Open 및 후속 Task](docs/fault_mock_injection.md)를 참조한다.
+새 자동 시험은 tests/test_fault_injection.py, tests/test_fault_injection_view.py,
+Windows 시험은 tests/gui_fault_injection_native_smoke.py --output-dir <새 증적 폴더>다.
+기존 전용 basetemp와 -p no:cacheprovider를 사용한다. 실제 결과는 VERIFICATION 최신 절에 기록한다.
+
+실제 CAN Bus Open/TX/ECU 제어 기능을 추가하지 않았다.
+사용자 수동 UI·실제 CANable/ECU·담당자 코드 리뷰 NOT VERIFIED, 팀 고정 버전 미확정.
+Fixture 재배포 미승인, Driver Live TX BLOCKED, PC 입력 Interface 승인 대기를 유지한다.
+CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**다.

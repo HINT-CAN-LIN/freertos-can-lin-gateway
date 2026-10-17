@@ -2243,3 +2243,138 @@ git diff --check, 신규 Python AST/공백 검사 및 정확한 변경 파일 �
 Jitter 공식/threshold, Bus Load/packet loss 모델은 후속 팀 리뷰 필요.
 CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**, 핸드북4.2/5.5 Interface Change 절차 적용.
 Git add/Commit/Push/PR/Merge/Jira 등록·Done 미실행.
+
+
+## Phase 3M-2 — Fault Injection / Mock TEST ONLY (2026-10-17)
+
+### Scope / actual source review
+
+기준 PC-Diagnostic-Test / 14e31ca40a3196222087fdf3184ab8b26088e77d, 시작 Working Tree clean.
+기존 Fault Monitor 아래 TEST ONLY 패널, Qt 독립 FaultInjectionModel facade,
+Assertion/시험 History 표시와 방어 검증을 추가했다.
+기존9페이지/Alt+1~9/탭 index 및 Automation11개 정의를 유지한다.
+
+실제 조사 근거:
+- gui/automation.py catalog/ScenarioInput와 gui/scenario_runner.py의 격리 MainWindow/Worker/cleanup 경로.
+- FaultHistoryEntry/Model 및 기존 Fault tests, decode/cache/Raw/Source/Logging 경계.
+- 명시적 tests/fixtures/test_only.dbc의 기존 Signal과 SHA-256 계약.
+- 현재 Repository DBC Fault_Status(0x310)/Gateway 송신/4개 Signal 및 Node Enum/choice.
+- Handbook10.1~10.5(p27~28)의 감지·전파·복구/주입 범위와 기존 Interface 리뷰 J2-016/018.
+자료의 감지 Threshold/Recovery 예시를 새로운 PC Fault 정책으로 구현하지 않았다.
+
+상세 Scenario/입력/상태/차단/관측과 실제 Fault의 차이/Open은 docs/fault_mock_injection.md에 기록했다.
+이번 구현은 **기존 관측 시험**이다. 실제 Fault_Status 주입/ECU Fault 발생·Recovery/Hardware 완료가 아니다.
+
+### Reuse / source boundary / retained meanings
+
+기존 HINT48-MOCK-FAULT-v1, HINT48-MOCK-DECODE-ERROR-v1, HINT48-MOCK-SOURCE-v1의
+같은 Scenario 객체/입력/expected를 참조한다. 새 ID/Scenario 복제/Runner/Thread/Timer는 없다.
+같은 Automation Runner를 공유하므로 다른 Automation 실행을 교체하거나 취소하지 않는다.
+hidden child에는 새 패널을 만들지 않아 재귀 Runner 생성이 없다.
+
+사용자 Source=Mock와 명시적 unchanged fixture를 Model/기존 Runner에서 각각 검사한다.
+실제 user Live(주입 backend 포함)는 버튼/Slot/Model/Runner 직접 호출에서도 차단한다.
+기존 Source 편집 lock/programmatic 원복을 유지한다.
+이를 우회한 실제 raw settings 변경은 기존 changed/tick에서 감지해 자기 trial만 cancel한다.
+기존 Close→request_close→cleanup→Close 재시도 계약을 그대로 사용한다.
+
+사용자 Receiver/Logger/Graph/Cache/Raw/Fault/Network는 격리 trial과 별개다.
+시험 중 실제 사용자 Mock Rx/Logging/Graph가 계속됨과 멈춘 사용자 snapshot 불변을 검증했다.
+기존 FaultHistoryEntry를 최대8개 참조하고 시험 RunResult를 최대10개 보관한다.
+새 FaultTestRecord는 PC 시험 결과이며 ECU Fault Event 저장소가 아니다.
+Reset은 자기 결과만 지우고 기존 Automation 결과/사용자 Fault History를 지우지 않는다.
+
+Fixture에는 FaultCode/ECUOffline/RecoveryState/SystemState가 없다.
+Production DBC를 자동 입력으로 채택하거나 Fixture를 확장하지 않았다.
+별도 읽기 전용 회귀에서 기존 실제 DBC FaultCode0/ECUOffline1=VCU/RecoveryState0 choice ACTIVE와
+Status Unknown 보존을 확인했다. 이 Label을 실제 Fault 해제/상태 전이 승인으로 쓰지 않는다.
+Gateway 송신 주체/ECUOffline Node Enum/FaultCode0 자동 Clear 금지/Status Unknown을 유지한다.
+ACTIVE/CLEARED 승인, 실제 Fault_Status 시험, Event 저장소/Replay/Resync는 계속 Open이다.
+
+### Actual final verification
+
+기존 .venv: Python3.14.6 / PySide6 6.10.3 / python-can4.6.1 / cantools44.2.1 / pytest9.1.1.
+추가 패키지 설치/재설치/pyproject 변경 없음. 팀 고정 승인 버전은 미확정이다.
+
+| 검증 | 이번 실제 결과 |
+|---|---|
+| 새 모델 + 기존 Automation/Runner 국소 회귀 | 54 passed /12.01s |
+| 신규 Model/GUI 중간 | 35 passed /6.81s — Header 회귀1개 추가 전 |
+| 신규 Model/GUI 최종 단독 | **36 passed /8.85s** |
+| Header 보완 전 전체 | 734 passed /100.46s — 최종735와 구분 |
+| 최종 전체 pytest | **735 passed /116.41s**, 기존699 + 신규36, fail/skip 없음 |
+| 최종 CLI 별도 회귀 | **140 passed /1.30s**, 초기 Phase1/2 테스트 목록 |
+| 최종 Windows Native 기존14종 | **14 PASS** — Raw/Decode/Vehicle/ECU/Logging/Fake Live/Graph/Fault/Automation/Workspace/Driver/Polish/Pause Export/Network |
+| 최종 신규 Fault TEST Native | **PASS** — 기존3개 실행, PASS/FAIL/ERROR/CANCEL, Live 차단,3크기, 종료 |
+| 모듈/설치 CLI·GUI --help | 4개 모두 종료0 |
+| pip check | 종료0, No broken requirements found |
+| 실제 Hardware / 사용자 수동 UI | **NOT VERIFIED / NOT RUN** |
+
+pytest는 쓰기를 확인한 .test-tmp/phase3m2-verified 아래 새 basetemp와 -p no:cacheprovider,
+QT_QPA_PLATFORM=offscreen을 사용했다. Native는 QT_QPA_PLATFORM 없는 실제 windows platform에서 실행했다.
+최종 code 이후 전체735, CLI140 및 Native15종을 새 증적 경로로 재실행했다.
+새 Assertion/Header 검증을 추가했으며 기존 테스트/Assertion은 수정하지 않았다.
+
+신규36개 검증:
+- 기존11개/3개 참조의 객체 identity, 유효/unsupported 선택, 입력 없음/잘못된 Raw/TX,
+  No DBC/Fixture 누락/Production DBC 불일치, closing/DBC dialog/shared busy.
+- 기존 실제 파이프라인에서3개 Scenario PASS. expected만 다르게 한 TEST ONLY 시험은 FAILED로 검출.
+  누락/취소를 PASS로 표시하지 않으며 준비 ERROR가 이전 PASS 표로 표시되지 않음.
+- 중복 Run/Reset 차단, 자신의 Cancel, 타 Automation Run cancel 금지, 유한 이력/Reset,
+  실제 receive 오류/정상 자원 해제와 active Close.
+- Primary Live/주입 Live의 Slot/Model 및 기존 Runner guard.
+  can.Bus, PythonCanInterface.send, MockCanInterface.send 공개 경계 spy는 호출되면 실패하도록 설정.
+  신규 Native 실제 결과 open0/send0, ScenarioInput send_calls0,7개 stream 정상해제.
+  새 코드에는 ECU 제어 API 호출이 없다. 실제 물리 측정으로 해석하지 않는다.
+- 기존 잠금 중 Source 변경 시도는 원복, 신호 차단으로 강제한 실제 Source 변경은 CANCELLED.
+- TEST ONLY Fault History의 Status Unknown/실제 신호와 시험 이력 구분,
+  사용자 Fault/Cache/Graph/Network/Raw snapshot 보존 및 사용자 활성 Mock Rx/Logger 유지.
+- 기존 실제 DBC의 Node Enum/choice/FaultCode0/Status Unknown 읽기 전용 계약 회귀.
+- 800×600/1024×768/1280×920 액션/Navigation, 새 Header 실제 글꼴 폭/tooltip,
+  기존 Raw Pause/Export/Network/Automation11/Driver/Logging/Graph 기존 suite·Native 회귀.
+
+### Initial findings / visual correction
+
+신규 GUI 첫 실행은17 PASS/1 FAIL이었다.
+테스트가 잠긴 mode_combo를 바꿔 실제 Source가 변경됐다고 가정했으나,
+기존 ConnectionView.settings_changed가 즉시 Mock으로 원복했다.
+제품 결함으로 단정하지 않았다. 기존 원복 동작은 별도 새 시험으로 유지하고,
+원래 취소 검증에는 QSignalBlocker로 시험자가 실제 값 변경을 만든 뒤 CANCELLED를 확인했다.
+기존 Source 방어 코드를 수정하거나 기존 Assertion을 약화하지 않았다.
+
+초기 실제 캡처에서 새 결과 표의 Actual observation/Actual signals 제목이 잘렸다.
+새 readonly_table의 styled Header 글꼴 폭/여백과 tooltip만 보완하고 새 회귀1개를 추가했다.
+최종 캡처에서 제목 가독성을 확인했다. 전체735/CLI140/Native15종은 이 보완 이후 결과다.
+
+### Evidence / actual Windows captures
+
+외부 증적 hint48-phase3m2-20261017:
+- verified-tests-final/pytest-all.txt, cli140.txt, pytest-results.json — 최종735/140
+- entry-pip-results.json — 모듈·설치 진입점/의존성/설치 버전
+- native-verified/results.json,15개 로그 — 최종 기존14 + 신규1 모두 종료0
+- native-verified/fault-injection/ — 최종11개 PNG 및 사용자 Mock Raw Logging 시험 파일
+- source-test-sha256.json, preservation.json, git-final.json — 보존/변경 근거
+- fault-injection-first/, native-final/, verified-tests/ — Header 보완 전 기록, 최종과 구분
+
+최종 캡처(native-verified/fault-injection/):
+fault-test-actions-800x600.png, fault-test-assertions-800x600.png, fault-test-history-800x600.png,
+fault-test-actions-1024x768.png, fault-test-assertions-1024x768.png, fault-test-history-1024x768.png,
+fault-test-actions-1280x920.png, fault-test-assertions-1280x920.png, fault-test-history-1280x920.png,
+fault-test-assertion-failed.png, fault-test-live-blocked.png.
+실제 QWidget.grab() 결과를 시각 점검했고 작은 창의 주요 버튼·표 rect 접근을 자동 확인했다.
+사용자 수동 확인/전체 DPI·Screen Reader 검증은 NOT VERIFIED다.
+
+### Preservation / open work
+
+SHA-256 대조로 D: 원본25개, 다른 Worktree 추적446개·HEAD·Status, 리뷰2개,
+임시 Excel 및 Git refs를 보존했다. README/VERIFICATION은 기존 바이트를 보존해 append했다.
+기존 Automation catalog/Runner/Fixture, 모든 기존 테스트, 공통 Matrix/DBC/LDF/Routing/Requirements/
+Firmware와 기존 Adapter/Codec/Cache/CLI Sender/Logger/Network/Driver 계약을 변경하지 않았다.
+새 소스/테스트 Syntax/공백/Markdown 링크와 git diff --check를 확인했다. Stage는 비어 있다.
+
+팀 고정 버전·배포/Fixture 재배포 승인·Production Fault/Recovery/Interface Freeze는 미확정 또는 검토 필요.
+담당자 코드 리뷰·사용자 수동 UI·실제 CANable/ECU Hardware는 NOT VERIFIED.
+0x600 미승인 후보, Driver Live TX BLOCKED, VCU_Command(0x100) PC 송신 금지를 유지한다.
+실제 Fault_Status fixture/Scenario와 Event/Replay/Resync 계약은 후속 Jira 검토 초안으로 남겼다.
+CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**, 핸드북4.2/5.5 Interface Change 절차 적용.
+Git add/Commit/Push/PR/Merge/Jira 등록·Done 미실행.

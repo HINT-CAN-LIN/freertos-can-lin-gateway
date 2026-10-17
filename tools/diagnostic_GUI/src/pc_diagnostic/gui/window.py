@@ -76,6 +76,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.automation_view = None
         self.driver_control_view = None
+        self.fault_injection_view = None
         self._interface_factory = interface_factory
         self._live_interface_factory = live_interface_factory or open_live_interface
         self._source_text = MOCK_SOURCE_LABEL
@@ -198,6 +199,15 @@ class MainWindow(QMainWindow):
         self.pause_button.clicked.connect(self.toggle_raw_pause)
         self.export_controls = ExportControls(self)
         self.update_raw_pause_label()
+        if self.automation_view is not None:
+            # 기존 Runner를 공유하고 Fault Monitor에만 TEST ONLY 패널을 연결한다.
+            from .fault_injection_view import FaultInjectionView
+            from .ui_components import Disclosure
+            from PySide6.QtWidgets import QWidgetItem
+            self.fault_injection_view = FaultInjectionView(self, self.fault_monitor_view)
+            self.fault_injection_section = Disclosure(
+                self.fault_monitor_view, self.fault_monitor_view.layout(),
+                "Fault Injection / Mock TEST ONLY", [QWidgetItem(self.fault_injection_view)])
         self.timer = QTimer(self)
         self.timer.setInterval(DISPLAY_REFRESH_MS)
         self.timer.timeout.connect(self.refresh_frames)
@@ -314,6 +324,8 @@ class MainWindow(QMainWindow):
             self.automation_view.refresh()
         if self.driver_control_view is not None:
             self.driver_control_view.refresh()
+        if self.fault_injection_view is not None:
+            self.fault_injection_view.refresh()
         refresh_workspace(self)
 
     @Slot()
@@ -406,6 +418,8 @@ class MainWindow(QMainWindow):
         self.connection_view.set_state("Error")
         self.connection_view.show_error(message)
         self.error_area.appendPlainText(message)
+        if self.fault_injection_view is not None:
+            self.fault_injection_view.refresh()
         refresh_workspace(self)
 
     @Slot()
@@ -676,6 +690,8 @@ class MainWindow(QMainWindow):
         self.graph_view.close_view()
         self.fault_monitor_view.close_view()
         self.driver_control_view.close_view()
+        if self.fault_injection_view is not None:
+            self.fault_injection_view.close_view()
         if self.automation_view is not None:
             self.automation_view.close_view()
         event.accept()
