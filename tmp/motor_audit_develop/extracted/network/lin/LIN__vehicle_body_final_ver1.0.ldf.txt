@@ -1,0 +1,256 @@
+// FreeRTOS CAN-LIN Gateway - candidate LIN Description File
+// Source priority: LIN_Matrix.xlsx > system architecture > handbook.
+// PRE-FIRMWARE DIAGNOSTIC INTERFACE BASELINE - APPROVED 2026-09-29
+// The current source artifacts did not define NAD/product_id/response_error.
+// The approved values below are the design baseline for firmware development.
+// Actual Slave ECU/NCF compatibility remains a later hardware validation step.
+//
+// Approved project decision, 2026-09-29:
+// - BODY_10ms is the operational candidate schedule.
+// - BASE_20ms is retained as a reference schedule only.
+// - Window values follow the message definition workbook.
+// - Application-frame checksum policy is Enhanced.
+// Missing/TBD fields resolved from the message definition workbook still
+// require Matrix synchronization and relative-owner review before Interface
+// Freeze; see the companion review report.
+
+LIN_description_file;
+LIN_protocol_version = "2.2";
+LIN_language_version = "2.2";
+LIN_speed = 19.2 kbps;
+
+Nodes {
+  // 10 ms base time is required by the resolved BODY_10ms schedule. The
+  // original LIN Matrix 20 ms baseline is retained as BASE_20ms below.
+  // Jitter is a 1 ms target, not a hardware measurement.
+  Master: Gateway_ECU, 10 ms, 1 ms ;
+  Slaves: Door_ECU, Light_ECU, Window_ECU ;
+}
+
+Signals {
+  // Door_Status - provisional bit layout from the message definition workbook.
+  DoorOpen: 1, 0, Door_ECU, Gateway_ECU ;
+  DoorLocked: 1, 0, Door_ECU, Gateway_ECU ;
+  DoorAlive: 4, 0, Door_ECU, Gateway_ECU ;
+  // Provisional diagnostic response-error signal for tool validation.
+  DoorResponseError: 1, 0, Door_ECU, Gateway_ECU ;
+
+  // Door_Command - provisional bit layout from the message definition workbook.
+  LockCommand: 2, 0, Gateway_ECU, Door_ECU ;
+  RequestState: 1, 0, Gateway_ECU, Door_ECU ;
+
+  // Light_Command - provisional bit layout from the message definition workbook.
+  HeadLamp: 1, 0, Gateway_ECU, Light_ECU ;
+  TurnLamp: 2, 0, Gateway_ECU, Light_ECU ;
+  HazardLamp: 1, 0, Gateway_ECU, Light_ECU ;
+  ReverseLamp: 1, 0, Gateway_ECU, Light_ECU ;
+  BrakeLamp: 1, 0, Gateway_ECU, Light_ECU ;
+
+  // Light_Status - provisional bit layout from the message definition workbook.
+  LampState: 6, 0, Light_ECU, Gateway_ECU ;
+  LightAlive: 4, 0, Light_ECU, Gateway_ECU ;
+  DiagnosticState: 2, 0, Light_ECU, Gateway_ECU ;
+  // Provisional diagnostic response-error signal for tool validation.
+  LightResponseError: 1, 0, Light_ECU, Gateway_ECU ;
+
+  // Window_Command / Window_Status - resolved from the message definition
+  // workbook because the current LIN Matrix marks these fields TBD / OPEN.
+  WindowCommand: 2, 0, Gateway_ECU, Window_ECU ;
+  WindowState: 3, 0, Window_ECU, Gateway_ECU ;
+  UpperLimit: 1, 0, Window_ECU, Gateway_ECU ;
+  LowerLimit: 1, 0, Window_ECU, Gateway_ECU ;
+  MotorState: 2, 0, Window_ECU, Gateway_ECU ;
+  WindowAlive: 4, 0, Window_ECU, Gateway_ECU ;
+  // Provisional diagnostic response-error signal for tool validation.
+  WindowResponseError: 1, 0, Window_ECU, Gateway_ECU ;
+}
+
+Frames {
+  // Approved PID interpretation: keep the source numeric value as LDF
+  // frame_id. Protected-ID parity remains a Bus Capture verification item.
+  Door_Status: 0x10, Door_ECU, 1 {
+    DoorOpen, 0 ;
+    DoorLocked, 1 ;
+    DoorAlive, 2 ;
+    DoorResponseError, 7 ;
+  }
+  Door_Command: 0x11, Gateway_ECU, 1 {
+    LockCommand, 0 ;
+    RequestState, 2 ;
+  }
+  Light_Command: 0x12, Gateway_ECU, 1 {
+    HeadLamp, 0 ;
+    TurnLamp, 1 ;
+    HazardLamp, 3 ;
+    ReverseLamp, 4 ;
+    BrakeLamp, 5 ;
+  }
+  Light_Status: 0x13, Light_ECU, 2 {
+    LampState, 0 ;
+    LightAlive, 8 ;
+    DiagnosticState, 12 ;
+    LightResponseError, 14 ;
+  }
+  Window_Command: 0x14, Gateway_ECU, 1 {
+    WindowCommand, 0 ;
+  }
+  Window_Status: 0x15, Window_ECU, 2 {
+    WindowState, 0 ;
+    UpperLimit, 3 ;
+    LowerLimit, 4 ;
+    MotorState, 5 ;
+    WindowAlive, 8 ;
+    WindowResponseError, 14 ;
+  }
+}
+
+// Approved pre-firmware diagnostic attributes. These values are the current
+// project design baseline and require later Slave/NCF and Bus validation.
+Node_attributes {
+  Door_ECU {
+    LIN_protocol = "2.2" ;
+    configured_NAD = 0x05 ;
+    initial_NAD = 0x05 ;
+    product_id = 0x0000, 0x0005, 255 ;
+    response_error = DoorResponseError ;
+    P2_min = 50 ms ;
+    ST_min = 0 ms ;
+    N_As_timeout = 1000 ms ;
+    N_Cr_timeout = 1000 ms ;
+    configurable_frames {
+      Door_Status;
+      Door_Command;
+    }
+  }
+  Light_ECU {
+    LIN_protocol = "2.2" ;
+    configured_NAD = 0x06 ;
+    initial_NAD = 0x06 ;
+    product_id = 0x0000, 0x0006, 255 ;
+    response_error = LightResponseError ;
+    P2_min = 50 ms ;
+    ST_min = 0 ms ;
+    N_As_timeout = 1000 ms ;
+    N_Cr_timeout = 1000 ms ;
+    configurable_frames {
+      Light_Command;
+      Light_Status;
+    }
+  }
+  Window_ECU {
+    LIN_protocol = "2.2" ;
+    configured_NAD = 0x07 ;
+    initial_NAD = 0x07 ;
+    product_id = 0x0000, 0x0007, 255 ;
+    response_error = WindowResponseError ;
+    P2_min = 50 ms ;
+    ST_min = 0 ms ;
+    N_As_timeout = 1000 ms ;
+    N_Cr_timeout = 1000 ms ;
+    configurable_frames {
+      Window_Command;
+      Window_Status;
+    }
+  }
+}
+
+Schedule_tables {
+  // ACTIVE CANDIDATE: message definition workbook Team Schedule, 10 ms slot
+  // and 100 ms supercycle. The two extended delays absorb source Reserved/
+  // Idle entries. Schedule selection is an application decision; this table
+  // is the approved operational candidate.
+  BODY_10ms {
+    Door_Status delay 10 ms ;
+    Window_Command delay 10 ms ;
+    Light_Command delay 10 ms ;
+    Window_Status delay 10 ms ;
+    Light_Status delay 20 ms ;
+    Door_Command delay 10 ms ;
+    Light_Command delay 30 ms ;
+  }
+
+  // REFERENCE ONLY: LIN_Matrix.xlsx / LIN_Schedule 0, 20, 40, 60 ms entries
+  // and 100 ms repeat. The final 40 ms delay preserves the next-cycle start
+  // at 100 ms; this reference schedule does not satisfy Light_Command 50 ms.
+  BASE_20ms {
+    Door_Status delay 20 ms ;
+    Light_Command delay 20 ms ;
+    Light_Status delay 20 ms ;
+    Door_Command delay 40 ms ;
+  }
+}
+
+// Approved application-frame checksum policy: Enhanced. Checksum is not a
+// per-frame field in the canonical LDF syntax; Matrix/Firmware/Test must keep
+// the policy synchronized and verify it on the LIN bus.
+Signal_encoding_types {
+  Bool_Encoding {
+    logical_value, 0, "OFF" ;
+    logical_value, 1, "ON" ;
+  }
+  LockCommand_Encoding {
+    logical_value, 0, "NO_ACTION" ;
+    logical_value, 1, "LOCK" ;
+    logical_value, 2, "UNLOCK" ;
+    logical_value, 3, "INVALID" ;
+  }
+  RequestState_Encoding {
+    logical_value, 0, "NO_REQUEST" ;
+    logical_value, 1, "REQUEST_STATUS" ;
+  }
+  TurnLamp_Encoding {
+    logical_value, 0, "OFF" ;
+    logical_value, 1, "LEFT" ;
+    logical_value, 2, "RIGHT" ;
+    logical_value, 3, "INVALID" ;
+  }
+  LampState_Encoding {
+    logical_value, 0, "ALL_OFF" ;
+    logical_value, 1, "HEAD_LAMP" ;
+    logical_value, 2, "LEFT_TURN" ;
+    logical_value, 4, "RIGHT_TURN" ;
+    logical_value, 8, "HAZARD" ;
+    logical_value, 16, "REVERSE_LAMP" ;
+    logical_value, 32, "BRAKE_LAMP" ;
+  }
+  DiagnosticState_Encoding {
+    logical_value, 0, "NORMAL" ;
+    logical_value, 1, "WARNING" ;
+    logical_value, 2, "FAULT" ;
+    logical_value, 3, "INVALID" ;
+  }
+  WindowCommand_Encoding {
+    logical_value, 0, "STOP" ;
+    logical_value, 1, "UP" ;
+    logical_value, 2, "DOWN" ;
+    logical_value, 3, "INVALID" ;
+  }
+  WindowState_Encoding {
+    logical_value, 0, "STOPPED" ;
+    logical_value, 1, "MOVING_UP" ;
+    logical_value, 2, "MOVING_DOWN" ;
+    logical_value, 3, "UPPER_LIMIT" ;
+    logical_value, 4, "LOWER_LIMIT" ;
+    logical_value, 5, "FAULT" ;
+    logical_value, 6, "RESERVED" ;
+    logical_value, 7, "INVALID" ;
+  }
+  MotorState_Encoding {
+    logical_value, 0, "STOPPED" ;
+    logical_value, 1, "DRIVING_UP" ;
+    logical_value, 2, "DRIVING_DOWN" ;
+    logical_value, 3, "FAULT" ;
+  }
+}
+
+Signal_representation {
+  Bool_Encoding: DoorOpen, DoorLocked, HeadLamp, HazardLamp, ReverseLamp, BrakeLamp ;
+  LockCommand_Encoding: LockCommand ;
+  RequestState_Encoding: RequestState ;
+  TurnLamp_Encoding: TurnLamp ;
+  LampState_Encoding: LampState ;
+  DiagnosticState_Encoding: DiagnosticState ;
+  WindowCommand_Encoding: WindowCommand ;
+  WindowState_Encoding: WindowState ;
+  MotorState_Encoding: MotorState ;
+}

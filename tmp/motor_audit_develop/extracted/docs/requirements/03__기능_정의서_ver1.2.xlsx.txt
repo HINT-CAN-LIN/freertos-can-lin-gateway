@@ -1,0 +1,140 @@
+SHEET Function definition
+ROW 1:  |  |  |  |  | 
+ROW 2:  | 기능 정의서 |  |  |  | 
+ROW 3:  |  |  |  |  | 
+ROW 4:  |  |  |  |  | 
+ROW 5:  | VCU ECU | 분류 | 기능명 | 기능설명 | 비고
+ROW 6:  |  | 입력 | Ignition 입력 처리 | 운전자 또는 Mock 입력으로부터 Ignition 상태를 입력받고 차량 상태 판단에 사용함 | OFF / ON / RUN 상태 관리
+ROW 7:  |  |  | Accelerator 입력 처리 | Accelerator 입력값을 수신하여 Torque Request 계산에 사용함 | 입력 모델 사용 가능
+ROW 8:  |  |  | Brake 입력 처리 | Brake 입력 상태를 수신하여 Torque Request 제한 또는 0 처리 판단에 사용함 | Vehicle Control 연계
+ROW 9:  |  |  | Gear 입력 처리 | P/N/D/R Gear 상태를 입력받아 차량 운전 상태를 판단함 | DBC Value Table과 동일 기준
+ROW 10:  |  | 출력 | VCU Command 송신 | TorqueRequest, Gear, Brake, AliveCounter를 CAN Network로 송신함 | VCU_Command
+ROW 11:  |  |  | 차량 제어 정보 제공 | Motor, Gateway, Cluster가 사용할 차량 제어 정보를 CAN Network에 제공함 | CAN 500 kbps
+ROW 12:  |  | ECU 동작 | Vehicle State 판단 | Ignition, Accelerator, Brake, Gear 상태를 기반으로 Vehicle State를 결정함 | IGN_OFF → READY → DRIVE → FAULT
+ROW 13:  |  |  | Torque Request 생성 | 운전자 입력과 Vehicle State를 기반으로 Motor 제어용 Torque Request를 생성함 | SF_01 Vehicle Control
+ROW 14:  |  |  | Alive Counter 관리 | VCU_Command 송신 시 Alive Counter를 0~15 범위에서 순환 관리함 | 4 bit
+ROW 15:  |  |  |  |  | 
+ROW 16:  | Motor ECU | 분류 | 기능명 | 기능설명 | 비고
+ROW 17:  |  | 입력 | VCU Command 수신 | CAN Network로부터 VCU_Command를 수신함 | VCU → Motor
+ROW 18:  |  |  | Torque Request 수신 | VCU에서 생성된 Torque Request를 입력받음 | Motor 제어 기준 입력
+ROW 19:  |  |  | Brake / Gear 상태 수신 | 제어 허용 여부 및 Target RPM 계산에 사용함 | 금지 상태 시 출력 제한
+ROW 20:  |  |  | Alive / Message Age 확인 | VCU_Command의 age, valid, Alive 상태를 직접 감시함 | Motor Local Monitoring
+ROW 21:  |  | 출력 | Motor Status 송신 | Motor 상태를 VCU, Gateway, Cluster로 CAN 송신함 | CAN Network
+ROW 22:  |  | ECU 동작 | Torque Request 처리 | 수신 Torque Request의 유효 범위와 상태를 확인함 | SF_02_01
+ROW 23:  |  |  | Target RPM 계산 | Torque Request를 기준으로 Virtual Motor의 목표 RPM을 계산함 | 기본안 Virtual Motor
+ROW 24:  |  |  | Virtual RPM 생성 | Target RPM에 대한 Virtual Motor 응답을 생성함 | Virtual Motor Model
+ROW 25:  |  |  | Motor State 관리 | OFF / READY / RUN / FAIL_SAFE 상태를 관리함 | MotorState: 0 OFF / 1 READY / 2 RUN / 3 FAIL_SAFE
+ROW 26:  |  |  | Local Fail-safe 판단 | VCU timeout 또는 invalid/alive 오류 발생 시 자체적으로 안전 상태를 적용함 | Gateway 별도 명령 대기 금지
+ROW 27:  |  |  | Safe Output 적용 | Fault 시 TorqueApplied=0, Target RPM=0 및 RPM 감쇠 처리를 수행함 | Local Fail-safe
+ROW 28:  |  |  | 실제 Motor Demonstrator 출력 | Virtual Motor 결과를 Driver/H-Bridge 및 DC Motor Demonstrator로 출력함 | 보조 Physical Output
+ROW 29:  |  |  | Motor Status 생성 | RPM, TorqueApplied, MotorState, AliveCounter를 생성함 | Motor_Status
+ROW 30:  |  |  |  |  | 
+ROW 31:  | Gateway ECU | 분류 | 기능명 | 기능설명 | 비고
+ROW 32:  |  | 입력 | CAN Message 수신 | VCU, Motor 등 CAN ECU에서 전송되는 Message를 수신함 | CANRxTask
+ROW 33:  |  |  | LIN Response 수신 | Door, Light, Window ECU의 LIN Response를 수신함 | Gateway = LIN Master
+ROW 34:  |  | 출력 | LIN Command 송신 | Door, Light, Window ECU에 Command를 LIN으로 전달함 | LIN Master
+ROW 35:  |  |  | Vehicle Status 송신 | 차량 및 Motor 상태를 Cluster/PC로 전달함 | Vehicle_Status
+ROW 36:  |  |  | Body Status 송신 | Door, Light, Window 상태를 통합하여 Body_Status로 송신함 | Body_Status / 02 메시지 정의서 FIX 기준
+ROW 37:  |  |  | Gateway Status 송신 | Gateway Health, Queue 상태 등을 CAN으로 송신함 | Gateway_Status
+ROW 38:  |  |  | Fault Status 송신 | FaultCode, ECUOffline, RecoveryState, SystemState를 Cluster/PC에 Fault_Status Event로 전달함 | Fault_Status 0x310 Event
+ROW 39:  |  |  | Fault 외부 전파 | 검출된 Fault/Health 정보를 Cluster와 PC Tool에 전달함 | 외부 전파 누락 시 Fault 완료 아님
+ROW 40:  |  | ECU 동작 | CAN Message Validation | 수신 Message의 ID, DLC 및 Signal 유효성을 확인함 | CANRxTask
+ROW 41:  |  |  | CAN Signal Decoding | 수신 CAN Message를 Signal 단위로 해석함 | 02 메시지 정의서 FIX / vehicle.dbc 기준으로 Signal Decode
+ROW 42:  |  |  | CAN Signal Encoding | 송신할 상태 및 Fault Signal을 CAN Message Payload로 변환함 | SF_07_04
+ROW 43:  |  |  | Vehicle / Body Status 통합 관리 | Vehicle, Motor, Door, Light, Window 상태를 수집·통합하여 Vehicle_Status 및 Body_Status 생성에 사용함 | SF_05
+ROW 44:  |  |  | Signal Cache 관리 | 최신 CAN/LIN Signal과 수신 시각을 내부 Cache에 저장함 | Routing / Health 공용
+ROW 45:  |  |  | CAN-to-LIN Routing | CAN Signal을 정의된 Routing 규칙에 따라 LIN Signal로 변환함 | 예: Gear R → ReverseLamp
+ROW 46:  |  |  | LIN-to-CAN Routing | LIN Body Status를 CAN Status Signal로 변환함 | 예: DoorOpen → Body_Status
+ROW 47:  |  |  | Routing Condition 판단 | Routing Table의 조건을 평가하여 전달 여부를 결정함 | RoutingTask
+ROW 48:  |  |  | Signal Mapping / Conversion | Source Signal과 Destination Signal 사이의 의미와 형식을 변환함 | Routing Table 기반
+ROW 49:  |  |  | Rate Adaptation | CAN/LIN의 서로 다른 통신 주기와 Schedule을 고려하여 전달 시점을 조정함 | SF_10
+ROW 50:  |  |  | LIN Frame Validation | 수신 LIN Response를 02 메시지 정의서 FIX 및 vehicle.ldf 정의 기준으로 검증함 | SF_08_06 / LIN Interface 변경 시 상대 담당자 리뷰 필요
+ROW 51:  |  |  | LIN Schedule 수행 | 정의된 Schedule에 따라 LIN Header/Frame 통신을 수행함 | LINSchedulerTask
+ROW 52:  |  |  | Message Age 감시 | CAN/LIN Message의 마지막 정상 수신 시각을 감시함 | Network Health
+ROW 53:  |  |  | Alive Counter 감시 | Alive Counter 연속성을 확인하고 오류를 검출함 | 0~15 순환
+ROW 54:  |  |  | ECU Online/Offline 판단 | Message Age 및 LIN Response 상태를 기준으로 각 ECU의 online/offline 상태를 판단함 | HealthTask / Window_Status 100 ms, 2 cycle no response → OFFLINE; 정상 Status+WindowAlive ×3 → CLEARED
+ROW 55:  |  |  | Queue Health 감시 | FreeRTOS Queue 사용량 및 Drop 발생을 감시함 | Gateway_Status 연계
+ROW 56:  |  |  | Critical Deadline 감시 | VCU 등 Critical Message의 Deadline을 감시함 | 30 ms timeout 경로
+ROW 57:  |  |  | Fault Detection | CAN timeout, LIN timeout, Alive 오류, ECU Offline, Queue Drop 등을 검출함 | FaultManager
+ROW 58:  |  |  | Fault State 관리 | Fault별 ACTIVE/CLEARED 상태를 독립적으로 관리함 | D-07 기준
+ROW 59:  |  |  | System State 계산 | 다중 Fault 상황에서 대표 System State를 계산함 | FAIL_SAFE > OFFLINE > DEGRADED > NORMAL
+ROW 60:  |  |  | Recovery 관리 | Fault별 Recovery 조건을 확인하여 상태를 복구함. VCU timeout/Door/Alive/Window는 정상 조건 3회 연속 확인, QUEUE_DROP은 Queue full 해소 + 추가 Drop 없음 + QueueUsage < 80%를 HealthTask에서 3회 연속 확인 후 CLEARED 처리함 | SYS_REQ_053, SYS_REQ_057 / V0.4 Freeze
+ROW 61:  |  |  |  |  | 
+ROW 62:  | Cluster ECU | 분류 | 기능명 | 기능설명 | 비고
+ROW 63:  |  | 입력 | Vehicle Status 수신 | Gateway에서 Speed, RPM, Gear, Brake, NetworkState 등 Vehicle_Status를 수신함 | CAN / Vehicle_Status
+ROW 64:  |  |  | Body Status 수신 | Door, Light, Window 상태를 수신함 | CAN
+ROW 65:  |  |  | Fault Status 수신 | FaultCode, ECUOffline, RecoveryState, SystemState를 수신함 | CAN / Fault_Status 0x310
+ROW 66:  |  |  | Gateway Status 수신 | GatewayAlive와 QueueUsage를 수신하여 Gateway Health를 표시함 | CAN / Gateway_Status 0x300
+ROW 67:  |  |  | Motor Status 수신 | Motor ECU로부터 RPM, TorqueApplied, MotorState 등의 Motor 상태를 수신함 | Motor_Status
+ROW 68:  |  | 출력 | TFT 화면 출력 | Vehicle/Body/Fault/Health 정보를 ST7796S TFT에 표시함 | Physical Device
+ROW 69:  |  |  | Fault 경고 표시 | Fault 또는 Offline 발생 시 사용자에게 상태를 표시함 | Cluster Display
+ROW 70:  |  | ECU 동작 | Vehicle Status 관리 | Vehicle 관련 정보를 화면 표시용 상태로 변환함 | SF_06
+ROW 71:  |  |  | Motor Status 관리 | RPM 및 Motor 상태를 표시용 데이터로 관리함 | TFT 표시
+ROW 72:  |  |  | Body Status 관리 | Door, Light, Window 상태를 표시용 데이터로 관리함 | Body Status
+ROW 73:  |  |  | Fault / Health 처리 | Fault와 ECU Health 정보를 표시 가능한 형태로 변환함 | Fault 원인 판정 주체 아님
+ROW 74:  |  |  | Stale / Offline 처리 | 수신 age가 오래된 상태를 stale/offline으로 표시함 | 수신 Age 기반
+ROW 75:  |  |  |  |  | 
+ROW 76:  | Door ECU | 분류 | 기능명 | 기능설명 | 비고
+ROW 77:  |  | 입력 | Door Command 수신 | Gateway LIN Master에서 Door_Command를 수신함 | LIN Slave
+ROW 78:  |  |  | Position / Limit Feedback 입력 | Door Lock Actuator 상태를 Feedback으로 입력받음 | Physical Feedback
+ROW 79:  |  | 출력 | Door Status 송신 | Gateway Polling에 따라 Door 상태 Response를 송신함 | LIN Slave Response
+ROW 80:  |  | ECU 동작 | Door Command 처리 | Gateway에서 전달된 Door 명령을 해석함 | SF_03_01
+ROW 81:  |  |  | Door Open / Close 상태 관리 | Door Open/Close 상태를 내부 상태로 관리함 | SF_03_02
+ROW 82:  |  |  | Door Lock / Unlock 제어 | Lock Actuator를 제어함 | SF_03_03
+ROW 83:  |  |  | Physical Lock Actuation | 실제 Door Lock Actuator를 구동함 | Physical Device
+ROW 84:  |  |  | Feedback 확인 | Position/Limit Feedback을 이용해 동작 결과를 확인함 | 센서 세부 사양 TBD
+ROW 85:  |  |  | Door Status 생성 | DoorOpen, DoorLocked, DoorAlive 등의 상태를 생성함 | Door_Status
+ROW 86:  |  |  |  |  | 
+ROW 87:  | Light ECU | 분류 | 기능명 | 기능설명 | 비고
+ROW 88:  |  | 입력 | Light Command 수신 | Gateway로부터 Light_Command를 LIN으로 수신함 | LIN Slave
+ROW 89:  |  | 출력 | Light Status 송신 | Gateway 요청에 따라 Lamp 상태를 LIN Response로 반환함 | LIN Slave
+ROW 90:  |  | ECU 동작 | Light Command 처리 | 각 Lamp Command를 분석하여 출력 상태를 결정함 | SF_04_01
+ROW 91:  |  |  | Head Lamp 제어 | HeadLamp Command에 따라 Lamp를 제어함 | LED/Lamp
+ROW 92:  |  |  | Turn Lamp 제어 | Turn Lamp 상태를 제어함 | Left/Right 또는 enum
+ROW 93:  |  |  | Hazard Lamp 제어 | Hazard 명령 시 양측 Turn Lamp를 제어함 | 우선순위 정책 문서화
+ROW 94:  |  |  | Reverse Lamp 제어 | ReverseLamp Command에 따라 후진등을 제어함 | Gear=R MVP
+ROW 95:  |  |  | Brake Lamp 제어 | Brake 상태에 따라 Brake Lamp를 제어함 | VCU Brake 연계
+ROW 96:  |  |  | Physical Lamp 출력 | Command를 실제 LED/Lamp Load로 출력함 | Physical Device
+ROW 97:  |  |  | Light Status 생성 | 현재 Lamp 동작 상태를 생성함 | Light_Status
+ROW 98:  |  |  |  |  | 
+ROW 99:  | Window ECU | 분류 | 기능명 | 기능설명 | 비고
+ROW 100:  |  | 입력 | Window Command 수신 | Gateway LIN Master에서 Window_Command를 수신함 | LIN Slave / PID 0x14 / 1 byte / 100 ms / slot 10 ms / Enhanced checksum
+ROW 101:  |  |  | Upper Limit 입력 | Window 상단 Limit Switch 상태를 입력받음 | Physical Device
+ROW 102:  |  |  | Lower Limit 입력 | Window 하단 Limit Switch 상태를 입력받음 | Physical Device
+ROW 103:  |  | 출력 | Window Status 송신 | Gateway LIN Master의 요청에 Window 상태를 응답함 | PID 0x15 / 2 byte / 100 ms / slot 30 ms / Enhanced checksum / 상대 담당자 리뷰 필요
+ROW 104:  |  | ECU 동작 | Window Command 처리 | STOP/UP/DOWN Command를 해석하여 Window 동작 방향을 결정하고, 유효 Window_Command의 수신 상태를 Window ECU가 자체 감시하여 하위 Window SW에서 정의한 Local Command Timeout 초과 시 Gateway의 별도 Fail-safe 명령을 기다리지 않고 Motor STOP을 수행함 | SYS_REQ_059 / SF_13 / SF_19_01 / POL-009 / timeout 정량값은 하위 Window SW 상세 요구사항에서 정의·추적
+ROW 105:  |  |  | Window UP 제어 | H-Bridge를 이용하여 Window Motor를 상승 방향으로 구동함 | SF_19_02
+ROW 106:  |  |  | Window DOWN 제어 | H-Bridge를 이용하여 Window Motor를 하강 방향으로 구동함 | SF_19_02
+ROW 107:  |  |  | Window Limit 감시 | Upper/Lower Limit 상태를 지속적으로 확인함 | SF_19_03
+ROW 108:  |  |  | Window Limit 보호 처리 | Upper/Lower Limit 활성 시 해당 방향 Motor를 STOP/inhibit하여 기계적 한계 방향 추가 구동을 차단함 | SYS_REQ_045 / SCN-10
+ROW 109:  |  |  | Window State 관리 | WindowState를 0 STOPPED / 1 MOVING_UP / 2 MOVING_DOWN / 3 UPPER_LIMIT / 4 LOWER_LIMIT / 5 FAULT / 6 RESERVED / 7 INVALID로 관리함 | SF_19_04 / WINDOW_STATE
+ROW 110:  |  |  | H-Bridge 제어 | Window DC Gear Motor의 방향 및 정지 동작을 제어함 | Physical Device
+ROW 111:  |  |  | Window Status 생성 | WindowState, UpperLimit, LowerLimit, MotorState, WindowAlive를 생성하여 Window_Status로 반환함 | SF_19_05 / Window_Status PID 0x15
+ROW 112:  |  |  |  |  | 
+ROW 113:  | PC Diagnostic Tool | 분류 | 기능명 | 기능설명 | 비고
+ROW 114:  |  | 입력 | CAN 데이터 수신 | CANable을 통해 CAN Network의 Raw Frame을 수신함 | python-can
+ROW 115:  |  |  | DBC 파일 Load | vehicle.dbc를 Load하여 Message/Signal 정보를 사용함 | cantools
+ROW 116:  |  | 출력 | CAN Frame Drop Injection | 특정 Message 전송을 중단하여 Timeout을 발생시킴 | Fault Injection
+ROW 117:  |  |  | Alive Error Injection | 잘못된 Alive Counter를 전달하여 오류를 발생시킴 | Fault Injection
+ROW 118:  |  |  | Invalid Signal Injection | 유효 범위를 벗어난 Signal을 주입함 | Fault Injection
+ROW 119:  |  |  | LIN Response Stop 요청 | LIN ECU Response 중단 Test를 수행함 | Test Fixture 연계
+ROW 120:  |  |  | Test Result 기록 | 테스트 결과 및 Evidence를 기록함 | test-result.md 연계
+ROW 121:  |  |  | CAN 데이터 송신 | CANable을 통해 Test 또는 Fault Injection용 CAN Message를 CAN Network로 송신함 | SYS_REQ_027 / python-can / 정식 UDS 범위 아님
+ROW 122:  |  |  | Normal Communication Restoration | Fault Injection 종료 후 중단·변조했던 통신을 정상 상태로 복원함 | SF_17_05
+ROW 123:  |  | ECU 동작 | Raw CAN Monitoring | Timestamp, ID, DLC, Payload를 실시간 확인함 | Filter / Pause / Save
+ROW 124:  |  |  | DBC Message Decode | Raw CAN Frame을 Message 및 Signal 값으로 Decode함 | vehicle.dbc 기준
+ROW 125:  |  |  | Vehicle 상태 Monitoring | Speed, RPM, Gear, Brake, Torque 등 FIX된 CAN Interface로 제공되는 현재 상태를 표시함 | PySide6 GUI / Ignition은 CAN Signal 미정의로 표시 대상 제외
+ROW 126:  |  |  | ECU Health Monitoring | VCU, Motor, Gateway, Cluster, Door, Light, Window 상태를 확인함 | online/offline
+ROW 127:  |  |  | Network Status Monitoring | Vehicle_Status.NetworkState, Gateway_Status.GatewayAlive/QueueUsage, Fault_Status.SystemState 및 CAN/LIN timeout 정보를 표시함 | Vehicle_Status / Gateway_Status / Fault_Status
+ROW 128:  |  |  | Fault Monitoring | FaultCode, ACTIVE/CLEARED, ECU Offline 및 Representative SystemState를 확인함 | Fault_Status 0x310
+ROW 129:  |  |  | Signal Visualization | RPM, Torque, Health 등의 상태를 GUI/Graph로 표현함 | GUI
+ROW 130:  |  |  | Communication Logging | CAN 및 Decode된 Signal을 기록함 | CSV / JSON
+ROW 131:  |  |  | Fault / Health Event 기록 | Fault 발생·복구 이벤트를 Log로 저장함 | Evidence
+ROW 132:  |  |  | Log Export | Test 및 분석용 Log를 파일로 Export함 | Test Evidence
+ROW 133:  |  |  | 정상 시나리오 자동 시험 | 정상 동작 시나리오를 pytest로 실행함 | Automated Test
+ROW 134:  |  |  | Fault 시나리오 자동 시험 | Timeout/Alive/Offline 등 Fault Test를 자동 실행함 | pytest
+ROW 135:  |  |  | Expected / Actual 비교 | 기대 결과와 실제 결과를 비교함 | PASS / FAIL
+ROW 136:  |  |  | Test Input Generation | 정상 및 Fault Scenario 수행에 필요한 CAN Signal, Message 등의 Test 입력값을 생성함 | SF_18_01
+ROW 137:  |  |  | PASS / FAIL Judgment | Expected Result와 Actual Result의 비교 결과를 기준으로 Test PASS/FAIL을 판정함 | SF_18_05
+ROW 138:  |  |  |  |  | 
+ROW 139:  | ※ 동기화 기준: 02__메시지_정의서_v0.4_정합.xlsx FIX + 05__요구사항_명세서_v0.5_정합.xlsx. CAN/LIN Matrix는 참고용이며 Baseline을 덮어쓰지 않음. Interface 변경 시 상대 담당자 리뷰 필요. |  |  |  | 

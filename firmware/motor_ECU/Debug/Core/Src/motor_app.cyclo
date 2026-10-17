@@ -1,0 +1,7 @@
+../Core/Src/motor_app.c:5:10:motor_servo_pulse_us	6
+../Core/Src/motor_app.c:20:6:motor_command_policy	10
+../Core/Src/motor_app.c:29:6:motor_drive_init	2
+../Core/Src/motor_app.c:34:6:motor_drive_step	21
+../Core/Src/motor_app.c:65:6:motor_app_init	15
+../Core/Src/motor_app.c:84:6:motor_app_receive	13
+../Core/Src/motor_app.c:116:6:motor_app_step	28

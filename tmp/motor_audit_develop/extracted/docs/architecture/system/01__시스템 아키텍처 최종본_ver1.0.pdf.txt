@@ -1,0 +1,332 @@
+PAGE 1
+Driver / User
+Provide Vehicle
+Control Input
+Observe Vehicle /
+Body Status
+Observe Fault /
+Health Status
+Test / Diagnostic Engineer
+Monitor ECU /
+Network Status
+Perform
+Diagnostic
+Analysis
+Execute Fault
+Injection
+Review Test /
+Log Results
+Vehicle Operation
+Perform Vehicle
+Operation
+Perform Body
+Operation
+Provide Vehicle /
+Body Status
+Provide Fault /
+Health Status
+Support
+Diagnostic / Test
+Vehicle Control Input
+.
+.
+Vehicle / BodyStatus
+.
+.
+Fault / Health Status
+.
+.
+ECU / Network Status
+.
+.
+Diagnostic Data
+.
+.
+Fault Injection Request
+.
+.
+Test / LogResult
+.
+.
+PAGE 2
+FreeRTOS CAN-LIN System
+Driver / User
+Test / Diagnostic Engineer
+CANable
+Vehicle Control Input
+Vehicle / Body / Fault / Health Status
+ Diagnostic / Test Request
+Diagnostic / Test Result
+CAN Data Input
+CAN Data Output
+PAGE 3
+SF_01 Vehicle Control
+SF_02 Virtual Motor Control
+SF_03 Door Control
+SF_04 Light Control
+SF_05 Vehicle / BodyStatus Management
+SF_06 Vehicle / BodyStatus Display
+SF_07 CAN Communication
+SF_08 LIN Communication
+SF_09 CAN-LIN Signal Routing
+SF_10 Cross-Network Timing/ Rate Adaptation
+SF_11 Network Health Monitoring
+SF_12 Fault Detection & RecoveryManagement
+SF_13 Fail-safe Control
+SF_14 Fault / Health Notification
+SF_15 Diagnostic Monitoring & Analysis
+SF_16 Communication Logging
+SF_17 Fault Injection
+SF_18 Automated Test Execution
+SF_19 Window Control
+Torque / Vehicle Control Request
+.
+.
+Vehicle Control Signals
+.
+.
+Motor Status
+.
+.
+Door Status
+. .
+Light Status
+. .
+Window Status.
+.
+Vehicle / Body Status
+.
+.
+CAN Control Data. .
+CAN Signal Data
+.
+.
+LIN Command Data
+.
+.
+LIN Status Data
+.
+.
+Routed Signal Data
+.
+.
+Rate-Adapted Status Data
+.
+.
+Network Health Data
+.
+.
+Fault / RecoveryState
+.
+.
+Fault State
+.
+.
+Fail-safe Control Request..
+Fault / Health Status ..
+Diagnostic / Monitoring Data
+.
+.
+Injected Fault Condition
+.
+.
+Fault Injection Command
+.
+.
+Test / Log Evidence
+.
+.
+PAGE 4
+VCU ECU
+ Motor ECU
+ Cluster ECU
+VCU ECU
+PD_02A Motor Driver / H-Bridge
+ Light ECU
+ Window ECU
+PC Diagnostic Tool
+CE_CAN_VCU_Gateway
+CE_CAN_Motor_Gateway
+CE_CAN_Gateway_Cluster
+CE_CAN_PC_Gateway
+CE_LIN_Gateway_Door
+CE_LIN_Gateway_Light
+CE_LIN_Gateway_Window
+PAGE 5
+VCU ECU
+VCU ECU
+Motor ECU
+PD_02A Motor Driver / H-Bridge
+PD_02B DC Motor Demonstrator
+Motor ECU
+GatewayECU
+CAN Interface
+LIN Master Interface
+GatewayECU
+Cluster ECU
+PD_04A ST7796S TFT
+Cluster ECU
+Door ECU
+PD_05A Door Lock Actuator
+PD_05B Position / Limit Feedback
+Door ECU
+Light ECU
+PD_06A LED / LampLoads
+Light ECU
+Window ECU
+PD_08A Window H-Bridge
+PD_08B Window DC Gear Motor
+PD_08C Upper Limit Switch
+PD_08D Lower Limit Switch
+Window ECU
+PC Diagnostic Tool
+PC Diagnostic Tool
+CAN Bus
+LIN Bus
+CANable
+PL_MOTOR_DRIVER_MOTOR
+.
+.
+PL_DOOR_ACTUATOR_FEEDBACK
+.
+.
+PL_WINDOW_HBRIDGE_MOTOR
+.
+.
+PL_CAN_GATEWAY_BUS
+.
+.
+PL_LIN_GATEWAY_BUS.
+.
+PL_LIN_WINDOW_BUS. .
+PL_LIN_DOOR_BUS
+. .
+PL_LIN_LIGHT_BUS
+.
+.
+PL_CAN_CLUSTER_BUS.
+.
+PL_CAN_VCU_BUS
+.
+.
+ PL_CAN_MOTOR_BUS
+..
+PL_USB_PC_CANABLE
+..
+PL_CAN_CANABLE_BUS
+.
+.
+PL_MOTOR_DRIVER_MOTOR
+.
+.
+PL_WINDOW_HBRIDGE_MOTOR
+.
+.
+CE_CAN_VCU_Gateway
+CE_CAN_Motor_Gateway
+CE_CAN_Gateway_Cluster
+CE_LIN_Gateway_Door
+CE_LIN_Gateway_Light
+CE_LIN_Gateway_Window
+CE_CAN_PC_Gateway
+PL_DOOR_ACTUATOR_FEEDBACK
+.
+.
+PAGE 6
+VCU ECU
+ Motor ECU
+ Gateway ECU
+ Cluster ECU
+Torque / Vehicle Control Request()
+Motor Status()
+Vehicle / BodyStatus()
+PAGE 7
+Motor ECU
+PAGE 8
+VCU ECU
+ Light ECU
+ Cluster ECU
+ Gateway ECU
+Gear / Vehicle State()
+Light Command()
+Light Status()
+Vehicle / BodyStatus()
+PAGE 9
+VCU ECU
+ Gateway ECU
+ Door ECU
+Door Lock/Unlock Request()
+Door Status()
+Door Command()
+PAGE 10
+VCU ECU
+ Motor ECU
+ Gateway ECU
+ Cluster ECU
+ PC Diagnostic
+Tool
+VCU_Command age > 30
+ms→VCU_TIMEOUT
+VCU_TIMEOUT→
+TorqueApplied = 0, target_...
+Normal communication
+restored→Recovery
+Torque / Vehicle Control Request()
+Fault / Health Status_Cluster()
+Fault / Health Status_PC()
+PAGE 11
+Gateway ECU
+ Door ECU
+ PC Diagnostic
+Tool
+Door_Status no response × 3 cycle
+→DOOR_ECU_OFFLINE
+Door response restored→
+Recovery
+Cluster ECU
+Door Command()
+Door Status()
+Fault / Health Status_Cluster()
+Fault / Health Status_PC()
+Door Status()
+PAGE 12
+Gateway ECU
+ Cluster ECU
+ PC Diagnostic
+Tool
+Fault detected / Health abnormal→
+FaultManager ACTIVE
+Fault condition cleared→FaultManager
+CLEARED
+Fault / Health Status_Cluster()
+Fault / Health Status_PC()
+PAGE 13
+VCU ECU
+ Door ECU
+ Gateway ECU
+ Cluster ECU
+Normal VCU + Valid + Alive→
+Recovery condition
+Door Response + Alive × 3→
+Recovery condition
+Fault CLEARED→Representative
+State recompute
+Torque / Vehicle Control Request()
+Door Status()
+Fault / Health Status()
+PAGE 14
+Gateway ECU
+ Window ECU
+ Cluster ECU
+Window Command()
+Window Position()
+Window Status()
+PAGE 15
+Gateway ECU
+ Window ECU
+ Cluster ECU
+Upper / Lower Limit detected
+→Motor Stop
+Window Command()
+Window Position()
+Window Status()
