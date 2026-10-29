@@ -1,0 +1,155 @@
+VERSION "0.4 - review-ready interface proposal"
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    BA_DEF_DEF_
+
+BS_:
+
+BU_: VCU MOTOR GATEWAY CLUSTER PC_TOOL
+
+BO_ 256 VCU_Command: 8 VCU
+ SG_ TorqueRequest : 0|16@1+ (0.1,0) [0|4000] "Nm" MOTOR,GATEWAY,CLUSTER
+ SG_ Gear : 16|3@1+ (1,0) [0|3] "enum" MOTOR,GATEWAY,CLUSTER
+ SG_ Brake : 19|1@1+ (1,0) [0|1] "bool" MOTOR,GATEWAY,CLUSTER
+ SG_ AliveCounter : 20|4@1+ (1,0) [0|15] "count" MOTOR,GATEWAY,CLUSTER
+
+BO_ 272 Motor_Status: 8 MOTOR
+ SG_ RPM : 0|16@1+ (1,0) [0|12000] "rpm" VCU,GATEWAY,CLUSTER
+ SG_ TorqueApplied : 16|16@1+ (0.1,0) [0|4000] "Nm" VCU,GATEWAY,CLUSTER
+ SG_ MotorState : 32|2@1+ (1,0) [0|3] "state" VCU,GATEWAY,CLUSTER
+ SG_ AliveCounter : 34|4@1+ (1,0) [0|15] "count" VCU,GATEWAY,CLUSTER
+
+BO_ 288 Vehicle_Status: 8 GATEWAY
+ SG_ Speed : 0|16@1+ (0.1,0) [0|250] "km/h" CLUSTER,PC_TOOL
+ SG_ RPM : 16|16@1+ (1,0) [0|12000] "rpm" CLUSTER,PC_TOOL
+ SG_ Gear : 32|3@1+ (1,0) [0|3] "enum" CLUSTER,PC_TOOL
+ SG_ Brake : 35|1@1+ (1,0) [0|1] "bool" CLUSTER,PC_TOOL
+ SG_ NetworkState : 36|2@1+ (1,0) [0|3] "state" CLUSTER,PC_TOOL
+
+BO_ 512 Body_Status: 8 GATEWAY
+ SG_ DoorStatus : 8|8@1+ (1,0) [0|3] "state" CLUSTER,PC_TOOL
+ SG_ LightStatus : 16|8@1+ (1,0) [0|63] "bitmask" CLUSTER,PC_TOOL
+ SG_ WindowStatus : 24|8@1+ (1,0) [0|5] "state" CLUSTER,PC_TOOL
+ SG_ ReverseLamp : 0|1@1+ (1,0) [0|1] "bool" CLUSTER,PC_TOOL
+ SG_ DoorOpen : 1|1@1+ (1,0) [0|1] "bool" CLUSTER,PC_TOOL
+
+BO_ 768 Gateway_Status: 8 GATEWAY
+ SG_ GatewayAlive : 0|4@1+ (1,0) [0|15] "count" VCU,MOTOR,CLUSTER,PC_TOOL
+ SG_ QueueUsage : 8|8@1+ (1,0) [0|100] "%" VCU,MOTOR,CLUSTER,PC_TOOL
+
+BO_ 784 Fault_Status: 8 GATEWAY
+ SG_ FaultCode : 0|8@1+ (1,0) [0|6] "code" CLUSTER,PC_TOOL
+ SG_ ECUOffline : 8|4@1+ (1,0) [0|7] "node" CLUSTER,PC_TOOL
+ SG_ RecoveryState : 12|1@1+ (1,0) [0|1] "state" CLUSTER,PC_TOOL
+ SG_ SystemState : 13|2@1+ (1,0) [0|3] "state" CLUSTER,PC_TOOL
+
+CM_ "Source baseline: message definition workbook v0.3 + communication specification review. This v0.4 proposal resolves DBC-level inconsistencies only: Gear normal range 0..3, physical CAN receivers for Gateway_Status, duplicate Body_Status source consistency notes, and Fault_Status lifecycle semantics. LIN routing/schedule and event retry policy remain outside this CAN DBC. Interface Freeze requires counterpart-owner review.";
+CM_ BO_ 256 "Source: CAN_Message_Definition row 6. Tx type: Cyclic. Age > 30 ms: VCU_TIMEOUT. Local fail-safe is implemented by the receiving ECU.";
+CM_ BO_ 272 "Source: CAN_Message_Definition row 7. Tx type: Cyclic.";
+CM_ BO_ 288 "Source: CAN_Message_Definition row 8. Tx type: Cyclic.";
+CM_ BO_ 512 "Source: CAN_Message_Definition row 9. Tx type: Cyclic.";
+CM_ BO_ 768 "Tx type: Cyclic, 100 ms. DBC receivers are actual CAN consumers only (VCU/MOTOR/CLUSTER/PC_TOOL). Door/Light/Window are LIN slaves; any logical propagation to them must be defined by LIN Matrix/Routing, not by CAN DBC Receiver.";
+CM_ BO_ 784 "Tx type: Event. One Fault_Status frame represents one fault ACTIVE/CLEARED transition. Multiple simultaneous fault transitions are represented as separate events. Event ordering/retry/loss handling is a Fault Manager/Test policy and is not encoded by DBC.";
+CM_ SG_ 256 TorqueRequest "Source: CAN_Signal_Definition row 6. Invalid raw: 0xFFFF (hex). Requirements: SYS_REQ_003, SYS_REQ_020.";
+CM_ SG_ 256 Gear "Normal values: 0=P, 1=N, 2=D, 3=R. Raw 4..6 are RESERVED; raw 7 is INVALID. Normal physical range is therefore 0..3.";
+CM_ SG_ 256 Brake "Source: CAN_Signal_Definition row 8. Invalid raw: N/A. Requirements: SYS_REQ_003.";
+CM_ SG_ 256 AliveCounter "Source: CAN_Signal_Definition row 9. Invalid raw: N/A. Requirements: SYS_REQ_022-023. Valid counter 0..15, wraps 15 to 0. Expected next value = (previous + 1) modulo 16; sequence checking is application logic.";
+CM_ SG_ 272 RPM "Source: CAN_Signal_Definition row 10. Invalid raw: 0xFFFF (hex). Requirements: SYS_REQ_004.";
+CM_ SG_ 272 TorqueApplied "Source: CAN_Signal_Definition row 11. Invalid raw: 0xFFFF (hex). Requirements: SYS_REQ_004, SYS_REQ_024.";
+CM_ SG_ 272 MotorState "Source: CAN_Signal_Definition row 12. Invalid raw: N/A. Requirements: SYS_REQ_004.";
+CM_ SG_ 272 AliveCounter "Source: CAN_Signal_Definition row 13. Invalid raw: N/A. Requirements: SYS_REQ_022-023. Valid counter 0..15, wraps 15 to 0. Expected next value = (previous + 1) modulo 16; sequence checking is application logic.";
+CM_ SG_ 288 Speed "Gateway-provided virtual vehicle speed. DBC defines encoding only (factor 0.1 km/h); RPM-to-Speed conversion model/coefficient belongs to Gateway/Virtual Motor application design.";
+CM_ SG_ 288 RPM "Source: CAN_Signal_Definition row 15. Invalid raw: 0xFFFF (hex). Requirements: SYS_REQ_007.";
+CM_ SG_ 288 Gear "Normal values: 0=P, 1=N, 2=D, 3=R. Raw 4..6 are RESERVED; raw 7 is INVALID. Normal physical range is therefore 0..3.";
+CM_ SG_ 288 Brake "Source: CAN_Signal_Definition row 17. Invalid raw: N/A. Requirements: SYS_REQ_007.";
+CM_ SG_ 288 NetworkState "Representative system health state: 0=NORMAL, 1=DEGRADED, 2=OFFLINE, 3=FAIL_SAFE. Used as the cyclic health summary.";
+CM_ SG_ 512 DoorStatus "Source: CAN_Signal_Definition row 19. Invalid raw: 0xFF. Requirements: SYS_REQ_005, SYS_REQ_021.";
+CM_ SG_ 512 LightStatus "Source: CAN_Signal_Definition row 20. Invalid raw: 0xFF. Requirements: SYS_REQ_006. Bitmask: 0x0=ALL_OFF, 0x1=HEAD_LAMP, 0x2=LEFT_TURN, 0x4=RIGHT_TURN, 0x8=HAZARD, 0x10=REVERSE_LAMP, 0x20=BRAKE_LAMP, 0xff=INVALID. Flags may be combined; no extra overlapping signals are introduced.";
+CM_ SG_ 512 WindowStatus "Source: CAN_Signal_Definition row 21. Invalid raw: 0xFF. Requirements: SYS_REQ_042-044, SYS_REQ_057.";
+CM_ SG_ 512 ReverseLamp "Derived from the same LIN Light_Status/LampState source used for Body_Status.LightStatus REVERSE_LAMP bit. Gateway routing shall update both consistently.";
+CM_ SG_ 512 DoorOpen "Derived from the same LIN Door_Status source used to build Body_Status.DoorStatus. Gateway routing shall update both consistently.";
+CM_ SG_ 768 GatewayAlive "Valid 4-bit cyclic counter 0..15 with wrap 15->0. No raw Invalid value is assigned; continuity/age checking is application logic.";
+CM_ SG_ 768 QueueUsage "Source: CAN_Signal_Definition row 25. Invalid raw: 0xFF. Requirements: SYS_REQ_017, SYS_REQ_054.";
+CM_ SG_ 784 FaultCode "Source: CAN_Signal_Definition row 26. Invalid raw: 0xFF. Requirements: SYS_REQ_018, SYS_REQ_025-026.";
+CM_ SG_ 784 ECUOffline "Source: CAN_Signal_Definition row 27. Invalid raw: 0xF. Requirements: SYS_REQ_018, SYS_REQ_021, SYS_REQ_025.";
+CM_ SG_ 784 RecoveryState "Compatibility name retained. Semantics are fault lifecycle state: 0=ACTIVE, 1=CLEARED. It does not encode an intermediate recovery-progress state.";
+CM_ SG_ 784 SystemState "Representative system state copied from the same Gateway health aggregation used by Vehicle_Status.NetworkState for the instant of this fault event.";
+
+BA_DEF_ "BusType" STRING ;
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 65535;
+BA_DEF_ BO_ "SourceTxType" STRING ;
+BA_DEF_ SG_ "GenSigStartValue" FLOAT 0 65535;
+BA_DEF_ SG_ "GenSigInvalidValue" FLOAT 0 65535;
+BA_ "BusType" "CAN";
+BA_ "GenMsgCycleTime" BO_ 256 10;
+BA_ "SourceTxType" BO_ 256 "Cyclic";
+BA_ "GenMsgCycleTime" BO_ 272 10;
+BA_ "SourceTxType" BO_ 272 "Cyclic";
+BA_ "GenMsgCycleTime" BO_ 288 20;
+BA_ "SourceTxType" BO_ 288 "Cyclic";
+BA_ "GenMsgCycleTime" BO_ 512 100;
+BA_ "SourceTxType" BO_ 512 "Cyclic";
+BA_ "GenMsgCycleTime" BO_ 768 100;
+BA_ "SourceTxType" BO_ 768 "Cyclic";
+BA_ "SourceTxType" BO_ 784 "Event";
+BA_ "GenSigStartValue" SG_ 256 TorqueRequest 0;
+BA_ "GenSigInvalidValue" SG_ 256 TorqueRequest 65535;
+BA_ "GenSigStartValue" SG_ 256 Gear 0;
+BA_ "GenSigInvalidValue" SG_ 256 Gear 7;
+BA_ "GenSigStartValue" SG_ 256 Brake 0;
+BA_ "GenSigStartValue" SG_ 256 AliveCounter 0;
+BA_ "GenSigStartValue" SG_ 272 RPM 0;
+BA_ "GenSigInvalidValue" SG_ 272 RPM 65535;
+BA_ "GenSigStartValue" SG_ 272 TorqueApplied 0;
+BA_ "GenSigInvalidValue" SG_ 272 TorqueApplied 65535;
+BA_ "GenSigStartValue" SG_ 272 MotorState 0;
+BA_ "GenSigStartValue" SG_ 272 AliveCounter 0;
+BA_ "GenSigStartValue" SG_ 288 Speed 0;
+BA_ "GenSigInvalidValue" SG_ 288 Speed 65535;
+BA_ "GenSigStartValue" SG_ 288 RPM 0;
+BA_ "GenSigInvalidValue" SG_ 288 RPM 65535;
+BA_ "GenSigStartValue" SG_ 288 Gear 0;
+BA_ "GenSigInvalidValue" SG_ 288 Gear 7;
+BA_ "GenSigStartValue" SG_ 288 Brake 0;
+BA_ "GenSigStartValue" SG_ 288 NetworkState 0;
+BA_ "GenSigStartValue" SG_ 512 DoorStatus 0;
+BA_ "GenSigInvalidValue" SG_ 512 DoorStatus 255;
+BA_ "GenSigStartValue" SG_ 512 LightStatus 0;
+BA_ "GenSigInvalidValue" SG_ 512 LightStatus 255;
+BA_ "GenSigStartValue" SG_ 512 WindowStatus 0;
+BA_ "GenSigInvalidValue" SG_ 512 WindowStatus 255;
+BA_ "GenSigStartValue" SG_ 512 ReverseLamp 0;
+BA_ "GenSigStartValue" SG_ 512 DoorOpen 0;
+BA_ "GenSigStartValue" SG_ 768 GatewayAlive 0;
+BA_ "GenSigStartValue" SG_ 768 QueueUsage 0;
+BA_ "GenSigInvalidValue" SG_ 768 QueueUsage 255;
+BA_ "GenSigStartValue" SG_ 784 FaultCode 0;
+BA_ "GenSigInvalidValue" SG_ 784 FaultCode 255;
+BA_ "GenSigStartValue" SG_ 784 ECUOffline 0;
+BA_ "GenSigInvalidValue" SG_ 784 ECUOffline 15;
+BA_ "GenSigStartValue" SG_ 784 RecoveryState 1;
+BA_ "GenSigStartValue" SG_ 784 SystemState 0;
+
+VAL_ 256 Gear 0 "P" 1 "N" 2 "D" 3 "R" 4 "RESERVED" 5 "RESERVED" 6 "RESERVED" 7 "INVALID";
+VAL_ 256 Brake 0 "FALSE" 1 "TRUE";
+VAL_ 256 AliveCounter 0 "SEQUENCE" 1 "SEQUENCE" 2 "SEQUENCE" 3 "SEQUENCE" 4 "SEQUENCE" 5 "SEQUENCE" 6 "SEQUENCE" 7 "SEQUENCE" 8 "SEQUENCE" 9 "SEQUENCE" 10 "SEQUENCE" 11 "SEQUENCE" 12 "SEQUENCE" 13 "SEQUENCE" 14 "SEQUENCE" 15 "SEQUENCE";
+VAL_ 272 MotorState 0 "OFF" 1 "READY" 2 "RUN" 3 "FAIL_SAFE";
+VAL_ 272 AliveCounter 0 "SEQUENCE" 1 "SEQUENCE" 2 "SEQUENCE" 3 "SEQUENCE" 4 "SEQUENCE" 5 "SEQUENCE" 6 "SEQUENCE" 7 "SEQUENCE" 8 "SEQUENCE" 9 "SEQUENCE" 10 "SEQUENCE" 11 "SEQUENCE" 12 "SEQUENCE" 13 "SEQUENCE" 14 "SEQUENCE" 15 "SEQUENCE";
+VAL_ 288 Gear 0 "P" 1 "N" 2 "D" 3 "R" 4 "RESERVED" 5 "RESERVED" 6 "RESERVED" 7 "INVALID";
+VAL_ 288 Brake 0 "FALSE" 1 "TRUE";
+VAL_ 288 NetworkState 0 "NORMAL" 1 "DEGRADED" 2 "OFFLINE" 3 "FAIL_SAFE";
+VAL_ 512 DoorStatus 0 "CLOSED_UNLOCKED" 1 "CLOSED_LOCKED" 2 "OPEN_UNLOCKED" 3 "OPEN_LOCKED" 255 "INVALID";
+VAL_ 512 LightStatus 0 "ALL_OFF" 1 "HEAD_LAMP" 2 "LEFT_TURN" 4 "RIGHT_TURN" 8 "HAZARD" 16 "REVERSE_LAMP" 32 "BRAKE_LAMP" 255 "INVALID";
+VAL_ 512 WindowStatus 0 "STOPPED" 1 "MOVING_UP" 2 "MOVING_DOWN" 3 "UPPER_LIMIT" 4 "LOWER_LIMIT" 5 "FAULT" 6 "RESERVED" 255 "INVALID";
+VAL_ 512 ReverseLamp 0 "FALSE" 1 "TRUE";
+VAL_ 512 DoorOpen 0 "FALSE" 1 "TRUE";
+VAL_ 768 GatewayAlive 0 "SEQUENCE" 1 "SEQUENCE" 2 "SEQUENCE" 3 "SEQUENCE" 4 "SEQUENCE" 5 "SEQUENCE" 6 "SEQUENCE" 7 "SEQUENCE" 8 "SEQUENCE" 9 "SEQUENCE" 10 "SEQUENCE" 11 "SEQUENCE" 12 "SEQUENCE" 13 "SEQUENCE" 14 "SEQUENCE" 15 "SEQUENCE";
+VAL_ 784 FaultCode 0 "NONE" 1 "VCU_TIMEOUT" 2 "DOOR_ECU_OFFLINE" 3 "ALIVE_ERROR" 4 "ECU_OFFLINE" 5 "QUEUE_DROP" 6 "WINDOW_ECU_OFFLINE" 7 "RESERVED" 8 "RESERVED" 9 "RESERVED" 10 "RESERVED" 11 "RESERVED" 12 "RESERVED" 13 "RESERVED" 14 "RESERVED" 15 "RESERVED" 16 "RESERVED" 17 "RESERVED" 18 "RESERVED" 19 "RESERVED" 20 "RESERVED" 21 "RESERVED" 22 "RESERVED" 23 "RESERVED" 24 "RESERVED" 25 "RESERVED" 26 "RESERVED" 27 "RESERVED" 28 "RESERVED" 29 "RESERVED" 30 "RESERVED" 31 "RESERVED" 32 "RESERVED" 33 "RESERVED" 34 "RESERVED" 35 "RESERVED" 36 "RESERVED" 37 "RESERVED" 38 "RESERVED" 39 "RESERVED" 40 "RESERVED" 41 "RESERVED" 42 "RESERVED" 43 "RESERVED" 44 "RESERVED" 45 "RESERVED" 46 "RESERVED" 47 "RESERVED" 48 "RESERVED" 49 "RESERVED" 50 "RESERVED" 51 "RESERVED" 52 "RESERVED" 53 "RESERVED" 54 "RESERVED" 55 "RESERVED" 56 "RESERVED" 57 "RESERVED" 58 "RESERVED" 59 "RESERVED" 60 "RESERVED" 61 "RESERVED" 62 "RESERVED" 63 "RESERVED" 64 "RESERVED" 65 "RESERVED" 66 "RESERVED" 67 "RESERVED" 68 "RESERVED" 69 "RESERVED" 70 "RESERVED" 71 "RESERVED" 72 "RESERVED" 73 "RESERVED" 74 "RESERVED" 75 "RESERVED" 76 "RESERVED" 77 "RESERVED" 78 "RESERVED" 79 "RESERVED" 80 "RESERVED" 81 "RESERVED" 82 "RESERVED" 83 "RESERVED" 84 "RESERVED" 85 "RESERVED" 86 "RESERVED" 87 "RESERVED" 88 "RESERVED" 89 "RESERVED" 90 "RESERVED" 91 "RESERVED" 92 "RESERVED" 93 "RESERVED" 94 "RESERVED" 95 "RESERVED" 96 "RESERVED" 97 "RESERVED" 98 "RESERVED" 99 "RESERVED" 100 "RESERVED" 101 "RESERVED" 102 "RESERVED" 103 "RESERVED" 104 "RESERVED" 105 "RESERVED" 106 "RESERVED" 107 "RESERVED" 108 "RESERVED" 109 "RESERVED" 110 "RESERVED" 111 "RESERVED" 112 "RESERVED" 113 "RESERVED" 114 "RESERVED" 115 "RESERVED" 116 "RESERVED" 117 "RESERVED" 118 "RESERVED" 119 "RESERVED" 120 "RESERVED" 121 "RESERVED" 122 "RESERVED" 123 "RESERVED" 124 "RESERVED" 125 "RESERVED" 126 "RESERVED" 127 "RESERVED" 128 "RESERVED" 129 "RESERVED" 130 "RESERVED" 131 "RESERVED" 132 "RESERVED" 133 "RESERVED" 134 "RESERVED" 135 "RESERVED" 136 "RESERVED" 137 "RESERVED" 138 "RESERVED" 139 "RESERVED" 140 "RESERVED" 141 "RESERVED" 142 "RESERVED" 143 "RESERVED" 144 "RESERVED" 145 "RESERVED" 146 "RESERVED" 147 "RESERVED" 148 "RESERVED" 149 "RESERVED" 150 "RESERVED" 151 "RESERVED" 152 "RESERVED" 153 "RESERVED" 154 "RESERVED" 155 "RESERVED" 156 "RESERVED" 157 "RESERVED" 158 "RESERVED" 159 "RESERVED" 160 "RESERVED" 161 "RESERVED" 162 "RESERVED" 163 "RESERVED" 164 "RESERVED" 165 "RESERVED" 166 "RESERVED" 167 "RESERVED" 168 "RESERVED" 169 "RESERVED" 170 "RESERVED" 171 "RESERVED" 172 "RESERVED" 173 "RESERVED" 174 "RESERVED" 175 "RESERVED" 176 "RESERVED" 177 "RESERVED" 178 "RESERVED" 179 "RESERVED" 180 "RESERVED" 181 "RESERVED" 182 "RESERVED" 183 "RESERVED" 184 "RESERVED" 185 "RESERVED" 186 "RESERVED" 187 "RESERVED" 188 "RESERVED" 189 "RESERVED" 190 "RESERVED" 191 "RESERVED" 192 "RESERVED" 193 "RESERVED" 194 "RESERVED" 195 "RESERVED" 196 "RESERVED" 197 "RESERVED" 198 "RESERVED" 199 "RESERVED" 200 "RESERVED" 201 "RESERVED" 202 "RESERVED" 203 "RESERVED" 204 "RESERVED" 205 "RESERVED" 206 "RESERVED" 207 "RESERVED" 208 "RESERVED" 209 "RESERVED" 210 "RESERVED" 211 "RESERVED" 212 "RESERVED" 213 "RESERVED" 214 "RESERVED" 215 "RESERVED" 216 "RESERVED" 217 "RESERVED" 218 "RESERVED" 219 "RESERVED" 220 "RESERVED" 221 "RESERVED" 222 "RESERVED" 223 "RESERVED" 224 "RESERVED" 225 "RESERVED" 226 "RESERVED" 227 "RESERVED" 228 "RESERVED" 229 "RESERVED" 230 "RESERVED" 231 "RESERVED" 232 "RESERVED" 233 "RESERVED" 234 "RESERVED" 235 "RESERVED" 236 "RESERVED" 237 "RESERVED" 238 "RESERVED" 239 "RESERVED" 240 "RESERVED" 241 "RESERVED" 242 "RESERVED" 243 "RESERVED" 244 "RESERVED" 245 "RESERVED" 246 "RESERVED" 247 "RESERVED" 248 "RESERVED" 249 "RESERVED" 250 "RESERVED" 251 "RESERVED" 252 "RESERVED" 253 "RESERVED" 254 "RESERVED" 255 "INVALID";
+VAL_ 784 ECUOffline 0 "NONE" 1 "VCU" 2 "MOTOR" 3 "GATEWAY" 4 "CLUSTER" 5 "DOOR" 6 "LIGHT" 7 "WINDOW" 8 "RESERVED" 9 "RESERVED" 10 "RESERVED" 11 "RESERVED" 12 "RESERVED" 13 "RESERVED" 14 "RESERVED" 15 "INVALID";
+VAL_ 784 RecoveryState 0 "ACTIVE" 1 "CLEARED";
+VAL_ 784 SystemState 0 "NORMAL" 1 "DEGRADED" 2 "OFFLINE" 3 "FAIL_SAFE";

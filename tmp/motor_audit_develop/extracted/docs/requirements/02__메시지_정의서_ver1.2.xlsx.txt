@@ -1,0 +1,712 @@
+SHEET Message_Summary
+ROW 1: FreeRTOS CAN-LIN Gateway 메시지 정의서 |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 2: FIX Interface 반영본 | 02 메시지 정의서와 05 요구사항 명세서를 Interface/Requirement Baseline으로 사용 | CAN/LIN Matrix는 참고용 | Interface 변경 시 상대 담당자 리뷰 필요 |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 3:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 4: Document information |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 5: 문서명 | FreeRTOS CAN-LIN Gateway 메시지 정의서 |  | CAN bitrate | 500 kbps |  |  |  |  |  |  |  |  | 
+ROW 6: 프로젝트 | FreeRTOS / CAN-LIN Gateway 7인 팀 프로젝트 |  | LIN bitrate | 19.2 kbps |  |  |  |  |  |  |  |  | 
+ROW 7: 기준 문서 | CAN-LIN Gateway Handbook v1.0; 시스템 아키텍처 사양서 v1.0; D-07 Fault/Failsafe v0.9 |  | CAN FD | Stretch Goal / 기본 범위 제외 |  |  |  |  |  |  |  |  | 
+ROW 8: 작성 기준일 | 2026-09-28 00:00:00 |  | Motor | Virtual Motor ECU 기본안 |  |  |  |  |  |  |  |  | 
+ROW 9: 원본 연계 | Reference artifacts: CAN_Matrix.xlsx / LIN_Matrix.xlsx | Derived implementation artifacts: vehicle.dbc / vehicle.ldf |  | LIN Master | Gateway |  |  |  |  |  |  |  |  | 
+ROW 10: 현재 원본 상태 | CAN/LIN Matrix는 참고용이며 본 Workbook FIX Interface를 덮어쓰지 않음. DBC/LDF/Firmware/Test는 02/05 기준값에 동기화. |  | Window | In-Scope LIN Slave |  |  |  |  |  |  |  |  | 
+ROW 11:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 12: Network overview |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 13: Network | Interface / Role | Nodes | Bitrate | Base schedule | Scope | Notes |  |  |  |  |  |  | 
+ROW 14: CAN | Classical CAN / control & status | VCU, Motor, Gateway, Cluster | 500 kbps | Message cycle 10/20/100 ms + event | In-scope | CAN FD는 Stretch Goal |  |  |  |  |  |  | 
+ROW 15: LIN | Gateway Master / Body ECU Slave | Gateway, Door, Light, Window | 19.2 kbps | 10 ms slot / 100 ms supercycle | In-scope | Window 포함 Team Schedule. Handbook 20 ms baseline 확장 → Interface Change/Review 필요 |  |  |  |  |  |  | 
+ROW 16: PC | CANable external diagnostic interface | PC Diagnostic Tool | via CAN | Event/log driven | In-scope | DBC decode, raw monitor, health/fault, logging, injection, pytest |  |  |  |  |  |  | 
+ROW 17:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 18: KPI and review gate |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 19: CAN 메시지 | =COUNTA(CAN_Message_Definition!$B$6:$B$11) | LIN 프레임 | =COUNTA(LIN_Frame_Definition!$B$6:$B$11) | Open / Review records | =COUNTIF(CAN_Signal_Definition!$T$6:$T$29,"상대 담당자 리뷰 필요")+COUNTIF(LIN_Signal_Definition!$T$6:$T$24,"상대 담당자 리뷰 필요")+COUNTIF(LIN_Frame_Definition!$P$6:$P$11,"상대 담당자 리뷰 필요")+COUNTIF(Fault_Timeout_Policy!$O$6:$O$13,"상대 담당자 리뷰 필요") | Review Gate | =IF(F19>0,"OPEN: 상대 담당자 리뷰 필요","READY") |  |  |  |  |  | 
+ROW 20:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 21: Status 의미: 기준 예시/기준 문서 반영 = source baseline, 기준+팀 결정안/팀 결정안 = 프로젝트 encoding 결정(리뷰 전), 확정 = 리뷰 완료 기준. Merge만으로 Done 처리하지 않음. |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 22:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 23: Message and frame summary |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 24: Network | Message / Frame | ID / PID | ID Format | DLC / Length | Tx Type | Period | Sender / Publisher | Receiver / Subscriber | Primary signal / purpose | Alive / Timeout | Source | Status | Review Gate
+ROW 25: CAN | VCU_Command | 0x100 (hex) | Standard | 8 | Cyclic | 10 | VCU | Motor / Gateway / Cluster | TorqueRequest, Gear, Brake, AliveCounter | 30 ms age timeout | HB §5.2; ARCH §8.1 | 기준 문서 반영 | 담당자 확인
+ROW 26: CAN | Motor_Status | 0x110 (hex) | Standard | 8 | Cyclic | 10 | Motor | VCU / Gateway / Cluster | RPM, TorqueApplied, MotorState, AliveCounter | Alive 0-15 wrap; ALIVE_ERROR → DEGRADED (Team classification) | HB §5.2; ARCH §8.1 | 기준 문서 반영 | 담당자 확인
+ROW 27: CAN | Vehicle_Status | 0x120 (hex) | Standard | 8 | Cyclic | 20 | Gateway | Cluster / PC | Speed, RPM, Gear, Brake, network state | Gateway health context | HB §5.2; ARCH §8.1 | 기준 문서 반영 | 담당자 확인
+ROW 28: CAN | Body_Status | 0x200 (hex) | Standard | 8 | Cyclic | 100 | Gateway | Cluster / PC | Door / Light / Window status, ReverseLamp, DoorOpen | LIN-derived status | ARCH §8.1 | 기준 문서 반영 | 담당자 확인
+ROW 29: CAN | Gateway_Status | 0x300 (hex) | Standard | 8 | Cyclic | 100 | Gateway | All / PC | Gateway Health, Queue usage, Alive | GatewayAlive / queue health | HB §5.2; ARCH §8.1 | 기준 문서 반영 | 담당자 확인
+ROW 30: CAN | Fault_Status | 0x310 (hex) | Standard | 8 | Event | event | Gateway | Cluster / PC | FaultCode, ECUOffline, RecoveryState, SystemState | ACTIVE↔CLEARED transition event; one fault transition per event | HB §5.2; ARCH §8.1; D-07 | 기준 문서 반영 | 상대 담당자 리뷰 필요
+ROW 31: LIN | Door_Status | 0x10 (hex) | PID | 1 | Scheduled | 100 | Door | Gateway | DoorOpen, DoorLocked, DoorAlive | 3-cycle no response | HB §6.1; ARCH §8.2 | 기준+팀 결정안 | 상대 담당자 리뷰 필요
+ROW 32: LIN | Door_Command | 0x11 (hex) | PID | 1 | Scheduled | 100 | Gateway | Door | LockCommand, RequestState | Scheduled command | HB §6.1; ARCH §8.2 | 기준+팀 결정안 | 상대 담당자 리뷰 필요
+ROW 33: LIN | Light_Command | 0x12 (hex) | PID | 1 | Scheduled | 50 | Gateway | Light | HeadLamp, TurnLamp, HazardLamp, ReverseLamp, BrakeLamp | 50 ms scheduled command | HB §6.1; ARCH §8.2 | 기준+팀 결정안 | 상대 담당자 리뷰 필요
+ROW 34: LIN | Light_Status | 0x13 (hex) | PID | 2 | Scheduled | 100 | Light | Gateway | LampState, LightAlive, DiagnosticState | Alive policy / status response | HB §6.1; ARCH §8.2 | 기준+팀 결정안 | 상대 담당자 리뷰 필요
+ROW 35: LIN | Window_Command | 0x14 (hex) | PID | 1 | Scheduled | 100 | Gateway | Window | WindowCommand (STOP/UP/DOWN) | Window slot 10 ms; command 100 ms; Local Command Timeout → Motor STOP (POL-009, SYS_REQ_059) | ARCH §8.2-8.3; Team Encoding | 팀 결정안 | 상대 담당자 리뷰 필요
+ROW 36: LIN | Window_Status | 0x15 (hex) | PID | 2 | Scheduled | 100 | Window | Gateway | WindowState, UpperLimit, LowerLimit, MotorState, WindowAlive | 2-cycle no response | ARCH §8.2-8.3; Team Encoding | 팀 결정안 | 상대 담당자 리뷰 필요
+ROW 37:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 38: Source rule: CAN/LIN Matrix는 참고용이며 본 Workbook의 FIX Interface와 05 요구사항 Baseline을 덮어쓰지 않습니다. 변경은 Jira Issue → 기준 산출물(02/05) 갱신 → 상대 담당자 리뷰 → DBC/LDF → Firmware/PC Tool/Test → Evidence 순으로 추적합니다. Matrix는 필요 시 참고용 동기화 산출물로 갱신합니다. |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 39:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 40:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 41:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 42:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 43:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 44:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 45:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 46:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 47:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 48:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 49:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 50:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 51:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 52:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 53:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 54:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 55:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 56:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 57:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 58:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 59:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 60:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 61:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 62:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 63:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 64:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 65:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 66:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 67:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 68:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 69:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 70:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 71:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 72:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 73:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 74:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 75:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 76:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 77:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 78:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 79:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 80:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 81:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 82:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 83:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 84:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 85:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 86:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 87:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 88:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 89:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 90:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 91:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 92:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 93:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 94:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 95:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 96:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 97:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 98:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 99:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 100:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 101:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 102:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 103:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 104:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 105:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 106:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 107:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 108:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 109:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 110:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 111:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 112:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 113:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 114:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 115:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 116:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 117:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 118:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 119:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 120:  |  |  |  |  |  |  |  |  |  |  |  |  | 
+SHEET CAN_Message_Definition
+ROW 1: CAN Message Definition |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 2: CAN ID/DLC/주기와 Signal Interface는 본 Workbook FIX 및 05 요구사항 Baseline을 기준으로 관리합니다. CAN_Matrix.xlsx는 참고용이며 vehicle.dbc는 구현/배포용 파생 산출물로 동일 값에 동기화합니다. |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 3:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 4: Message header / transport |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 5: Group | Message Name | CAN ID | ID Format | DLC | Tx Type | Cycle Time (ms) | Transmitter | Receiver | Purpose | Alive Counter | Timeout / Invalid | Related Requirement | DBC / Matrix Link | Status | Review
+ROW 6: Vehicle / Powertrain | VCU_Command | 0x100 (hex) | Standard | 8 | Cyclic | 10 | VCU | Motor / Gateway / Cluster | TorqueRequest, Gear, Brake, AliveCounter 전달 | 4 bit / 0-15 wrap | Age > 30 ms → VCU_TIMEOUT | SYS_REQ_003, SYS_REQ_020, SYS_REQ_022-023 | vehicle.dbc / CAN_Matrix.xlsx | 기준 문서 반영 | 담당자 확인
+ROW 7: Vehicle / Powertrain | Motor_Status | 0x110 (hex) | Standard | 8 | Cyclic | 10 | Motor | VCU / Gateway / Cluster | RPM, TorqueApplied, MotorState, AliveCounter 전달 | 4 bit / 0-15 wrap | Alive discontinuity → ALIVE_ERROR / DEGRADED (Team classification) | SYS_REQ_004, SYS_REQ_022 | vehicle.dbc / CAN_Matrix.xlsx | 기준 문서 반영 | 담당자 확인
+ROW 8: Vehicle / Status | Vehicle_Status | 0x120 (hex) | Standard | 8 | Cyclic | 20 | Gateway | Cluster / PC | Speed, RPM, Gear, Brake, network state 전달 | N/A | Gateway source health 적용 | SYS_REQ_007, SYS_REQ_015 | vehicle.dbc / CAN_Matrix.xlsx | 기준 문서 반영 | 담당자 확인
+ROW 9: Body / Status | Body_Status | 0x200 (hex) | Standard | 8 | Cyclic | 100 | Gateway | Cluster / PC | Door / Light / Window status, ReverseLamp, DoorOpen 전달 | N/A | LIN source health 적용 | SYS_REQ_005-006, SYS_REQ_016, SYS_REQ_021 | vehicle.dbc / CAN_Matrix.xlsx | 기준 문서 반영 | 담당자 확인
+ROW 10: Gateway / Health | Gateway_Status | 0x300 (hex) | Standard | 8 | Cyclic | 100 | Gateway | All / PC | Gateway Health, Queue usage, Alive 전달 | 4 bit / 0-15 wrap | Queue health / alive policy | SYS_REQ_017, SYS_REQ_029-031 | vehicle.dbc / CAN_Matrix.xlsx | 기준+팀 결정안 | 상대 담당자 리뷰 필요
+ROW 11: Gateway / Fault | Fault_Status | 0x310 (hex) | Standard | 8 | Event | event | Gateway | Cluster / PC | FaultCode, ECUOffline, RecoveryState, SystemState 전달 | N/A | ACTIVE↔CLEARED 전이 시 Event; Event 1건당 Fault 전이 1건 | SYS_REQ_018, SYS_REQ_025-026, SYS_REQ_050-058 | vehicle.dbc / CAN_Matrix.xlsx | 기준+팀 결정안 | 상대 담당자 리뷰 필요
+ROW 12:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 13: CAN Byte / Bit map (8-byte view) |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 14: Message Name | Byte 0 | Byte 1 | Byte 2 | Byte 3 | Byte 4 | Byte 5 | Byte 6 | Byte 7 | Map Status |  |  |  |  |  | 
+ROW 15: VCU_Command | TorqueRequest [7:0] | TorqueRequest [15:8] | Gear [2:0] / Brake [3] / AliveCounter [7:4] | Reserved | Reserved | Reserved | Reserved | Reserved | 팀 신규 결정 / Interface Review |  |  |  |  |  | 
+ROW 16: Motor_Status | RPM [7:0] | RPM [15:8] | TorqueApplied [7:0] | TorqueApplied [15:8] | MotorState [1:0] / AliveCounter [5:2] / Reserved [7:6] | Reserved | Reserved | Reserved | 팀 신규 결정 / Interface Review |  |  |  |  |  | 
+ROW 17: Vehicle_Status | Speed [7:0] | Speed [15:8] | RPM [7:0] | RPM [15:8] | Gear [2:0] / Brake [3] / NetworkState [5:4] / Reserved [7:6] | Reserved | Reserved | Reserved | 팀 신규 결정 / Interface Review |  |  |  |  |  | 
+ROW 18: Body_Status | ReverseLamp [0] / DoorOpen [1] / Reserved [7:2] | DoorStatus [7:0] | LightStatus [7:0] | WindowStatus [7:0] | Reserved | Reserved | Reserved | Reserved | 팀 신규 결정 / Interface Review |  |  |  |  |  | 
+ROW 19: Gateway_Status | GatewayAlive [3:0] / Reserved [7:4] | QueueUsage [7:0] | Reserved | Reserved | Reserved | Reserved | Reserved | Reserved | GatewayAlive=핸드북 예시 / QueueUsage=팀 신규 결정 |  |  |  |  |  | 
+ROW 20: Fault_Status | FaultCode [7:0] | ECUOffline [3:0] / RecoveryState [4] / SystemState [6:5] / Reserved [7] | Reserved | Reserved | Reserved | Reserved | Reserved | Reserved | 팀 신규 결정 / Interface Review |  |  |  |  |  | 
+ROW 21:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 22: Bit map 사용 원칙: Start Bit/Length/Byte Order는 CAN_Signal_Definition을 기준 표로 사용합니다. Byte/Bit view는 보조 뷰입니다. Matrix는 참고용이며 구현은 FIX Interface와 이에 동기화된 DBC를 기준으로 합니다. |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 23:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 24:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 25:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 26:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 27:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 28:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 29:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 30:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 31:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 32:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 33:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 34:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 35:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 36:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 37:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 38:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 39:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 40:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 41:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 42:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 43:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 44:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 45:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 46:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 47:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 48:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 49:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 50:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 51:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 52:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 53:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 54:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 55:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 56:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 57:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 58:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 59:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 60:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 61:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 62:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 63:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 64:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 65:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 66:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 67:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 68:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 69:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 70:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 71:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 72:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 73:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 74:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 75:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 76:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 77:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 78:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 79:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 80:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+SHEET CAN_Signal_Definition
+ROW 1: CAN Signal Definition |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 2: 모든 Signal의 Start Bit, Length, Byte Order, Factor, Offset, Min, Max, Unit, Initial, Invalid은 본 시트 FIX를 기준으로 관리합니다. CAN_Matrix.xlsx는 참고용이며 vehicle.dbc와 상대 담당자 리뷰를 통해 동일 값을 구현 산출물에 반영합니다. |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 3:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 4: Signal detail |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 5: Signal Key | Message Name | Signal Name | Start Bit | Length | Byte Order | Data Type | Factor | Offset | Min | Max | Unit | Initial | Invalid | Transmitter | Receiver | Value Table | Source / Trace | Status | Review | Related Requirement
+ROW 6: VCU_Command.TorqueRequest | VCU_Command | TorqueRequest | 0 | 16 | Intel | unsigned | 0.1 | 0 | 0 | 4000 | Nm | 0 | 0xFFFF (hex) | VCU | Motor / Gateway / Cluster | - | HB §5.3 Table 5-2 | 기준 예시 | 상대 담당자 리뷰 필요 | SYS_REQ_003, SYS_REQ_020
+ROW 7: VCU_Command.Gear | VCU_Command | Gear | 16 | 3 | Intel | enum | 1 | 0 | 0 | 5 | enum | P | 7 | VCU | Motor / Gateway / Cluster | GEAR | HB §5.3; §5.4 | 기준 예시 | 상대 담당자 리뷰 필요 | SYS_REQ_003
+ROW 8: VCU_Command.Brake | VCU_Command | Brake | 19 | 1 | Intel | bool | 1 | 0 | 0 | 1 | bool | 0 | 1 | VCU | Motor / Gateway / Cluster | BOOL | HB §5.3 Table 5-2 | 기준 예시 | 상대 담당자 리뷰 필요 | SYS_REQ_003
+ROW 9: VCU_Command.AliveCounter | VCU_Command | AliveCounter | 20 | 4 | Intel | unsigned | 1 | 0 | 0 | 15 | count | 0 | 0xF | VCU | Motor / Gateway / Cluster | ALIVE_COUNTER | HB §5.1, §5.3; ARCH §3.D | 기준 예시 | 상대 담당자 리뷰 필요 | SYS_REQ_022-023
+ROW 10: Motor_Status.RPM | Motor_Status | RPM | 0 | 16 | Intel | unsigned | 1 | 0 | 0 | 12000 | rpm | 0 | 0xFFFF (hex) | Motor | VCU / Gateway / Cluster | - | HB §5.3 Table 5-2 | 기준 예시 | 상대 담당자 리뷰 필요 | SYS_REQ_004
+ROW 11: Motor_Status.TorqueApplied | Motor_Status | TorqueApplied | 16 | 16 | Intel | unsigned | 0.1 | 0 | 0 | 4000 | Nm | 0 | 0xFFFF (hex) | Motor | VCU / Gateway / Cluster | - | ARCH §8.1 purpose | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_004, SYS_REQ_024
+ROW 12: Motor_Status.MotorState | Motor_Status | MotorState | 32 | 2 | Intel | enum | 1 | 0 | 0 | 3 | state | OFF | N/A | Motor | VCU / Gateway / Cluster | MOTOR_STATE | ARCH §8.1 purpose | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_004
+ROW 13: Motor_Status.AliveCounter | Motor_Status | AliveCounter | 34 | 4 | Intel | unsigned | 1 | 0 | 0 | 15 | count | 0 | N/A | Motor | VCU / Gateway / Cluster | ALIVE_COUNTER | ARCH §8.1 purpose | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_022-023
+ROW 14: Vehicle_Status.Speed | Vehicle_Status | Speed | 0 | 16 | Intel | unsigned | 0.1 | 0 | 0 | 250 | km/h | 0 | 0xFFFF (hex) | Gateway | Cluster / PC | - | Virtual Motor RPM 기반 가상값 | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_007
+ROW 15: Vehicle_Status.RPM | Vehicle_Status | RPM | 16 | 16 | Intel | unsigned | 1 | 0 | 0 | 12000 | rpm | 0 | 0xFFFF (hex) | Gateway | Cluster / PC | - | ARCH §8.1 purpose | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_007
+ROW 16: Vehicle_Status.Gear | Vehicle_Status | Gear | 32 | 3 | Intel | enum | 1 | 0 | 0 | 5 | enum | P | 7 | Gateway | Cluster / PC | GEAR | ARCH §8.1 purpose | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_007
+ROW 17: Vehicle_Status.Brake | Vehicle_Status | Brake | 35 | 1 | Intel | bool | 1 | 0 | 0 | 1 | bool | 0 | 1 | Gateway | Cluster / PC | BOOL | ARCH §8.1 purpose | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_007
+ROW 18: Vehicle_Status.NetworkState | Vehicle_Status | NetworkState | 36 | 2 | Intel | enum | 1 | 0 | 0 | 3 | state | NORMAL | N/A | Gateway | Cluster / PC | SYSTEM_STATE | ARCH §8.1 purpose | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_007, SYS_REQ_017
+ROW 19: Body_Status.DoorStatus | Body_Status | DoorStatus | 8 | 8 | Intel | enum | 1 | 0 | 0 | 3 | state | CLOSED_UNLOCKED | 0xFF | Gateway | Cluster / PC | DOOR_STATE | ARCH §8.1 purpose | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_005, SYS_REQ_021
+ROW 20: Body_Status.LightStatus | Body_Status | LightStatus | 16 | 8 | Intel | unsigned | 1 | 0 | 0 | 63 | bitmask | 0 | 0xFF | Gateway | Cluster / PC | LAMP_STATUS_BITS | ARCH §8.1 purpose | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_006
+ROW 21: Body_Status.WindowStatus | Body_Status | WindowStatus | 24 | 8 | Intel | enum | 1 | 0 | 0 | 5 | state | STOPPED | 0xFF | Gateway | Cluster / PC | WINDOW_STATE | ARCH §8.1-8.3 | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_042-044, SYS_REQ_057
+ROW 22: Body_Status.ReverseLamp | Body_Status | ReverseLamp | 0 | 1 | Intel | bool | 1 | 0 | 0 | 1 | bool | 0 | N/A | Gateway | Cluster / PC | BOOL | HB §5.3 Table 5-2 | 기준 예시 | 상대 담당자 리뷰 필요 | SYS_REQ_006-007
+ROW 23: Body_Status.DoorOpen | Body_Status | DoorOpen | 1 | 1 | Intel | bool | 1 | 0 | 0 | 1 | bool | 0 | N/A | Gateway | Cluster / PC | BOOL | ARCH §8.1 purpose | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_005, SYS_REQ_007
+ROW 24: Gateway_Status.GatewayAlive | Gateway_Status | GatewayAlive | 0 | 4 | Intel | unsigned | 1 | 0 | 0 | 15 | count | 0 | 0xF | Gateway | All / PC | ALIVE_COUNTER | HB §5.3 Table 5-2 | 기준 예시 | 상대 담당자 리뷰 필요 | SYS_REQ_017, SYS_REQ_023
+ROW 25: Gateway_Status.QueueUsage | Gateway_Status | QueueUsage | 8 | 8 | Intel | unsigned | 1 | 0 | 0 | 100 | % | 0 | 0xFF | Gateway | All / PC | - | HB §5.2; D-07 §7.1 | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_017, SYS_REQ_054
+ROW 26: Fault_Status.FaultCode | Fault_Status | FaultCode | 0 | 8 | Intel | enum | 1 | 0 | 0 | 6 | code | NONE | 0xFF | Gateway | Cluster / PC | FAULT_CODE | ARCH §8.1; D-07 §7 + Team Encoding | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_018, SYS_REQ_025-026
+ROW 27: Fault_Status.ECUOffline | Fault_Status | ECUOffline | 8 | 4 | Intel | enum | 1 | 0 | 0 | 7 | node | NONE | 0xF | Gateway | Cluster / PC | ECU_OFFLINE | ARCH §8.1; D-07 §4 + Team Encoding | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_018, SYS_REQ_021, SYS_REQ_025
+ROW 28: Fault_Status.RecoveryState | Fault_Status | RecoveryState | 12 | 1 | Intel | enum | 1 | 0 | 0 | 1 | state | CLEARED | N/A | Gateway | Cluster / PC | RECOVERY_STATE | ARCH §8.1; D-07 §5/§7 + Team Encoding | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_026, SYS_REQ_053
+ROW 29: Fault_Status.SystemState | Fault_Status | SystemState | 13 | 2 | Intel | enum | 1 | 0 | 0 | 3 | state | NORMAL | N/A | Gateway | Cluster / PC | SYSTEM_STATE | ARCH §3.D, §7.2; D-07 §4-5 + Team Encoding | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_050-052, SYS_REQ_056, SYS_REQ_058
+ROW 30:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 31: 입력 규칙: 숫자 필드는 숫자형으로 기록하고 기준 문서 고정값과 Team Encoding을 Source/Status에서 구분합니다. Fault_Status와 Window encoding은 본 Workbook FIX이며 Matrix는 참고용, DBC/LDF/FW/Test는 동일 값으로 동기화합니다. |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 32:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 33:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 34:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 35:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 36:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 37:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 38:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 39:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 40:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 41:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 42:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 43:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 44:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 45:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 46:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 47:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 48:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 49:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 50:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 51:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 52:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 53:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 54:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 55:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 56:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 57:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 58:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 59:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 60:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 61:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 62:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 63:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 64:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 65:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 66:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 67:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 68:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 69:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 70:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 71:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 72:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 73:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 74:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 75:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 76:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 77:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 78:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 79:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 80:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+SHEET LIN_Frame_Definition
+ROW 1: LIN Frame Definition |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 2: Gateway=LIN Master, Door/Light/Window=Slave. 본 시트의 PID/Length/Checksum/Schedule은 FIX Interface입니다. LIN_Matrix는 참고용이며 vehicle.ldf/Firmware/Test에 동일 값을 반영하고 변경 시 상대 담당자 리뷰 필요. |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 3:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 4: Frame header / schedule link |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 5: Frame Type | Frame Name | PID | Direction | Length (bytes) | Tx Method | Period (ms) | Publisher | Subscriber | Schedule Slot | Checksum | Purpose | Related Requirement | LDF / Matrix Link | Status | Review
+ROW 6: Status | Door_Status | 0x10 (hex) | Slave → Master | 1 | Scheduled | 100 | Door | Gateway | 0 ms / entry 1 | Enhanced | DoorOpen, DoorLocked, DoorAlive | SYS_REQ_005, SYS_REQ_021, SYS_REQ_053 | vehicle.ldf / LIN_Matrix.xlsx | 기준+팀 결정안 | 상대 담당자 리뷰 필요
+ROW 7: Command | Door_Command | 0x11 (hex) | Master → Slave | 1 | Scheduled | 100 | Gateway | Door | 60 ms / entry 7 | Enhanced | LockCommand, RequestState | SYS_REQ_005, SYS_REQ_013 | vehicle.ldf / LIN_Matrix.xlsx | 기준+팀 결정안 | 상대 담당자 리뷰 필요
+ROW 8: Command | Light_Command | 0x12 (hex) | Master → Slave | 1 | Scheduled | 50 | Gateway | Light | 20 ms / entry 3, 70 ms / entry 8 | Enhanced | HeadLamp, TurnLamp, HazardLamp, ReverseLamp, BrakeLamp | SYS_REQ_006, SYS_REQ_013 | vehicle.ldf / LIN_Matrix.xlsx | 기준+팀 결정안 | 상대 담당자 리뷰 필요
+ROW 9: Status | Light_Status | 0x13 (hex) | Slave → Master | 2 | Scheduled | 100 | Light | Gateway | 40 ms / entry 5 | Enhanced | LampState, LightAlive, DiagnosticState | SYS_REQ_006, SYS_REQ_013 | vehicle.ldf / LIN_Matrix.xlsx | 기준+팀 결정안 | 상대 담당자 리뷰 필요
+ROW 10: Command | Window_Command | 0x14 (hex) | Master → Slave | 1 | Scheduled | 100 | Gateway | Window | 10 ms / entry 2 | Enhanced | Window UP/DOWN command | SYS_REQ_042-045, SYS_REQ_057, SYS_REQ_059 | vehicle.ldf / LIN_Matrix.xlsx | 팀 결정안 | 상대 담당자 리뷰 필요
+ROW 11: Status | Window_Status | 0x15 (hex) | Slave → Master | 2 | Scheduled | 100 | Window | Gateway | 30 ms / entry 4 | Enhanced | Window status / limit / motor state | SYS_REQ_042-044, SYS_REQ_057 | vehicle.ldf / LIN_Matrix.xlsx | 팀 결정안 | 상대 담당자 리뷰 필요
+ROW 12:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 13: LIN Master schedule |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 14: Slot Time (ms) | Schedule Entry | Frame | Meaning | Status |  |  |  |  |  |  |  |  |  |  | 
+ROW 15: 0 | 1 | Door_Status | Door 상태 수집 | 팀 결정안 |  |  |  |  |  |  |  |  |  |  | 
+ROW 16: 10 | 2 | Window_Command | Window STOP/UP/DOWN command 전달 | 팀 결정안 |  |  |  |  |  |  |  |  |  |  | 
+ROW 17: 20 | 3 | Light_Command | Lamp command 전달 | 팀 결정안 |  |  |  |  |  |  |  |  |  |  | 
+ROW 18: 30 | 4 | Window_Status | Window 상태/limit/motor/alive 수집 | 팀 결정안 |  |  |  |  |  |  |  |  |  |  | 
+ROW 19: 40 | 5 | Light_Status | Lamp 응답 수집 | 팀 결정안 |  |  |  |  |  |  |  |  |  |  | 
+ROW 20: 50 | 6 | Idle / Reserved | 향후 확장용 Reserved slot | 팀 결정안 |  |  |  |  |  |  |  |  |  |  | 
+ROW 21: 60 | 7 | Door_Command | Lock 또는 Request 상태 전달 | 팀 결정안 |  |  |  |  |  |  |  |  |  |  | 
+ROW 22: 70 | 8 | Light_Command | 50 ms 주기 충족을 위한 두 번째 Lamp command | 팀 결정안 |  |  |  |  |  |  |  |  |  |  | 
+ROW 23: 80 | 9 | Idle / Reserved | 향후 확장용 Reserved slot | 팀 결정안 |  |  |  |  |  |  |  |  |  |  | 
+ROW 24: 90 | 10 | Idle / Reserved | 향후 확장용 Reserved slot | 팀 결정안 |  |  |  |  |  |  |  |  |  |  | 
+ROW 25: 100 | repeat | Schedule 0 | 10 ms slot / 100 ms supercycle 반복 | 팀 결정안 |  |  |  |  |  |  |  |  |  |  | 
+ROW 26:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 27: LIN 구현 규칙: Gateway가 Schedule/Header를 시작하고 해당 Frame의 Publisher가 Response/Data를 제공. Door no-response 3 cycle, Window no-response 2 cycle을 Offline 기준으로 사용. 10 ms slot / 100 ms supercycle은 FIX Interface이며 vehicle.ldf/Firmware/Test와 1:1 동기화합니다. LIN_Matrix/Schedule은 참고용입니다. PulseView로 PID/Data/Checksum/Timing을 확인합니다. |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 28:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 29:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 30:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 31:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 32:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 33:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 34:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 35:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 36:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 37:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 38:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 39:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 40:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 41:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 42:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 43:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 44:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 45:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 46:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 47:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 48:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 49:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 50:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 51:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 52:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 53:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 54:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 55:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 56:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 57:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 58:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 59:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 60:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 61:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 62:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 63:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 64:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 65:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 66:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 67:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 68:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 69:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 70:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 71:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 72:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 73:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 74:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 75:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 76:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 77:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 78:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 79:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 80:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+SHEET LIN_Signal_Definition
+ROW 1: LIN Signal Definition |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 2: Handbook §6.1 Signal 이름을 바탕으로 Team Encoding을 FIX. Start Bit/Length/Byte Order/Scaling/Initial/Invalid은 본 시트를 기준으로 하고 LIN_Matrix는 참고용, vehicle.ldf/Firmware/Test에 동일 반영 후 상대 담당자 리뷰합니다. |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 3:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 4: Signal detail |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 5: Signal Key | Frame Name | Signal Name | Start Bit | Length | Byte Order | Data Type | Factor | Offset | Min | Max | Unit | Initial | Invalid | Publisher | Subscriber | Value Table | Source / Trace | Status | Review | Related Requirement
+ROW 6: Door_Status.DoorOpen | Door_Status | DoorOpen | 0 | 1 | Intel | bool | 1 | 0 | 0 | 1 | bool | 0 | N/A | Door | Gateway | BOOL | HB §6.1 Table 6-1 + Team Encoding | 기준+팀 Encoding | 상대 담당자 리뷰 필요 | SYS_REQ_005, SYS_REQ_021
+ROW 7: Door_Status.DoorLocked | Door_Status | DoorLocked | 1 | 1 | Intel | bool | 1 | 0 | 0 | 1 | bool | 0 | N/A | Door | Gateway | BOOL | HB §6.1 Table 6-1 + Team Encoding | 기준+팀 Encoding | 상대 담당자 리뷰 필요 | SYS_REQ_005
+ROW 8: Door_Status.DoorAlive | Door_Status | DoorAlive | 2 | 4 | Intel | unsigned | 1 | 0 | 0 | 15 | count | 0 | N/A | Door | Gateway | ALIVE_COUNTER | HB §6.1; D-07 Alive Policy + Team Encoding | 기준+팀 Encoding | 상대 담당자 리뷰 필요 | SYS_REQ_021-023
+ROW 9: Door_Command.LockCommand | Door_Command | LockCommand | 0 | 2 | Intel | enum | 1 | 0 | 0 | 2 | command | NO_ACTION | 3 | Gateway | Door | LOCK_COMMAND | HB §6.1 Table 6-1 + Team Encoding | 기준+팀 Encoding | 상대 담당자 리뷰 필요 | SYS_REQ_005
+ROW 10: Door_Command.RequestState | Door_Command | RequestState | 2 | 1 | Intel | enum | 1 | 0 | 0 | 1 | state | NO_REQUEST | N/A | Gateway | Door | REQUEST_STATE | HB §6.1 Table 6-1 + Team Encoding | 기준+팀 Encoding | 상대 담당자 리뷰 필요 | SYS_REQ_005
+ROW 11: Light_Command.HeadLamp | Light_Command | HeadLamp | 0 | 1 | Intel | bool | 1 | 0 | 0 | 1 | bool | 0 | N/A | Gateway | Light | BOOL | HB §6.1 Table 6-1 + Team Encoding | 기준+팀 Encoding | 상대 담당자 리뷰 필요 | SYS_REQ_006
+ROW 12: Light_Command.TurnLamp | Light_Command | TurnLamp | 1 | 2 | Intel | enum | 1 | 0 | 0 | 2 | state | OFF | 3 | Gateway | Light | TURN_LAMP | HB §6.1 Table 6-1 + Team Encoding | 기준+팀 Encoding | 상대 담당자 리뷰 필요 | SYS_REQ_006
+ROW 13: Light_Command.HazardLamp | Light_Command | HazardLamp | 3 | 1 | Intel | bool | 1 | 0 | 0 | 1 | bool | 0 | N/A | Gateway | Light | BOOL | HB §6.1 Table 6-1 + Team Encoding | 기준+팀 Encoding | 상대 담당자 리뷰 필요 | SYS_REQ_006
+ROW 14: Light_Command.ReverseLamp | Light_Command | ReverseLamp | 4 | 1 | Intel | bool | 1 | 0 | 0 | 1 | bool | 0 | N/A | Gateway | Light | BOOL | HB §6.1 Table 6-1 + Team Encoding | 기준+팀 Encoding | 상대 담당자 리뷰 필요 | SYS_REQ_006
+ROW 15: Light_Command.BrakeLamp | Light_Command | BrakeLamp | 5 | 1 | Intel | bool | 1 | 0 | 0 | 1 | bool | 0 | N/A | Gateway | Light | BOOL | HB §6.1 Table 6-1 + Team Encoding | 기준+팀 Encoding | 상대 담당자 리뷰 필요 | SYS_REQ_006
+ROW 16: Light_Status.LampState | Light_Status | LampState | 0 | 6 | Intel | unsigned | 1 | 0 | 0 | 63 | bitmask | 0 | N/A | Light | Gateway | LAMP_STATUS_BITS | HB §6.1 Table 6-1 + Team Encoding | 기준+팀 Encoding | 상대 담당자 리뷰 필요 | SYS_REQ_006
+ROW 17: Light_Status.LightAlive | Light_Status | LightAlive | 8 | 4 | Intel | unsigned | 1 | 0 | 0 | 15 | count | 0 | N/A | Light | Gateway | ALIVE_COUNTER | HB §6.1; D-07 Alive Policy + Team Encoding | 기준+팀 Encoding | 상대 담당자 리뷰 필요 | SYS_REQ_022-023
+ROW 18: Light_Status.DiagnosticState | Light_Status | DiagnosticState | 12 | 2 | Intel | enum | 1 | 0 | 0 | 2 | state | NORMAL | 3 | Light | Gateway | DIAG_STATE | HB §6.1 Table 6-1 + Team Encoding | 기준+팀 Encoding | 상대 담당자 리뷰 필요 | SYS_REQ_017-018
+ROW 19: Window_Command.WindowCommand | Window_Command | WindowCommand | 0 | 2 | Intel | enum | 1 | 0 | 0 | 2 | command | STOP | 3 | Gateway | Window | WINDOW_COMMAND | ARCH §8.2-8.3 + Team Encoding | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_042-045, SYS_REQ_057, SYS_REQ_059
+ROW 20: Window_Status.WindowState | Window_Status | WindowState | 0 | 3 | Intel | enum | 1 | 0 | 0 | 5 | state | STOPPED | 7 | Window | Gateway | WINDOW_STATE | ARCH §8.2-8.3 + Team Encoding | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_042-044, SYS_REQ_057
+ROW 21: Window_Status.UpperLimit | Window_Status | UpperLimit | 3 | 1 | Intel | bool | 1 | 0 | 0 | 1 | bool | 0 | N/A | Window | Gateway | BOOL | ARCH §8.2-8.3 + Team Encoding | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_042-044, SYS_REQ_057
+ROW 22: Window_Status.LowerLimit | Window_Status | LowerLimit | 4 | 1 | Intel | bool | 1 | 0 | 0 | 1 | bool | 0 | N/A | Window | Gateway | BOOL | ARCH §8.2-8.3 + Team Encoding | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_042-044, SYS_REQ_057
+ROW 23: Window_Status.MotorState | Window_Status | MotorState | 5 | 2 | Intel | enum | 1 | 0 | 0 | 3 | state | STOPPED | N/A | Window | Gateway | WINDOW_MOTOR_STATE | ARCH §8.2-8.3 + Team Encoding | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_042-044, SYS_REQ_057
+ROW 24: Window_Status.WindowAlive | Window_Status | WindowAlive | 8 | 4 | Intel | unsigned | 1 | 0 | 0 | 15 | count | 0 | N/A | Window | Gateway | ALIVE_COUNTER | ARCH §8.2-8.3; D-07 Alive Policy + Team Encoding | 팀 결정안 | 상대 담당자 리뷰 필요 | SYS_REQ_042-044, SYS_REQ_057
+ROW 25:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 26: LIN signal mapping은 Frame/PID/Schedule과 함께 FIX. Door/Light/Window 상세 encoding은 본 문서 기준이며 LIN_Matrix/Schedule은 참고용, vehicle.ldf/Firmware/Test에 동일 반영 후 상대 담당자 리뷰 필요. |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 27:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 28:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 29:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 30:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 31:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 32:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 33:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 34:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 35:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 36:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 37:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 38:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 39:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 40:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 41:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 42:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 43:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 44:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 45:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 46:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 47:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 48:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 49:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 50:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 51:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 52:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 53:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 54:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 55:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 56:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 57:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 58:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 59:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 60:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 61:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 62:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 63:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 64:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 65:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 66:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 67:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 68:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 69:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 70:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 71:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 72:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 73:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 74:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 75:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 76:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 77:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 78:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 79:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 80:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 81:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 82:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 83:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 84:  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+SHEET Value_Table
+ROW 1: Value Table |  |  |  |  |  |  |  | 
+ROW 2: Enum/state/fault code의 사람이 읽는 의미와 raw encoding을 함께 관리. 본 Workbook Team Encoding이 FIX 기준이며 CAN/LIN Matrix는 참고용, DBC/LDF/FW/Test는 동일 값으로 동기화합니다. |  |  |  |  |  |  |  | 
+ROW 3:  |  |  |  |  |  |  |  | 
+ROW 4: Enumeration and state mapping |  |  |  |  |  |  |  | 
+ROW 5: Table ID | Domain | Raw Value | Label | Meaning | Unit | Encoding Scope | Source / Trace | Status
+ROW 6: GEAR | VCU_Command / Vehicle_Status | 0 | P | Park | enum | CAN Signal value | HB §5.4 Table 5-3 | 기준 예시
+ROW 7: GEAR | VCU_Command / Vehicle_Status | 1 | N | Neutral | enum | CAN Signal value | HB §5.4 Table 5-3 | 기준 예시
+ROW 8: GEAR | VCU_Command / Vehicle_Status | 2 | D | Drive | enum | CAN Signal value | HB §5.4 Table 5-3 | 기준 예시
+ROW 9: GEAR | VCU_Command / Vehicle_Status | 3 | R | Reverse | enum | CAN Signal value | HB §5.4 Table 5-3 | 기준 예시
+ROW 10: GEAR | VCU_Command / Vehicle_Status | 4-6 | RESERVED | Reserved / not used | enum | CAN Signal value | HB §5.3 + Team Encoding | 팀 결정안
+ROW 11: GEAR | VCU_Command / Vehicle_Status | 7 | INVALID | Invalid code | enum | CAN Signal value | HB §5.3 Table 5-2 | 기준 예시
+ROW 12: BOOL | CAN / LIN | 0 | FALSE | Off / inactive | bool | Signal value | HB §5.3 example | 기준 예시
+ROW 13: BOOL | CAN / LIN | 1 | TRUE | On / active | bool | Signal value | HB §5.3 example | 기준 예시
+ROW 14: ALIVE_COUNTER | CAN / LIN | 0-15 | SEQUENCE | 4-bit cyclic counter, 0→15→0 wrap | count | Message / Frame policy | HB §5.1; ARCH §3.D | 확정
+ROW 15: MOTOR_STATE | Motor_Status.MotorState | 0 | OFF | Motor ECU inactive | state | CAN Signal value | Team Encoding | 팀 결정안
+ROW 16: MOTOR_STATE | Motor_Status.MotorState | 1 | READY | Ready for command | state | CAN Signal value | Team Encoding | 팀 결정안
+ROW 17: MOTOR_STATE | Motor_Status.MotorState | 2 | RUN | Virtual Motor operating | state | CAN Signal value | Team Encoding | 팀 결정안
+ROW 18: MOTOR_STATE | Motor_Status.MotorState | 3 | FAIL_SAFE | Motor local fail-safe active | state | CAN Signal value | D-07 + Team Encoding | 팀 결정안
+ROW 19: SYSTEM_STATE | Vehicle_Status.NetworkState / Fault_Status.SystemState | 0 | NORMAL | All monitored communication / health normal | state | Gateway representative state | ARCH §3.D; D-07 §4 | 기준+팀 Encoding
+ROW 20: SYSTEM_STATE | Vehicle_Status.NetworkState / Fault_Status.SystemState | 1 | DEGRADED | Anomaly exists, immediate safety action not required | state | Gateway representative state | D-07 §4 | 기준+팀 Encoding
+ROW 21: SYSTEM_STATE | Vehicle_Status.NetworkState / Fault_Status.SystemState | 2 | OFFLINE | ECU / Node communication effectively lost | state | Gateway representative state | ARCH §3.D; D-07 §4 | 기준+팀 Encoding
+ROW 22: SYSTEM_STATE | Vehicle_Status.NetworkState / Fault_Status.SystemState | 3 | FAIL_SAFE | Safety action required | state | Gateway representative state | ARCH §3.D; D-07 §4 | 기준+팀 Encoding
+ROW 23: DOOR_STATE | Body_Status.DoorStatus | 0 | CLOSED_UNLOCKED | Door closed and unlocked | state | CAN Body_Status aggregation | LIN Door_Status + Team Encoding | 팀 결정안
+ROW 24: DOOR_STATE | Body_Status.DoorStatus | 1 | CLOSED_LOCKED | Door closed and locked | state | CAN Body_Status aggregation | LIN Door_Status + Team Encoding | 팀 결정안
+ROW 25: DOOR_STATE | Body_Status.DoorStatus | 2 | OPEN_UNLOCKED | Door open and unlocked | state | CAN Body_Status aggregation | LIN Door_Status + Team Encoding | 팀 결정안
+ROW 26: DOOR_STATE | Body_Status.DoorStatus | 3 | OPEN_LOCKED | Door open and locked | state | CAN Body_Status aggregation | LIN Door_Status + Team Encoding | 팀 결정안
+ROW 27: DOOR_STATE | Body_Status.DoorStatus | 0xFF | INVALID | Door status invalid / unavailable | state | CAN Body_Status aggregation | Team Encoding | 팀 결정안
+ROW 28: LAMP_STATUS_BITS | Light_Status.LampState / Body_Status.LightStatus | 0x00 | ALL_OFF | All lamp outputs off | bitmask | LIN/CAN Lamp status | Team Encoding | 팀 결정안
+ROW 29: LAMP_STATUS_BITS | Light_Status.LampState / Body_Status.LightStatus | 0x01 | HEAD_LAMP | Head lamp active | bitmask | bit 0 | Team Encoding | 팀 결정안
+ROW 30: LAMP_STATUS_BITS | Light_Status.LampState / Body_Status.LightStatus | 0x02 | LEFT_TURN | Left turn lamp active | bitmask | bit 1 | Team Encoding | 팀 결정안
+ROW 31: LAMP_STATUS_BITS | Light_Status.LampState / Body_Status.LightStatus | 0x04 | RIGHT_TURN | Right turn lamp active | bitmask | bit 2 | Team Encoding | 팀 결정안
+ROW 32: LAMP_STATUS_BITS | Light_Status.LampState / Body_Status.LightStatus | 0x08 | HAZARD | Hazard lamp active | bitmask | bit 3 | Team Encoding | 팀 결정안
+ROW 33: LAMP_STATUS_BITS | Light_Status.LampState / Body_Status.LightStatus | 0x10 | REVERSE_LAMP | Reverse lamp active | bitmask | bit 4 | Team Encoding | 팀 결정안
+ROW 34: LAMP_STATUS_BITS | Light_Status.LampState / Body_Status.LightStatus | 0x20 | BRAKE_LAMP | Brake lamp active | bitmask | bit 5 | Team Encoding | 팀 결정안
+ROW 35: LAMP_STATUS_BITS | Body_Status.LightStatus | 0xFF | INVALID | LIN Light status unavailable / invalid | bitmask | CAN Body_Status only | Team Encoding | 팀 결정안
+ROW 36: FAULT_CODE | Fault_Status.FaultCode | 0x00 | NONE | No fault code | code | Fault_Status encoding | Team Encoding | 팀 결정안
+ROW 37: FAULT_CODE | Fault_Status.FaultCode | 0x01 | VCU_TIMEOUT | VCU_Command age > 30 ms | code | Fault_Status encoding | HB §10.1; D-07 §4.1 | 기준+팀 Encoding
+ROW 38: FAULT_CODE | Fault_Status.FaultCode | 0x02 | DOOR_ECU_OFFLINE | Door_Status no response for 3 cycles | code | Fault_Status encoding | HB §10.1; D-07 §4.1 | 기준+팀 Encoding
+ROW 39: FAULT_CODE | Fault_Status.FaultCode | 0x03 | ALIVE_ERROR | Alive sequence discontinuity | code | Fault_Status encoding | HB §10.1; D-07 §4.1 | 기준+팀 Encoding
+ROW 40: FAULT_CODE | Fault_Status.FaultCode | 0x04 | ECU_OFFLINE | Generic ECU / node offline state | code | Fault_Status encoding | HB §10.1 + Team Encoding | 기준+팀 Encoding
+ROW 41: FAULT_CODE | Fault_Status.FaultCode | 0x05 | QUEUE_DROP | CAN Rx/Event Queue full or drop | code | Fault_Status encoding | HB §10.1; D-07 §4.1 | 기준+팀 Encoding
+ROW 42: FAULT_CODE | Fault_Status.FaultCode | 0x06 | WINDOW_ECU_OFFLINE | Window_Status no response for 2 cycles | code | Fault_Status encoding | ARCH §8.2-8.3/OPN-07/08 + Team Encoding | 팀 결정안
+ROW 43: FAULT_CODE | Fault_Status.FaultCode | 0x07-0xFE | RESERVED | Reserved for future Fault Code | code | Fault_Status encoding | Team Encoding | 팀 결정안
+ROW 44: FAULT_CODE | Fault_Status.FaultCode | 0xFF | INVALID | Invalid fault encoding | code | Fault_Status encoding | Team Encoding | 팀 결정안
+ROW 45: ECU_OFFLINE | Fault_Status.ECUOffline | 0 | NONE | No offline ECU associated with event | node | 4-bit node encoding | Team Encoding | 팀 결정안
+ROW 46: ECU_OFFLINE | Fault_Status.ECUOffline | 1 | VCU | VCU node | node | 4-bit node encoding | Team Encoding | 팀 결정안
+ROW 47: ECU_OFFLINE | Fault_Status.ECUOffline | 2 | MOTOR | Motor ECU node | node | 4-bit node encoding | Team Encoding | 팀 결정안
+ROW 48: ECU_OFFLINE | Fault_Status.ECUOffline | 3 | GATEWAY | Gateway ECU node | node | 4-bit node encoding | Team Encoding | 팀 결정안
+ROW 49: ECU_OFFLINE | Fault_Status.ECUOffline | 4 | CLUSTER | Cluster ECU node | node | 4-bit node encoding | Team Encoding | 팀 결정안
+ROW 50: ECU_OFFLINE | Fault_Status.ECUOffline | 5 | DOOR | Door ECU node | node | 4-bit node encoding | Team Encoding | 팀 결정안
+ROW 51: ECU_OFFLINE | Fault_Status.ECUOffline | 6 | LIGHT | Light ECU node | node | 4-bit node encoding | Team Encoding | 팀 결정안
+ROW 52: ECU_OFFLINE | Fault_Status.ECUOffline | 7 | WINDOW | Window ECU node | node | 4-bit node encoding | ARCH §8.2-8.3 + Team Encoding | 팀 결정안
+ROW 53: ECU_OFFLINE | Fault_Status.ECUOffline | 8-14 | RESERVED | Reserved node IDs | node | 4-bit node encoding | Team Encoding | 팀 결정안
+ROW 54: ECU_OFFLINE | Fault_Status.ECUOffline | 15 | INVALID | Invalid node ID | node | 4-bit node encoding | Team Encoding | 팀 결정안
+ROW 55: RECOVERY_STATE | Fault_Status.RecoveryState | 0 | ACTIVE | Fault currently active | state | Fault event state | D-07 §5/§7 + Team Encoding | 기준+팀 Encoding
+ROW 56: RECOVERY_STATE | Fault_Status.RecoveryState | 1 | CLEARED | Fault recovery condition satisfied | state | Fault event state | D-07 §5/§7 + Team Encoding | 기준+팀 Encoding
+ROW 57: LOCK_COMMAND | Door_Command.LockCommand | 0 | NO_ACTION | Maintain current lock state | command | LIN Signal value | HB §6.1 + Team Encoding | 팀 결정안
+ROW 58: LOCK_COMMAND | Door_Command.LockCommand | 1 | LOCK | Lock door | command | LIN Signal value | HB §6.1 + Team Encoding | 팀 결정안
+ROW 59: LOCK_COMMAND | Door_Command.LockCommand | 2 | UNLOCK | Unlock door | command | LIN Signal value | HB §6.1 + Team Encoding | 팀 결정안
+ROW 60: LOCK_COMMAND | Door_Command.LockCommand | 3 | INVALID | Invalid lock command | command | LIN Signal value | Team Encoding | 팀 결정안
+ROW 61: REQUEST_STATE | Door_Command.RequestState | 0 | NO_REQUEST | No status request | state | LIN Signal value | HB §6.1 + Team Encoding | 팀 결정안
+ROW 62: REQUEST_STATE | Door_Command.RequestState | 1 | REQUEST_STATUS | Request Door status response | state | LIN Signal value | HB §6.1 + Team Encoding | 팀 결정안
+ROW 63: TURN_LAMP | Light_Command.TurnLamp | 0 | OFF | Turn lamps off | state | LIN Signal value | HB §6.1 + Team Encoding | 팀 결정안
+ROW 64: TURN_LAMP | Light_Command.TurnLamp | 1 | LEFT | Left turn lamp request | state | LIN Signal value | HB §6.1 + Team Encoding | 팀 결정안
+ROW 65: TURN_LAMP | Light_Command.TurnLamp | 2 | RIGHT | Right turn lamp request | state | LIN Signal value | HB §6.1 + Team Encoding | 팀 결정안
+ROW 66: TURN_LAMP | Light_Command.TurnLamp | 3 | INVALID | Invalid turn command | state | LIN Signal value | Team Encoding | 팀 결정안
+ROW 67: DIAG_STATE | Light_Status.DiagnosticState | 0 | NORMAL | Light ECU normal | state | LIN Signal value | Team Encoding | 팀 결정안
+ROW 68: DIAG_STATE | Light_Status.DiagnosticState | 1 | WARNING | Light ECU warning | state | LIN Signal value | Team Encoding | 팀 결정안
+ROW 69: DIAG_STATE | Light_Status.DiagnosticState | 2 | FAULT | Light ECU fault detected | state | LIN Signal value | Team Encoding | 팀 결정안
+ROW 70: DIAG_STATE | Light_Status.DiagnosticState | 3 | INVALID | Invalid diagnostic state | state | LIN Signal value | Team Encoding | 팀 결정안
+ROW 71: WINDOW_COMMAND | Window_Command.WindowCommand | 0 | STOP | Stop Window motor | command | LIN Signal value | ARCH §8.2-8.3 + Team Encoding | 팀 결정안
+ROW 72: WINDOW_COMMAND | Window_Command.WindowCommand | 1 | UP | Move Window upward | command | LIN Signal value | ARCH §8.2-8.3 + Team Encoding | 팀 결정안
+ROW 73: WINDOW_COMMAND | Window_Command.WindowCommand | 2 | DOWN | Move Window downward | command | LIN Signal value | ARCH §8.2-8.3 + Team Encoding | 팀 결정안
+ROW 74: WINDOW_COMMAND | Window_Command.WindowCommand | 3 | INVALID | Invalid Window command | command | LIN Signal value | Team Encoding | 팀 결정안
+ROW 75: WINDOW_STATE | Window_Status.WindowState / Body_Status.WindowStatus | 0 | STOPPED | Window stopped | state | LIN Status / CAN aggregation | ARCH §8.2-8.3 + Team Encoding | 팀 결정안
+ROW 76: WINDOW_STATE | Window_Status.WindowState / Body_Status.WindowStatus | 1 | MOVING_UP | Window moving upward | state | LIN Status / CAN aggregation | Team Encoding | 팀 결정안
+ROW 77: WINDOW_STATE | Window_Status.WindowState / Body_Status.WindowStatus | 2 | MOVING_DOWN | Window moving downward | state | LIN Status / CAN aggregation | Team Encoding | 팀 결정안
+ROW 78: WINDOW_STATE | Window_Status.WindowState / Body_Status.WindowStatus | 3 | UPPER_LIMIT | Upper limit reached | state | LIN Status / CAN aggregation | Team Encoding | 팀 결정안
+ROW 79: WINDOW_STATE | Window_Status.WindowState / Body_Status.WindowStatus | 4 | LOWER_LIMIT | Lower limit reached | state | LIN Status / CAN aggregation | Team Encoding | 팀 결정안
+ROW 80: WINDOW_STATE | Window_Status.WindowState / Body_Status.WindowStatus | 5 | FAULT | Window actuator / control fault | state | LIN Status / CAN aggregation | Team Encoding | 팀 결정안
+ROW 81: WINDOW_STATE | Window_Status.WindowState / Body_Status.WindowStatus | 6 | RESERVED | Reserved | state | LIN Status / CAN aggregation | Team Encoding | 팀 결정안
+ROW 82: WINDOW_STATE | Window_Status.WindowState | 7 | INVALID | LIN invalid / unavailable Window state | state | LIN Signal value | Team Encoding | 팀 결정안
+ROW 83: WINDOW_STATE | Body_Status.WindowStatus | 0xFF | INVALID | Invalid / unavailable Window state | state | CAN Body_Status aggregation | Team Encoding | 팀 결정안
+ROW 84: WINDOW_MOTOR_STATE | Window_Status.MotorState | 0 | STOPPED | Motor stopped | state | LIN Signal value | Team Encoding | 팀 결정안
+ROW 85: WINDOW_MOTOR_STATE | Window_Status.MotorState | 1 | DRIVING_UP | Motor driving upward | state | LIN Signal value | Team Encoding | 팀 결정안
+ROW 86: WINDOW_MOTOR_STATE | Window_Status.MotorState | 2 | DRIVING_DOWN | Motor driving downward | state | LIN Signal value | Team Encoding | 팀 결정안
+ROW 87: WINDOW_MOTOR_STATE | Window_Status.MotorState | 3 | FAULT | Window motor fault | state | LIN Signal value | Team Encoding | 팀 결정안
+ROW 88:  |  |  |  |  |  |  |  | 
+ROW 89: Value Table 변경은 Jira Issue → 기준 산출물(02/05) 갱신 → 상대 담당자 리뷰 필요 → DBC/LDF → Firmware/PC Tool/Test → Evidence 순으로 반영합니다. Matrix는 참고용으로 필요 시 동기화합니다. |  |  |  |  |  |  |  | 
+SHEET Fault_Timeout_Policy
+ROW 1: Fault / Timeout Policy |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 2: Gateway는 System/Network Fault를 감지·관리·전파하고, 실제 안전 출력은 해당 ECU가 수행. VCU timeout 시 Motor가 local fail-safe를 직접 수행하며 Gateway 생존성에 종속되지 않음. |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 3:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 4: Detection, state, action and recovery policy |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 5: Policy ID | Fault / Condition | Source Interface | Detection / Threshold | Expected Period | State | Local ECU Action | Gateway Action | External Propagation | Recovery Condition | Recovery Count / Basis | Related Requirement | Source / Trace | Status | Review
+ROW 6: POL-001 | VCU_TIMEOUT | CAN / VCU_Command | VCU_Command expected 10 ms; age > 30 ms | 10 ms | FAIL_SAFE | Motor가 VCU_Command를 직접 감시하고 TorqueApplied=0, target_rpm=0, RPM decay 수행 | FaultManager가 VCU_TIMEOUT ACTIVE 기록, 대표 SystemState=FAIL_SAFE, Fault_Status Event 전송 | Cluster 대표 상태 + 주요 Fault 표시, PC Active Fault/History 기록 | 정상 VCU_Command + Valid + Alive 연속 확인 | 3 consecutive confirmations | SYS_REQ_020, SYS_REQ_024, SYS_REQ_053, SYS_REQ_055 | HB §10.1; ARCH §3.D; D-07 §3.3/§5.1 | 확정 | 상대 담당자 리뷰 필요
+ROW 7: POL-002 | DOOR_ECU_OFFLINE | LIN / Door_Status | Door_Status 100 ms; 3 cycle 연속 no response | 100 ms | OFFLINE | Door의 Local actuator 동작은 Door ECU 자체 책임. Gateway Fault에 의존한 강제 출력 없음 | Door 관련 Signal invalid 처리, Body_Status 반영, Fault_Status에 DOOR_ECU_OFFLINE ACTIVE 전송 | Cluster에 Door Offline/대표 상태 표시, PC Active Fault/History 기록 | 정상 Door_Status Response + 정상 DoorAlive 연속 확인 | 3 consecutive confirmations | SYS_REQ_021, SYS_REQ_025-026, SYS_REQ_053 | HB §10.1; ARCH §3.D; D-07 §4.1/§5.1 | 확정 | 상대 담당자 리뷰 필요
+ROW 8: POL-003 | ALIVE_ERROR | CAN / LIN Alive-bearing message/frame | AliveCounter 기대값 (prev+1) mod 16과 불일치 | Message-specific | Critical: FAIL_SAFE / Non-critical: DEGRADED | Critical 대상 ECU는 Local fail-safe 수행. Non-critical은 해당 Signal invalid/stale 처리 | Alive Fault ACTIVE 기록, 해당 입력 invalid 처리, Fault_Status Event + log 생성 | Cluster 대표 상태/주요 Fault 표시, PC 전체 Active Fault/History 기록 | 정상 Alive sequence 연속 확인 | 3 consecutive confirmations | SYS_REQ_022-023, SYS_REQ_053, SYS_REQ_058 | HB §5.1; D-07 §4.3/§5.1 + Team Classification | 팀 결정안 | 상대 담당자 리뷰 필요
+ROW 9: POL-004 | QUEUE_DROP | Gateway CAN RxQueue / EventQueue | Queue full 또는 enqueue 실패/drop 발생 | Event | DEGRADED | ECU Local fail-safe 없음 | Queue Drop counter 증가, Gateway_Status.QueueUsage 갱신, Fault/log/KPI 기록, 대표 SystemState=DEGRADED | Cluster 대표 SystemState 갱신, PC Gateway health/Queue/Fault log 기록 | Queue full 해소 + 추가 Drop 없음 + QueueUsage < 80% | 3 consecutive HealthTask evaluations, drop counter 증가 없음 | SYS_REQ_050, SYS_REQ_052, SYS_REQ_054, SYS_REQ_056 | ARCH §3.D; D-07 §4.1/§5.1 + Team Recovery Rule | 팀 결정안 | 상대 담당자 리뷰 필요
+ROW 10: POL-005 | WINDOW_ECU_OFFLINE | LIN / Window_Status | Window_Status 100 ms; 2 cycle 연속 no response | 100 ms | OFFLINE | Gateway의 Window Offline 판정 자체가 Window Motor 출력을 직접 강제하지 않음. Window_Command Local Timeout에 따른 Motor STOP은 POL-009 / SYS_REQ_059에서 별도 관리 | Window 관련 Signal invalid 처리, Body_Status.WindowStatus=INVALID, Fault_Status에 WINDOW_ECU_OFFLINE ACTIVE 전송 | Cluster에 Window Offline/대표 상태 표시, PC Active Fault/History 기록 | 정상 Window_Status Response + 정상 WindowAlive 연속 확인 | 3 consecutive confirmations | SYS_REQ_042-045, SYS_REQ_057 | ARCH §8.2-8.3/OPN-07/08 + Team Decision | 팀 결정안 | 상대 담당자 리뷰 필요
+ROW 11: POL-006 | REPRESENTATIVE_SYSTEM_STATE | Gateway aggregate / Active Fault Table | 모든 Active Fault의 State를 독립 평가 | Event + cyclic status | FAIL_SAFE > OFFLINE > DEGRADED > NORMAL | 대표 SystemState 자체는 Local safety command가 아님 | 가장 높은 Severity 계산, Vehicle_Status.NetworkState 및 Fault_Status.SystemState에 반영 | Cluster는 대표 SystemState + 주요 Fault, PC는 모든 Active Fault + History 표시 | 모든 Active Fault가 각 Recovery 조건을 만족해 CLEARED | 각 Fault별 Recovery 정책 적용 | SYS_REQ_050-052, SYS_REQ_056 | ARCH §3.D, §7.2; D-07 §5.2 | 확정 | 상대 담당자 리뷰 필요
+ROW 12: POL-007 | CRITICAL_DEADLINE | Gateway timing path | VCU 30 ms timeout은 100 ms HealthTask polling까지 대기할 수 없음 | VCU_Command 10 ms | FAIL_SAFE | Motor의 VCU timeout Local monitoring은 Gateway와 독립 수행 | Deadline/Event 기반 경로가 HealthTask/FaultManager를 즉시 Wake-up하고 실제 age 재확인 | Fault_Status Event를 Cluster/PC에 즉시 전송 | 정상 VCU_Command + Valid + Alive 복구 정책 적용 | 3 consecutive confirmations | SYS_REQ_020, SYS_REQ_055 | D-07 §6.3; ARCH §3.D | 확정 | 상대 담당자 리뷰 필요
+ROW 13: POL-008 | FAULT_STATUS_EXTERNAL | CAN / Fault_Status 0x310 | 각 Fault의 ACTIVE ↔ CLEARED 전이 시 Event 생성 | Event | RecoveryState = ACTIVE / CLEARED | N/A | FaultCode + ECUOffline(Source Node) + RecoveryState + SystemState를 0x310 Event로 전송. 한 Event에는 한 Fault 전이만 표현 | Cluster/PC가 Event를 수신해 Active Fault Table 갱신. Cluster는 대표 상태/주요 Fault, PC는 전체 Fault 및 History 유지 | 각 Fault별 Recovery 정책 사용 | Global recovery count 없음; 해당 Fault Policy의 기준 사용 | SYS_REQ_018, SYS_REQ_025-026, SYS_REQ_058 | ARCH §8.1-8.4; D-07 §7 + Team Encoding | 팀 결정안 | 상대 담당자 리뷰 필요
+ROW 14: POL-009 | WINDOW_COMMAND_TIMEOUT | LIN / Window_Command | 유효 Window_Command 미수신을 Window ECU가 자체 감시. Local Command Timeout의 정량값은 하위 Window SW 상세 요구사항에서 정의 | Window_Command 100 ms | Local safe stop (별도 SystemState mapping 없음) | Window ECU가 Gateway의 별도 Fail-safe 명령을 기다리지 않고 Window Motor를 STOP 상태로 전환 | 없음 — Gateway는 본 Local timeout의 판정 주체가 아님. Window_Status Offline/Alive 정책은 POL-005/POL-003에서 독립 감시 | 본 정책 자체의 별도 Fault_Status Event 요구 없음. 독립적인 Offline/Alive Fault가 발생하면 해당 정책에 따라 전파 | 유효 Window_Command 수신 복귀 후 실제 재구동은 다음 유효 명령과 Limit 조건을 만족할 때 수행 | System-level recovery count 없음; 상세 재개 조건/timeout parameter는 Window SW 하위 요구사항에서 추적 | SYS_REQ_059 | Message Definition v0.4 Team Decision / SYS_REQ_059 | 팀 결정안 | Window 담당 + Gateway/LIN Common 리뷰 필요
+ROW 15: Representative System State mapping |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 16: State | Meaning | Representative example | Cluster view | PC Diagnostic Tool view | Source |  |  |  |  |  |  |  |  | 
+ROW 17: NORMAL | All age/alive values normal | Normal communication | Normal | No Active Fault | D-07 §4.2/7.1 |  |  |  |  |  |  |  |  | 
+ROW 18: DEGRADED | Anomaly exists but immediate safety output is not requested | QUEUE_DROP, non-critical ALIVE_ERROR | Representative state + important fault | All Active Fault + detail log | D-07 §4.2/7.1 |  |  |  |  |  |  |  |  | 
+ROW 19: FAIL_SAFE | Affected ECU safety action required | VCU_TIMEOUT, critical fault | Representative state + important fault | All Active Fault + detail log | D-07 §4.2/7.1 |  |  |  |  |  |  |  |  | 
+ROW 20: OFFLINE | ECU/Node communication is effectively lost | Door 3-cycle / Window 2-cycle no response | Representative state + important fault | All Active Fault + detail log | D-07 §4.2/7.1 |  |  |  |  |  |  |  |  | 
+ROW 21:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 22: 책임 경계: Gateway는 Timeout/Alive/Offline/Queue 같은 System Health와 Fault State를 관리하고 외부에 전파합니다. Motor/문제 ECU는 실제 안전 출력과 Local Fail-safe를 수행합니다. Fault 감지 후 Cluster/PC 외부 전파가 누락된 구현은 완료로 판단하지 않습니다. |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 23:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 24: ALIVE_ERROR Criticality Classification (Team Decision) |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 25: Interface / Frame | Classification | State on ALIVE_ERROR | Basis | Status |  |  |  |  |  |  |  |  |  | 
+ROW 26: VCU_Command | Critical | FAIL_SAFE | 제어 안전 명령(Torque/Gear/Brake) 직접 포함 | 팀 결정안 |  |  |  |  |  |  |  |  |  | 
+ROW 27: Motor_Status | Non-critical | DEGRADED | 상태/모니터링 Frame; VCU timeout fail-safe는 Motor가 별도 수행 | 팀 결정안 |  |  |  |  |  |  |  |  |  | 
+ROW 28: Door_Status | Non-critical | DEGRADED | Body 상태 Frame; no-response Offline 정책 별도 | 팀 결정안 |  |  |  |  |  |  |  |  |  | 
+ROW 29: Light_Status | Non-critical | DEGRADED | Body 상태/진단 Frame | 팀 결정안 |  |  |  |  |  |  |  |  |  | 
+ROW 30: Window_Status | Non-critical | DEGRADED | Body 상태 Frame; no-response Offline 정책 별도 | 팀 결정안 |  |  |  |  |  |  |  |  |  | 
+ROW 31: Gateway_Status | Non-critical | DEGRADED | Gateway health 상태 Frame | 팀 결정안 |  |  |  |  |  |  |  |  |  | 
+ROW 32:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 33:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 34:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 35:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 36:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 37:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 38:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 39:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 40:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 41:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 42:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 43:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 44:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 45:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 46:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 47:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 48:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 49:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 50:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 51:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 52:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 53:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 54:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 55:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 56:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 57:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 58:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 59:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 60:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 61:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 62:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 63:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 64:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 65:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 66:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 67:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 68:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 69:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 70:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 71:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 72:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 73:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 74:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 75:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 76:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 77:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 78:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 79:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 80:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 81:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 82:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 83:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 84:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 85:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 86:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 87:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 88:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 89:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+ROW 90:  |  |  |  |  |  |  |  |  |  |  |  |  |  | 
+SHEET Revision_History
+ROW 1: Revision History |  |  |  |  |  |  | 
+ROW 2: 문서 개정 이력과 기준 입력자료를 관리. Merge는 Done과 동일하지 않으며 02/05 Baseline, DBC/LDF, code, test, evidence, review trace가 필요합니다. CAN/LIN Matrix는 참고용입니다. |  |  |  |  |  |  | 
+ROW 3:  |  |  |  |  |  |  | 
+ROW 4: Document revision history |  |  |  |  |  |  | 
+ROW 5: Version | Date | Change | Basis / Source | Owner | Status | Review | Notes
+ROW 6: 0.1 | 2026-09-20 00:00:00 | Message definition workbook initial template created with summary, CAN/LIN detail, value, fault and revision sheets | User request / prior planning conversation | Project | 초안 | 상대 담당자 리뷰 필요 | Matrix/DBC/LDF not present in sources/
+ROW 7: Ref-HB v1.0 | 2026-09-02 00:00:00 | CAN 500 kbps, LIN 19.2 kbps, reference CAN messages, LIN frames/schedule, signal field rules | freertos_can_lin_gateway_handbook_ko.pdf §5-6 | Reference | 확정 | 없음 | Baseline guidance
+ROW 8: Ref-ARCH v1.0 | 2026-09-13 00:00:00 | Window ECU in-scope LIN slave, interface impact matrix, system requirements and review gates | 시스템 아키텍처 사양서.pdf §1-3, §7-8 | Reference | 확정 | 없음 | Latest system architecture baseline
+ROW 9: Ref-D07 v0.9 | 2026-09-12 00:00:00 | Fault state mapping, VCU timeout, local fail-safe, recovery and external propagation policy | CAN-LIN_D07_Fault_Failsafe_설계보고서_v0.9_진행중.pdf §1-7 | Reference | 진행중 | 상대 담당자 리뷰 필요 | Use with Handbook and Architecture baseline
+ROW 10: 0.2 | 2026-09-28 00:00:00 | Fault_Timeout_Policy POL-001~008 최신화 및 대표 OFFLINE 예시 정합화 | 사용자 제공 최신 정책안; HB / ARCH / D-07 / Team Decision | Junho Park | 진행중 | 상대 담당자 리뷰 필요 | POL-003/004/005/008 팀 결정안 반영; POL-001/002/006/007 확정 유지
+ROW 11: 0.3 | 2026-09-28 00:00:00 | Cross-sheet consistency cleanup: LIN 10 ms schedule, Window PID/length, Value Table/FaultCode, review gate, source register sync | Message definition review; HB / ARCH / D-07 / Team Encoding | Junho Park | 진행중 | 상대 담당자 리뷰 필요 | 메시지 정의서 내부 정합성 수정 완료. 외부 LIN_Matrix/Schedule/LDF 동기화 필요
+ROW 12: 0.4 | 2026-09-30 00:00:00 | Matrix reference-only 정책 정리 + Window_Command Local Timeout을 POL-009로 분리하고 SYS_REQ_059 Requirement Trace 연결 | User decision; 05 Requirements v0.5; POL-009 Team Decision | Junho Park | FIX | 상대 담당자 리뷰 필요 | POL-005 Window Offline과 POL-009 Window local command freshness를 분리. Timeout 정량값은 하위 Window SW 요구사항에 위임.
+ROW 13: Source and input register |  |  |  |  |  |  | 
+ROW 14: Source ID | File | Section / Page | Used for | Availability | Integration action | Review | Notes
+ROW 15: SRC-HB | freertos_can_lin_gateway_handbook_ko.pdf | §5 pp.14-16; §6 pp.18-19; §10 | CAN/LIN baseline, field rules, schedule, fault threshold | Available | Use as project standard/reference input; 02/05 fixed baseline remains authoritative for this workbook | 없음 | Reference input. Matrix는 별도 참고용이며 Baseline 우선순위를 갖지 않음
+ROW 16: SRC-ARCH | 시스템 아키텍처 사양서.pdf | §1-3 pp.5-8; §7-8 pp.15-16 | Latest nodes, Window scope, requirements, interface impact | Available | Treat v1.0 Final Baseline as current architecture | 없음 | Critical/non-critical Alive classification resolved by team decision; source document update pending
+ROW 17: SRC-D07 | CAN-LIN_D07_Fault_Failsafe_설계보고서_v0.9_진행중.pdf | §1-7 pp.2-10 | Fault state, timeout, recovery, external propagation | Available | Use for policy rows and recovery basis | 상대 담당자 리뷰 필요 | Source 문서의 Critical/non-critical 목록은 Open이지만 본 Workbook에서 Team classification 제안 반영; 리뷰 필요
+ROW 18: SRC-CANM | CAN_Matrix.xlsx | Reference only | Reference CAN mapping aid | Available | Cross-check only; do not override 02/05 FIX | 필수 아님 | Reference-only artifact
+ROW 19: SRC-LINM | LIN_Matrix.xlsx | Reference only | Reference LIN mapping/schedule aid | Available | Cross-check only; do not override 02/05 FIX | 필수 아님 | Reference-only artifact
+ROW 20: SRC-DBC | vehicle.dbc | Not provided | Derived CAN database for implementation/decode | Missing | Generate/update from 02 FIX Interface after review | 상대 담당자 리뷰 필요 | DBC must match 02/05; Matrix does not override
+ROW 21: SRC-LDF | vehicle.ldf | Not provided | Derived LIN database / schedule artifact | Planned / not yet generated | Generate/update from 02 FIX LIN Interface after review | 상대 담당자 리뷰 필요 | LDF must match 02/05; Matrix/Schedule sheets are reference-only
+ROW 22:  |  |  |  |  |  |  | 
+ROW 23: Mandatory change control |  |  |  |  |  |  | 
+ROW 24: Jira Issue → 기준 산출물(02 메시지 정의서 / 05 요구사항 명세서) 갱신 → 상대 담당자 리뷰 필요 → CANdb++/DBC 또는 LDF 수정 → Firmware / PC Tool / Test 반영 → PR 및 HW/Test Evidence → Jira Done. Merge != Done. Matrix는 필요 시 참고용으로 동기화하며 Baseline 우선순위를 갖지 않습니다. |  |  |  |  |  |  | 
+ROW 25:  |  |  |  |  |  |  | 
+ROW 26:  |  |  |  |  |  |  | 
+ROW 27:  |  |  |  |  |  |  | 
+ROW 28:  |  |  |  |  |  |  | 
+ROW 29:  |  |  |  |  |  |  | 
+ROW 30:  |  |  |  |  |  |  | 
+ROW 31:  |  |  |  |  |  |  | 
+ROW 32:  |  |  |  |  |  |  | 
+ROW 33:  |  |  |  |  |  |  | 
+ROW 34:  |  |  |  |  |  |  | 
+ROW 35:  |  |  |  |  |  |  | 
+ROW 36:  |  |  |  |  |  |  | 
+ROW 37:  |  |  |  |  |  |  | 
+ROW 38:  |  |  |  |  |  |  | 
+ROW 39:  |  |  |  |  |  |  | 
+ROW 40:  |  |  |  |  |  |  | 
+ROW 41:  |  |  |  |  |  |  | 
+ROW 42:  |  |  |  |  |  |  | 
+ROW 43:  |  |  |  |  |  |  | 
+ROW 44:  |  |  |  |  |  |  | 
+ROW 45:  |  |  |  |  |  |  | 
+ROW 46:  |  |  |  |  |  |  | 
+ROW 47:  |  |  |  |  |  |  | 
+ROW 48:  |  |  |  |  |  |  | 
+ROW 49:  |  |  |  |  |  |  | 
+ROW 50:  |  |  |  |  |  |  | 
+ROW 51:  |  |  |  |  |  |  | 
+ROW 52:  |  |  |  |  |  |  | 
+ROW 53:  |  |  |  |  |  |  | 
+ROW 54:  |  |  |  |  |  |  | 
+ROW 55:  |  |  |  |  |  |  | 
+ROW 56:  |  |  |  |  |  |  | 
+ROW 57:  |  |  |  |  |  |  | 
+ROW 58:  |  |  |  |  |  |  | 
+ROW 59:  |  |  |  |  |  |  | 
+ROW 60:  |  |  |  |  |  |  | 
+ROW 61:  |  |  |  |  |  |  | 
+ROW 62:  |  |  |  |  |  |  | 
+ROW 63:  |  |  |  |  |  |  | 
+ROW 64:  |  |  |  |  |  |  | 
+ROW 65:  |  |  |  |  |  |  | 
+ROW 66:  |  |  |  |  |  |  | 
+ROW 67:  |  |  |  |  |  |  | 
+ROW 68:  |  |  |  |  |  |  | 
+ROW 69:  |  |  |  |  |  |  | 
+ROW 70:  |  |  |  |  |  |  | 
+ROW 71:  |  |  |  |  |  |  | 
+ROW 72:  |  |  |  |  |  |  | 
+ROW 73:  |  |  |  |  |  |  | 
+ROW 74:  |  |  |  |  |  |  | 
+ROW 75:  |  |  |  |  |  |  | 
+ROW 76:  |  |  |  |  |  |  | 
+ROW 77:  |  |  |  |  |  |  | 
+ROW 78:  |  |  |  |  |  |  | 
+ROW 79:  |  |  |  |  |  |  | 
+ROW 80:  |  |  |  |  |  |  | 
+ROW 81:  |  |  |  |  |  |  | 

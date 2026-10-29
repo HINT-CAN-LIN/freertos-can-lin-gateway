@@ -1,0 +1,35 @@
+CAN interface 256: MOCK - NO HARDWARE (open)
+VCU_Command=0x100, Motor_Status=0x110, DLC=8, 10ms, incrementing Alive
+Motor script 1.5 - repeating automatic speed/steering sequence
+Started in P/zero torque. Wait for READY, then enter a drive command.
+Stop any Raw TX/Generator sending 0x100 before using this script.
+auto : repeat speed/left/center/right sequence, including reverse; s stops
+AUTO uses PWM 20..35%, steer -40..+40 deg; 30s/cycle, repeats until stopped
+Any manual command cancels AUTO; status/help/dbc only observe
+forward 10 5 / d 10 5 : D, PWM 10%, 5 seconds (all four motors)
+reverse 10 5 / r 10 5 : R, PWM 10%, 5 seconds (all four motors)
+gear P/N/D/R : select gear with ZERO torque; does not start movement
+torque D 400 5 : D, TorqueRequest=400 Nm, 5 seconds (demo PWM=10%)
+s / p  : zero torque + P; n : neutral; b : brake
+status : show 0x110 virtual RPM/state and command
+quit   : send zero and end; help : show commands
+Duration defaults to 5 seconds, maximum 60 seconds
+left 20 5 / right 20 5 : request left/right 20 degrees for 5 seconds
+steer -20 5 / center : signed angle request / angle zero
+drive d 25 -20 5 : DC forward 25% + left20 degrees, both for 5 seconds
+drive r 25 20 5 : DC reverse 25% + right20 degrees, both for 5 seconds
+Requires firmware revision 4; SG90 PWM on PA0/PA1, 50Hz, center 1500us.
+dbc : explain CAN command layout
+TX=1 RX=0; command=(0.0, 0, 0)
+AUTO=OFF, step=0/11
+Order: Gear=P, Brake=0, TorqueRequest=0.0 Nm, demo PWM=0%
+Requested SteeringAngle=0 deg; max TX API interval=0.0ms (not bus delivery timing)
+Last 0x100 payload: 00 00 00 00 00 00 00 00
+No Motor_Status (0x110) received
+Stopped: Unknown command; enter help
+Script ended. ECU cuts output on command age >30ms.
+...............
+----------------------------------------------------------------------
+Ran 15 tests in 0.094s
+
+OK

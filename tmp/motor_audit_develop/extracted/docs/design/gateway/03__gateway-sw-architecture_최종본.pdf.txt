@@ -1,0 +1,3047 @@
+PAGE 1
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 1
+ Gateway SW Architecture + Detailed Design
+프로젝트
+FreeRTOS CAN-LIN Gateway
+대상
+Gateway ECU Software Architecture + Detailed Design
+기준일
+2026-10-05
+상태
+정합 반영 초안 + 상세설계 제안 (Freeze 전)
+
+PAGE 2
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 2
+요약
+현재 확정된 Architecture
+항목
+현재 기준
+Gateway 역할
+CAN Node + LIN Master. CAN/LIN Signal Routing, Schedule, System/Network Health, Fault State 관리와 Cluster/PC 전파를 담당한다.
+CAN 수신 경계
+CAN RX ISR은 Raw CAN Frame을 CANRxQueue로 전달하는 최소 작업만 수행한다. 검증, Decode, Cache 갱신은 CANRxTask가 수행한다.
+LIN 경계
+LINSchedulerTask/LIN Master가 10 ms slot, 100 ms supercycle의 Schedule을 실행하고 Header/Response 경계를 소유한다.
+Signal Cache
+같은 수신 Frame의 원시 입력값과 실제 수신시각을 함께 보존하고, validity 및 그룹 Health와 일관된 Snapshot으로 Routing/Health에 제공한다. LIN
+cache writer Task, 필드 표현과 동기화 방식은 TBD이다.
+Routing 경계
+Routing Manager가 Cache Snapshot을 읽고 Routing 조건과 변환을 평가한다. 실제 CAN/LIN Bus 송신은 CAN Interface 또는 LIN Master가
+담당한다.
+Health/Fault
+HealthTask가 정상 Health polling과 Critical VCU deadline/event 경로를 담당하고, FaultManager가 Fault별 ACTIVE/CLEARED, Recovery,
+Representative SystemState를 관리한다.
+Local Fail-safe
+Gateway가 모든 ECU의 안전 출력을 직접 수행하지 않는다. Motor/Window 등 영향 ECU가 Local Fail-safe를 수행한다. Gateway는 상태 관리와
+외부 전파를 담당한다.
+외부 전파
+Gateway_Status 0x300 cyclic, Vehicle_Status.NetworkState 0x120 cyclic, Fault_Status 0x310 event를 통해 Cluster/PC Tool에 전파한다.
+Logger
+ISR에서 직접 printf 하지 않는다. Health/Fault/Event를 Queue 기반으로 LoggerTask에 전달한다.
+TBD / Open
+●
+Task priority, stack size, Queue depth, item size, 정확한 RTOS API와 대부분의 Task period는 현재 기준 문서에서 확정되지 않았다.
+●
+HealthTask의 일반 Health polling 100 ms와 VCU 30 ms Critical deadline/event 경로는 확인되지만, Timer/Task Notification/EventGroup 등 구체 API는 TBD이다.
+●
+Signal Cache의 timestamp/age 타입·time base·snapshot 보호 방식, LIN 수신 cache writer Task, 최종 validity 결합/API는 TBD이다. CAN 수신시각과 Cache 반영시각은 구분하며, Queue
+대기시간이 source age에서 사라지지 않게 해야 한다.
+●
+Light_Status와 Motor_Status의 timeout 정량값은 정의되지 않았다. Door의 3-cycle 또는 Window의 2-cycle을 임의로 복사하지 않는다.
+●
+CAN Tx request path, LIN Tx request queue의 depth와 overflow policy는 TBD이다.
+●
+Fault_Status 다중 Fault Event의 송신 순서, 재전송, 유실 시 Cluster/PC 동기화 정책은 TBD이다.
+●
+신규 Body Command 입력은 Routing Table v1.0에서 VCU_Command Byte3 bit 24-31 후보로 정의되었으나 IFC-02~06의 DBC/Matrix 반영과 상대 검토 전까지 공식 Interface로 취급하지
+않는다. 기존 Gear/Brake route도 Gear 범위와 Brake invalid 표기의 DBC/정의서 동기화가 남아 있다.
+문서 간 주요 충돌
+1
+02__메시지_정의서_ver1.2.xlsx와 05__요구사항_명세서_ver1.2.xlsx는 Window 및 Fault Interface를 FIX/Freeze로 관리하지만, 02__시스템 아키텍처 사양서.pdf의 Section 8/12에는 같은
+항목이 아직 TBD/Open으로 남아 있다. 최신 02/05를 우선한다.
+
+PAGE 3
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 3
+2
+구형 시스템 아키텍처와 핸드북 예시는 LIN 20 ms base schedule을 사용하지만, 02/05와 현재 LDF 후보는 BODY_10ms, 10 ms slot, 100 ms supercycle을 기준으로 한다. 최신 02/05를
+우선한다.
+3
+D-07 보고서와 구형 아키텍처는 Fault_Status 상세 encoding, Window offline 기준, Queue recovery 기준을 일부 미확정으로 남겼다. 02/05에서 확정된 Fault_Status 0x310, Window 2-cycle
+offline, QueueUsage < 80% + 3회 HealthTask 평가를 사용한다.
+4
+Routing Table v1.0은 기존 Gear/Brake와 신규 VCU_Command Byte3 Body Command의 구체 Route 후보를 제공한다. 신규 5개 Signal은 IFC-02~06 반영 전까지 제안 상태이며, 전체 Route
+Table도 Review 상태이므로 DBC/LDF/Matrix·상대 검토 전 공식 Freeze로 보지 않는다.
+5
+02 Revision History는 DBC/LDF를 당시 미제공 또는 생성 예정으로 기록하지만, 프로젝트 폴더에는 review-ready DBC와 pre-firmware LDF가 존재한다. 두 파일은 파생 구현 후보이며
+02/05와의 공식 동기화 및 상대 담당자 리뷰가 남아 있다.
+상대 담당자 리뷰 필요
+●
+CAN ID, DLC, Signal bit/scale/enum, Sender/Receiver, cycle/event policy 변경
+●
+LIN Frame/PID, frame length, signal layout, Schedule, slot, checksum 변경
+●
+Fault_Status 및 SystemState encoding, Fault Event 순서/재전송 변경
+●
+VCU_Command valid/age/alive 및 Motor Local Fail-safe 책임 경계 변경
+●
+Routing Table에서 Source 또는 Destination Interface를 추가/변경하는 경우
+●
+DBC/LDF/Matrix/Firmware/PC Tool/Test 간 동기화
+1. 목적
+본 문서는 Gateway ECU 내부 Software Component의 책임 경계와 데이터 흐름을 정의한다. 상세 Routing Table의 개별 행이나 CAN/LIN Message bit layout을 새로 정의하지 않고, 각
+Interface가 Gateway 내부 어떤 Module과 RTOS 경계를 통과하는지만 고정한다.
+설계 결과는 다음 산출물의 기준으로 사용한다.
+●
+gateway-sw-architecture.drawio
+●
+Gateway Firmware의 Component/Task/Queue 분할
+●
+Signal Cache와 Routing Manager API 경계
+●
+Health/Fault/Logger의 검증 및 외부 전파 경로
+문서에 없는 수치, 측정값, 우선순위, Queue depth, Stack size, timeout은 임의로 확정하지 않고 TBD 또는 Open으로 표시한다.
+
+PAGE 4
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 4
+2. 설계 기준 문서
+2.1 우선순위 적용
+우선순위
+문서
+이번 설계에서의 사용
+1
+02__메시지_정의서_ver1.2.xlsx
+CAN/LIN Message, Signal, Schedule, Fault/Timeout Policy의 Interface 기준
+1
+05__요구사항_명세서_ver1.2.xlsx
+SYS_REQ, Traceability, Freeze/Open, Change Control 기준
+2
+03__기능_정의서_ver1.2.xlsx
+Gateway 기능과 책임, Signal Cache, Health/Fault, Logger 기능 확인
+2
+04__시스템_기능_분석_ver1.2.xlsx
+SF_07~SF_14, Gateway Allocation, Fault/Fail-safe 경계 확인
+2
+02__시스템 아키텍처 사양서.pdf
+System Element, Functional Exchange, Scenario, 기존 Architecture Baseline 확인
+2
+01__통신사양서_ver1.2.xlsx
+CAN/LIN Interface 보조 확인, Review/Open 목록 확인
+3
+FreeRTOS_CAN_LIN_Project_핸드북_kr_초기버전.pdf
+일반 구조, ISR/Queue/Cache/Logger 원칙 확인. 02/05와 충돌 시 보조 기준
+3
+03__CAN-LIN_D07_Fault_Failsafe_설계보고서_v1.0.pdf
+Fault 책임 경계와 D-07 의사결정의 원문 확인. 최신 02/05 Freeze 반영
+1
+Gateway_Routing_Table_v1.0_최종 (1).xlsx
+선행 CAN→LIN/LIN→CAN Route, 변환·fallback, Review/OPEN 상태를 Architecture 입력 기준으로 반영
+1
+Gateway_Signal_Cache_Design_Final.xlsx
+선행 Entry/Frame Group/Snapshot 및 Task 접근 계약을 Architecture 입력 기준으로 반영
+3
+CAN__DB_펌웨어 전 최종본_v0.1.dbc
+파생 DBC 후보 확인. 공식 기준은 02/05와 동기화 필요
+3
+LIN__vehicle_body_final_ver1.0.ldf
+파생 LDF 후보와 BODY_10ms 확인. Matrix/02/05 동기화 및 Review 필요
+2.2 현재 Interface 기준 요약
+Interface
+기준값
+상태
+CAN
+Classical CAN, 500 kbps, Standard ID
+02/05 FIX. 실제 Bus 측정값은 미생성
+LIN
+Gateway Master, Door/Light/Window Slave, 19.2 kbps
+02/05 FIX. 실제 Bus 검증 필요
+CAN Message
+VCU_Command 0x100/10 ms, Motor_Status 0x110/10 ms, Vehicle_Status 0x120/20 ms,
+Body_Status 0x200/100 ms, Gateway_Status 0x300/100 ms, Fault_Status 0x310 event
+02 FIX. Signal 변경은 Review Required
+LIN Frame
+Door_Status 0x10/100 ms, Door_Command 0x11/100 ms, Light_Command 0x12/50 ms,
+Light_Status 0x13/100 ms, Window_Command 0x14/100 ms, Window_Status 0x15/100 ms
+Routing v1.0 schedule baseline; Frame/PID/LDF/Matrix/Checksum sync and capture
+remain
+LIN Schedule
+10 ms slot, 100 ms supercycle. Door_Status 0, Window_Command 10, Light_Command
+20/70, Window_Status 30, Light_Status 40, Door_Command 60 ms
+Routing v1.0; LDF/Matrix official sync and Bus capture pending
+Checksum
+Enhanced
+02/LDF candidate 기준. Bus 검증 필요
+3. Gateway SW Scope
+3.1 In-Scope
+●
+CAN RX/TX Interface
+●
+CAN RX ISR와 CANRxQueue 경계
+
+PAGE 5
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 5
+●
+CANRxTask의 Message validation, Signal decode, Signal Cache update
+●
+CAN/LIN Signal Cache와 Snapshot API
+●
+Routing Manager의 조건 평가와 변환 요청 생성
+●
+LIN Master Schedule, Header/Response 처리
+●
+Network Health와 Fault detection/state/recovery
+●
+Gateway_Status, Vehicle_Status.NetworkState, Fault_Status 외부 전파 경계
+●
+LoggerTask와 Event/Log Queue
+●
+Queue health, drop count, critical deadline/event의 Architecture 경계
+3.2 Gateway가 소유하지 않는 책임
+책임
+실제 Owner
+Gateway Architecture의 역할
+VCU 운전자 입력과 VCU_Command 생성
+VCU ECU
+VCU_Command 수신, valid/age/alive 관찰
+VCU timeout 시 실제 Motor 안전 출력
+Motor ECU
+Gateway Fault 기록/전파. Motor에 별도 Fail-safe 명령을 보내는 구조로 만들지 않음
+Window_Command Local Timeout 이후 Motor STOP
+Window ECU
+Gateway는 Window_Status offline/alive를 독립 감시. POL-009 판정 주체가 아님
+Door/Light/Window Physical Output
+각 LIN Slave ECU
+LIN Command/Status Interface와 상태 전파만 소유
+Cluster 화면 렌더링
+Cluster ECU
+Gateway Status/Body/Fault/Health 제공
+PC Tool의 파일 Logger와 Fault Injection
+PC Diagnostic Tool
+Gateway CAN Interface와 Fault/Event 의미를 제공
+4. Software Component 구성
+4.1 논리 구조
+CAN Bus
+  -> CAN Driver / CAN RX ISR
+  -> CANRxQueue
+  -> CANRxTask
+  -> Signal Cache
+  -> Routing Manager
+       -> CAN TX intent / Status publication path
+       -> LINTxRequestQueue
+       -> LINSchedulerTask / LIN Master
+  -> LIN Body ECU
+       -> LIN response
+       -> LIN Master / Signal Cache
+Signal Cache + Queue counters + Deadline observation
+  -> HealthTask
+  -> FaultManager
+       -> Fault Event / Status publication
+       -> LogEventQueue -> LoggerTask
+       -> Fault_Status / Gateway_Status / Vehicle_Status path
+
+PAGE 6
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 6
+4.2 Module Responsibility Table
+Module Name
+Responsibility
+Input
+Output
+Producer
+Consumer
+Shared Data
+RTOS Object
+Fault Relation
+Related Requirement
+Source Document
+Status
+CAN Driver / CAN
+Interface
+CAN peripheral
+adapter, RX ISR 경계,
+Raw Frame 수신, CAN
+TX
+encoding/publication
+CAN Bus frame, TX
+intent
+Raw CAN Frame, CAN
+TX frame, TX
+result/diagnostic
+observation
+CAN peripheral,
+Routing/Health/Fault
+output
+CANRxTask, CAN Bus,
+Cluster/PC
+CAN RX/TX interface
+state, queue counters
+ISR + CANRxQueue;
+TX path object TBD
+RX drop, frame
+validation failure, TX
+failure 처리 경계.
+Bus-off 수치/정책은
+TBD
+SYS_REQ_001, 009,
+011, 014, 018, 025,
+035, 058
+02 Message_Summary/
+CAN_Message_Definiti
+on; 03 rows 32, 40, 42;
+Handbook §8.2-8.3
+Draft
+CANRxTask
+CANRxQueue 소비,
+CAN ID/DLC/Signal
+validation, Decode,
+CAN Cache update
+Raw CAN Frame
+Decoded CAN Signal,
+validation result, cache
+update event
+CAN Driver /
+CANRxQueue
+Signal Cache,
+HealthTask,
+Logger/Fault path
+CAN Signal Cache
+entries
+Task + CANRxQueue
+Invalid/stale/alive
+observation을
+Health/Fault에 제공.
+Decode를 ISR에서
+수행하지 않음
+SYS_REQ_001, 014,
+017, 019, 020, 022, 023
+03 rows 32, 40-44,
+52-57; Handbook
+§8.2-8.3
+Draft
+Signal Cache
+Frame Group별 값,
+실제 rx_stamp, entry
+validity와 일관된
+Health Snapshot 제공
+CANRxTask의 CAN
+Frame; LIN RX writer
+Task TBD
+Read-only group
+Snapshot, source
+quality/health
+observation
+CANRxTask, LIN RX
+writer Task TBD
+Routing Manager,
+HealthTask, CAN status
+publication
+raw 입력 제안,
+rx_stamp,
+received/validity,
+group Health; C type/ti
+mebase/protection
+TBD
+Frame 단위
+Update/Read API 계약.
+구체 sync primitive
+TBD
+Cache는 Fault owner가
+아님. Health/Fault
+판정은 HealthTask/Faul
+tManager가 소유
+RT-C2L-001~007,
+RT-L2C-001~006;
+AR-01~09
+첨부 Signal Cache
+01~03, Routing Table
+RT/LP
+Draft /
+Review
+Routing Manager
+Snapshot 기반 Routing
+조건 평가, 의미/형식
+변환, CAN/LIN 송신
+요청 생성
+Signal Cache Snapshot,
+Routing Table entry,
+quality state
+CAN TX intent, LIN TX
+request, output status
+update
+Signal Cache,
+HealthTask status
+CAN Interface,
+LINSchedulerTask,
+status publisher
+Routing rule table,
+output shadow value
+LINTxRequestQueue;
+CAN TX path/queue
+TBD
+source
+invalid/stale/timeout
+시 destination fallback
+정책을 적용하되
+정의되지 않은 값은
+TBD. Fault map은
+FaultManager와 연결
+SYS_REQ_002, 005-008,
+015, 016, 041-044
+03 rows 45-49; 04
+SF_09/SF_10; Routing
+Table README/CAN_to
+_LIN/LIN_to_CAN
+Draft
+LIN Scheduler /
+LIN Master
+10 ms slot/100 ms
+supercycle schedule 및
+Header/Response bus
+transaction 소유, LIN
+TX request 적용
+Schedule, LIN TX
+request, LIN Response
+Bus transaction 결과와
+Response handoff
+Routing Manager, LIN
+Bus
+LIN Bus, LIN RX
+validation/cache path,
+HealthTask
+Schedule table, LIN TX
+shadow/request
+LIN response
+decode/cache writer
+Task와 전달/queue
+방식 TBD
+Door 3-cycle, Window
+2-cycle no-response와
+Alive/response
+quality를 HealthTask/F
+aultManager에 제공
+RT schedule; SYS_REQ_
+005/006/010/012/013/
+021/041-044/057
+첨부 Routing Table
+RT/LP;
+LDF·Matrix·Capture
+확인 필요
+Draft /
+Review
+Health Manager /
+HealthTask
+Cache age/valid/alive,
+CAN/LIN response,
+ECU online/offline,
+Queue usage/drop,
+critical deadline를 관찰
+Signal Cache Snapshot,
+queue counters,
+deadline/event, LIN
+response observation
+Health observation,
+QueueUsage,
+FaultManager calls,
+status publication
+request
+CANRxTask/LIN
+Master/RTOS counters
+FaultManager, CAN
+Interface, LoggerTask
+Health state,
+QueueUsage, deadline
+state
+Nominal Health polling
+100 ms + critical
+deadline/event wake
+path. Priority/stack/API
+TBD
+VCU >30 ms, Door
+3-cycle, Window
+2-cycle, Alive, Queue
+Drop를 policy에 따라
+평가 입력으로 변환
+SYS_REQ_017, 019-023,
+041, 052-058
+02
+Fault_Timeout_Policy;
+03 rows 52-60; 04
+SF_11/SF_12; D-07 §6
+Draft
+Fault Manager
+Fault별
+ACTIVE/CLEARED 독립
+관리, severity
+aggregation, Recovery,
+Fault Event 생성
+Health observation,
+recovery evidence
+Fault state,
+Representative
+SystemState,
+Fault_Status event
+input
+HealthTask
+CAN status/Fault
+publication,
+LoggerTask, Cluster/PC
+path
+Active Fault Table,
+recovery counters
+Direct C module call
+from HealthTask.
+Independent
+Task/priority 없음
+Detection -> State ->
+Action boundary
+record -> External
+Propagation ->
+Recovery. 실제 Local
+action은 영향 ECU가
+소유
+SYS_REQ_018, 024-026,
+050-059
+02 Fault_Timeout_Polic
+y/POL-001~009; 05 Re
+quirements/Traceability
+; D-07 §3-8
+Draft
+Logger
+Event/Log 수집과 내부
+UART/ring-buffer 출력
+경계
+FaultEvent,
+HealthEvent,
+QueueDrop,
+routing/LIN/CAN
+observations
+Timestamped internal
+log record
+HealthTask,
+FaultManager,
+interface modules
+LoggerTask, PC Tool
+observation path
+Log schema and buffer
+ownership TBD
+LogEventQueue or
+event fan-out path
+TBD; ISR direct printf
+금지
+Fault
+detection/recovery와
+Queue Drop 증적 기록.
+Logger loss 자체의
+Fault severity는 TBD
+SYS_REQ_018, 025,
+030, 031, 056, 058
+03 rows 57-60; 04
+SF_14/SF_16;
+Handbook §7.3, §8.3
+Draft
+4.3 추가 Module을 별도 확정하지 않은 이유
+현재 문서에서 CAN Signal Encoding, LIN Frame Validation, Fault Event Publication, Status Publication은 확인되지만 별도 Task 또는 별도 Component로 고정되어 있지 않다. 따라서 이
+보고서에서는 다음과 같이 기존 Module 내부 책임으로 배치한다.
+●
+CAN Signal Encode/Decode: CAN Interface와 CANRxTask 경계
+
+PAGE 7
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 7
+●
+LIN Frame Validation/Header/Response: LIN Scheduler/Master 경계
+●
+Fault Event/Status Publication: FaultManager의 출력과 CAN Interface의 송신 경계
+●
+Status Aggregation: Signal Cache Snapshot + Routing Manager + Health/Fault 결과의 조합
+구현 규모가 커져 별도 Component가 필요해지면 Architecture Change로 추적한다.
+5. CAN RX Data Flow
+5.1 기본 흐름
+CAN Bus
+  | Raw CAN Frame
+  v
+CAN Driver / CAN RX ISR
+  | Raw frame enqueue
+  v
+CANRxQueue
+  | Raw CAN Frame
+  v
+CANRxTask
+  | ID/DLC/Signal validation, Decode
+  v
+Signal Cache
+  | CAN Snapshot: value + valid + alive + age context
+  +----------------------+
+  |                      |
+  v                      v
+Routing Manager      HealthTask
+  |                      |
+  |                      v
+  |                  FaultManager
+  v                      |
+CAN TX intent        Fault/Health event
+5.2 CANRxTask 책임 경계
+●
+ISR에서 Decode, Routing, Fault policy, printf를 수행하지 않는다.
+●
+CAN ID와 DLC 검증은 CANRxTask에서 수행한다.
+●
+Signal bit layout, scaling, enum은 02 FIX 및 그에 동기화된 DBC를 참조한다.
+●
+유효하지 않은 Signal 또는 Message는 Cache에 정상값으로 기록하지 않는다.
+●
+VCU_Command는 Routing 입력이면서 Health/Fault 입력이다. age > 30 ms 판단은 Gateway Health/Fault 경로에 포함되며 Motor Local Monitoring과 독립이다.
+●
+Motor_Status, Gateway_Status의 Alive는 Message별 정책에 따라 검사한다. Alive 불연속은 ALIVE_ERROR 입력이 된다.
+
+PAGE 8
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 8
+5.3 CAN RX data ownership
+Data
+Writer
+Reader
+권한
+Raw CAN Frame
+CAN RX ISR/Driver
+CANRxTask
+Queue ownership
+Decoded CAN Signal
+CANRxTask
+Signal Cache API
+CANRxTask만 CAN RX entry write
+CAN input quality
+CANRxTask + HealthTask observation
+Routing/Health
+Fault state는 FaultManager 소유
+Status/Fault TX value
+Routing/Health/Fault output path
+CAN Interface
+Bus serialization은 CAN Interface 소유
+6. LIN Data Flow
+6.1 LIN Master 기본 흐름
+Routing Manager
+  | LIN TX request / destination signal update
+  v
+LIN TX Request path
+  | Queue name/depth/overflow TBD
+  v
+LINSchedulerTask / LIN Master
+  | Schedule slot + Header
+  v
+Door / Light / Window LIN Slave
+  | Response / Data
+  v
+LIN Master Header/Response transaction
+  | Response handoff
+  v
+LIN RX validation / Cache writer (Task TBD)
+  | validated same-frame Signal Group
+  v
+Signal Cache
+  | LIN Snapshot
+  +----------------------+
+  |                      |
+  v                      v
+Routing Manager      HealthTask
+  |                      |
+  v                      v
+Body_Status         FaultManager
+6.2 현재 Schedule 기준
+아래는 선행 Routing Table v1.0과 맞춘 schedule baseline이다. LDF/Matrix 반영과 bus capture 전까지 공식 Freeze로 보지 않는다.
+Slot
+Frame
+Direction
+Gateway SW responsibility
+0 ms
+Door_Status 0x10
+Door -> Gateway
+Header/Poll, response validation, Door Signal Cache update
+10 ms
+Window_Command 0x14
+Gateway -> Window
+Current command shadow/request publish
+20 ms
+Light_Command 0x12
+Gateway -> Light
+Light command publish
+30 ms
+Window_Status 0x15
+Window -> Gateway
+Header/Poll, response validation, Window Cache update
+
+PAGE 9
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 9
+Slot
+Frame
+Direction
+Gateway SW responsibility
+40 ms
+Light_Status 0x13
+Light -> Gateway
+Header/Poll, response validation, Light Cache update
+50 ms
+Idle/Reserved
+-
+Reserved. No new behavior is inferred
+60 ms
+Door_Command 0x11
+Gateway -> Door
+Door command publish
+70 ms
+Light_Command 0x12
+Gateway -> Light
+100 ms supercycle의 두 번째 지정 전송 slot
+80/90 ms
+Idle/Reserved
+-
+Reserved. No new behavior is inferred
+The schedule entries are Interface facts from 02/05. The RTOS task's exact wake-up API, priority, stack, and jitter budget are not frozen by the source documents.
+6.3 LIN response and offline boundary
+●
+Door_Status: 100 ms expected, 3 consecutive no-response -> DOOR_ECU_OFFLINE / OFFLINE.
+●
+Window_Status: 100 ms expected, 2 consecutive no-response -> WINDOW_ECU_OFFLINE / OFFLINE.
+●
+Window recovery: valid Window_Status and WindowAlive 3 consecutive confirmations.
+●
+Light_Status timeout threshold: TBD. Do not copy Door or Window threshold.
+●
+Window_Command Local Command Timeout: Window ECU owns the local freshness monitor. Gateway does not create a separate Gateway Fail-safe command or POL-009 Fault_Status
+event.
+6.4 Frame ID and protected PID
+Project artifacts use 0x10~0x15 as the message definition/LDF frame identifiers. The actual protected PID/parity on the bus must be confirmed by LDF and PulseView capture. Gateway
+SW should keep Frame ID/PID representation behind the LIN Interface and not duplicate parity calculation rules in Routing Manager.
+7. Signal Cache 구조
+7.1 역할
+Signal Cache는 Gateway 내부에서 CAN/LIN 수신 Signal의 최신 상태를 소유하는 공용 데이터 경계이다. 전역변수를 여러 Module이 직접 읽고 쓰는 방식으로 구현하지 않고, Source owner와
+Snapshot reader를 분리한다.
+
+PAGE 10
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 10
+7.2 권장 논리 필드
+Field
+의미
+문서 확인
+설계 상태
+Field/Group
+의미
+설계 기준
+미확정/주의
+---
+---
+---
+---
+Entry.key
+선행 Routing Table의 Source key와 1:1 내부 식별
+기존 입력 19개와 신규 VCU 명령 5개, ResponseError 3개를
+구분
+문자열/enum 표현, lookup, 신규 5개 활성 시점은
+IFC-02~06 완료 후
+Entry.value
+Cache에 저장하는 수신 입력값. bit/enum 소비 값은 raw
+보존을 우선 제안
+출력 변환·조합·fallback은 Routing에서 수행하고 raw
+수신값을 덮어쓰지 않음
+신호별 raw/physical 표현과 C type은 확정 전
+Group.rx_stamp
+같은 CAN/LIN Frame에 속한 Entry가 공유하는 실제 Frame
+수신시각
+수신시각과 Cache commit 시각을 구분. VCU age는
+POL-001의 >30 ms와 연결
+clock·단위·폭·wrap 및 HW/ISR/driver 취득 위치 TBD. Queue
+체류시간을 숨기지 않음
+Entry validity
+미수신·Frame 기본 검사·Signal 판정 등 Entry 사용 가능성
+초기/미수신은 unusable. 정상 길이/checksum 외에
+Alive·age·offline 결과도 Route usability에 반영
+bool/enum, 최종 결합자와 commit/API TBD. 수신 validity와
+route usability를 혼동하지 않음
+Group.health_ref
+그룹의 Alive/age/offline 평가 결과 연결
+Routing과 Health가 같은 세대의 값을 읽고 Alive는 새 수신
+Frame별 평가
+복사/참조/버전 방식과 별도 상태 저장 여부 TBD
+Group.received_state
+Boot/Reset 미수신과 실제 수신값 구분
+초기값을 정상 수신값으로 오인하지 않음
+별도 field 여부 및 초기화 책임 TBD
+Snapshot
+Routing/Health가 함께 읽는 같은 Frame
+값·시각·validity·Health의 일관 사본
+DoorOpen+DoorLocked, LampState 기반
+LightStatus+ReverseLamp, WindowState와 상태정보를 해당
+Frame 단위로 묶음
+보호 primitive·수명·retry/failure TBD
+Timeout/Offline/Fault
+정책을 적용한 통신상태와 Fault 전이
+HealthTask/FaultManager가 계산·소유하고 Cache가 Fault
+상태를 중복 소유하지 않음
+Light timeout 등 미정 정책은 임의 복사 금지
+7.3 Writer/Reader model
+CAN receive timestamp + CANRxTask ---- write CAN frame group ----+
+                                                                  |
+LIN response validation / RX writer (Task TBD) -- write LIN group +--> Cache Snapshot API
+                                                                       |                |
+                                                                       v                v
+                                                                 RoutingTask        HealthTask
+●
+CANRxTask는 CAN 수신 Entry의 Writer이다.
+●
+LIN Master가 Header/Response bus transaction을 소유하지만, LIN 응답 decode 이후 Cache를 쓰는 구체 Task는 TBD이다. 이를 LINSchedulerTask로 단정하지 않는다.
+●
+CAN Frame의 실제 수신시각은 CAN 수신 경계에서 취득해 Queue를 거쳐 전달한다. CANRxTask dequeue/Cache commit 시각으로 대체하지 않으며, 필요하면 Cache commit 시각은 별도
+계측한다.
+●
+Routing Manager와 HealthTask는 Snapshot Reader이다.
+●
+Entry 기본 검증 결과와 같은 Frame의 rx_stamp를 함께 반영한다. 실패한 LIN 응답은 마지막 정상값/정상 rx_stamp를 갱신하지 않는다. 실패 관찰은 별도 진단 이벤트/카운터 경로가
+필요하며 소유자와 큐는 TBD이다.
+●
+validity, Alive/Health, received_state는 서로 다른 입력이다. timeout, offline, Fault ACTIVE/CLEARED는 정책에 따라 Health/Fault Module이 계산하며, Routing은 사용 시점에 age와 route
+usability를 재확인한다.
+
+PAGE 11
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 11
+●
+Snapshot에는 Value뿐 아니라 Timestamp, Validity, Health가 함께 일관되어야 한다. SignalCache_ReadSnapshot()의 논리 계약을 먼저 두되 Mutex/critical section/version 방식, 재시도와
+실패 처리는 다음 구현 검토로 남긴다.
+●
+같은 Frame 입력을 여러 번 읽는 것은 새 RX가 아니다. Alive/recovery counter는 서로 다른 수신 Frame에 대해서만 한 번 평가한다.
+7.4 Quality 처리
+Source 상태
+Routing 사용
+Body/Vehicle Status 반영
+Fault 관계
+수신됨 + fresh + 유효 + 그룹 상태 정상
+입력/변환 조건을 만족할 때 사용
+승인된 Destination 값을 생성
+Source별 Fault 없음
+수신됨 + stale / offline / Alive 오류
+정상 Route 입력으로 사용하지 않음
+Route별 승인 fallback/invalid 출력만 적용
+해당 정책으로 Health/Fault 평가
+Frame/Signal invalid 또는 미수신
+정상값으로 간주하지 않음. 이전 raw 값은 이력으로만
+보존 가능
+Route별 invalid 처리. DoorOpen/ReverseLamp의 1-bit
+fallback은 아직 open
+응답 오류 및 Alive 처리 정책과 구분
+정상 LIN response 없음
+Cache의 마지막 정상값/수신시각을 새 정상값으로
+갱신하지 않음
+Door/Window의 정해진 offline 출력 규칙, Light는 기준
+미정
+Door 3회, Window 2회; Light threshold는 open
+8. Routing 구조
+8.1 Routing Manager 책임
+Routing Manager는 개별 Route row를 소유하는 담당자의 영역과 중복하지 않고 다음 구조만 소유한다.
+●
+Source Snapshot 조회
+●
+Source quality 확인
+●
+Routing condition 평가 요청
+●
+Conversion function 호출 경계
+●
+Destination update 요청 생성
+●
+CAN TX intent 또는 LIN TX request 생성
+●
+Invalid/stale/fallback 정책 연결
+●
+Route 실행 결과와 오류를 Event/Log 경로에 전달
+개별 Source -> Conversion -> Destination 행, 신규 Signal, 새 CAN ID/PID는 Routing Table과 Interface 담당 영역이다.
+
+PAGE 12
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 12
+8.2 현재 문서로 확인되는 Interface 연결
+Source
+Gateway path
+Destination
+상태
+CAN VCU_Command.Gear/Brake
+CANRxTask -> same-frame Cache Snapshot ->
+Routing Manager
+LIN Light_Command.ReverseLamp/BrakeLamp
+RT-C2L-001/002. Gear range, Brake invalid notation
+and fallback need source sync/review
+CAN VCU_Command Byte3 bit 24-31
+CANRxTask -> Cache -> Routing Manager -> LIN
+schedule
+Head/Turn/Hazard Light, Door Lock, Window
+Command
+RT-C2L-003~007. IFC-02~06 pending; do not treat
+candidate fields as frozen DBC
+LIN Door_Status.DoorOpen/DoorLocked
+LIN RX validation (writer Task TBD) -> same-frame
+Cache Snapshot -> Routing Manager
+CAN Body_Status.DoorStatus and DoorOpen
+RT-L2C-001~003. DoorStatus combines two inputs;
+DoorOpen 1-bit invalid output remains open
+LIN Light_Status.LampState
+LIN RX validation (writer Task TBD) -> same-frame
+Cache Snapshot -> Routing Manager
+CAN Body_Status.LightStatus and ReverseLamp
+RT-L2C-004/005. Preserve six-bit raw value; timeout
+and 1-bit fallback remain open
+LIN Window_Status.WindowState
+LIN RX validation (writer Task TBD) -> Cache ->
+Routing Manager
+CAN Body_Status.WindowStatus
+RT-L2C-006. Two-cycle offline source policy; raw value
+6/DBC correspondence needs confirmation
+LIN Alive/ResponseError/Diagnostic/Limit/MotorState
+LIN RX/local Health path; not a normal signal route
+Health/Fault/local diagnostics
+LP-LIN-001~010 remain distinct from RT rows; Draft
+and Review statuses are preserved
+CAN Motor_Status.RPM, CAN
+VCU_Command.Gear/Brake
+CANRxTask -> Cache -> Routing Manager /
+StatusPublisher
+CAN Vehicle_Status signals
+Existing system-level status path; speed conversion
+remains TBD/Open
+Health/Fault state
+HealthTask -> FaultManager -> status publication
+Vehicle_Status.NetworkState, Gateway_Status,
+Fault_Status
+Existing policy boundary; event sequence/retry
+remains Open
+8.3 Body command Source의 Open 경계
+Routing Table v1.0은 VCU_Command Byte3에 HeadLampRequest(bit 24), TurnLampRequest(bits 25-26), HazardLampRequest(bit 27), DoorLockRequest(bits 28-29),
+WindowCommand(bits 30-31)를 배치하는 Route 후보를 제공한다. 이는 Architecture에서 방향·변환·폴백 경계를 정합하는 근거로 사용하되, IFC-02~06의 02/DBC/Matrix 반영과
+VCU/Network 상대 검토 전에는 구현용 공식 Signal 또는 Freeze로 보지 않는다.
+Jira Issue
+  -> 02/05 ■■ ■■■ ■■
+  -> VCU/Gateway/CAN/LIN ■■ ■■■ ■■
+  -> DBC/LDF/Matrix ■■■
+  -> Routing/Firmware/PC Tool/Test ■■
+따라서 Routing Manager는 해당 후보 Source key와 Conversion/Validity 경계를 반영하되, 실제 CAN bit definition·DBC version·승인 owner는 검토 Gate로 유지한다. 신규 후보의
+정상값/invalid값과 safe fallback은 상세설계 §21.2에 기록한다.
+
+PAGE 13
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 13
+9. Health / Fault 구조
+9.1 책임 분리
+Signal Cache Snapshot
+Queue usage / drop counters
+LIN response observations
+VCU critical deadline event
+          |
+          v
+HealthTask
+  - age / valid / alive
+  - online / offline observation
+  - Queue health
+  - Critical deadline re-check
+          |
+          v
+FaultManager (C module)
+  - Fault ACTIVE / CLEARED
+  - Fault -> state mapping
+  - Recovery condition/count
+  - Multi-fault severity
+  - Representative SystemState
+          |
+          +--> Fault_Status 0x310 event
+          +--> Gateway_Status 0x300 cyclic inputs
+          +--> Vehicle_Status.NetworkState
+          +--> LogEventQueue -> LoggerTask
+9.2 Fault policy baseline
+Fault
+Detection
+State
+Gateway action
+External propagation
+Recovery
+VCU_TIMEOUT
+VCU_Command expected 10 ms, age >
+30 ms
+FAIL_SAFE
+Fault ACTIVE, SystemState recompute,
+event publication
+Cluster/PC Fault_Status
+Valid VCU + Valid + Alive 3 consecutive
+DOOR_ECU_OFFLINE
+Door_Status 100 ms, 3 consecutive no
+response
+OFFLINE
+Door input invalid, Body_Status invalid,
+Fault event
+Cluster/PC
+Valid Door response + Alive 3
+consecutive
+WINDOW_ECU_OFFLINE
+Window_Status 100 ms, 2 consecutive no
+response
+OFFLINE
+Window input invalid,
+Body_Status.WindowStatus invalid, Fault
+event
+Cluster/PC
+Valid Window_Status + WindowAlive 3
+consecutive
+ALIVE_ERROR
+Expected next != (previous + 1) mod 16
+VCU critical -> FAIL_SAFE. Other listed
+messages -> DEGRADED
+Invalid input, Fault state/event, log
+Cluster/PC
+Valid Alive sequence 3 consecutive
+QUEUE_DROP
+CANRxQueue/EventQueue full or
+enqueue failure
+DEGRADED
+Drop count, QueueUsage, Fault/log/KPI
+Cluster/PC Gateway health/fault
+Queue full cleared + no additional drop
++ QueueUsage < 80% for 3 HealthTask
+evaluations
+WINDOW_COMMAND_TIMEO
+UT
+Window ECU local command freshness
+timeout
+Gateway does not own state
+No Gateway Fault event required by
+POL-009
+Separate Window offline/alive policies
+remain independent
+Window local policy, numeric timeout
+TBD in Window SW
+9.3 Representative SystemState
+FaultManager computes the highest active severity in this order:
+FAIL_SAFE > OFFLINE > DEGRADED > NORMAL
+
+PAGE 14
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 14
+Representative SystemState is a summary for Vehicle_Status.NetworkState, Fault_Status.SystemState, Cluster, and PC Tool. It is not a Motor or Window fail-safe command.
+9.4 Critical deadline path
+The 30 ms VCU timeout cannot depend only on a nominal 100 ms HealthTask polling period. The architecture therefore has two HealthTask entry paths.
+VCU_Command received
+  -> update VCU Cache age/alive
+  -> arm/update critical deadline observation
+VCU deadline exceeds 30 ms
+  -> deadline/event signal
+  -> HealthTask wake-up
+  -> actual age re-check
+  -> FaultManager VCU_TIMEOUT
+The concrete software timer, task notification, event group, or equivalent mechanism is TBD. The deadline path must not be replaced by a 100 ms-only poll.
+9.5 Fault event and propagation
+●
+Each Fault ACTIVE <-> CLEARED transition generates one Fault_Status event according to 02/05.
+●
+One event represents one Fault transition. Simultaneous transitions require multiple events.
+●
+Fault_Status fields are FaultCode, ECUOffline, RecoveryState, SystemState according to 02/05 FIX.
+●
+Gateway_Status is cyclic and currently contains GatewayAlive and QueueUsage; do not add GatewayHealth or SystemState without Interface Change review.
+●
+Event ordering, retransmission, lost event recovery, and Cluster/PC Active Fault Table resynchronization are Open decisions.
+10. Logger 구조
+10.1 LoggerTask boundary
+CAN/LIN/Health/Fault observation
+          |
+          v
+    LogEventQueue / event fan-out
+          |
+          v
+      LoggerTask
+          |
+          +--> UART / optional ring buffer
+          +--> internal evidence record
+●
+ISR에서는 문자열 포맷팅과 blocking printf를 수행하지 않는다.
+●
+LoggerTask는 기능 결과나 Fault state의 owner가 아니다.
+●
+Queue Drop, Fault ACTIVE/CLEARED, Recovery, timeout, validation failure, routing decision, LIN slot/response observation을 기록할 수 있다.
+●
+PC Tool의 CAN/decoded signal CSV/JSON Logger는 외부 Tool 영역이다. Gateway Logger와 PC Tool Logger를 하나의 Module로 합치지 않는다.
+●
+Handbook은 timestamp/module/level/event/key=value schema를 예시로 제시하지만, 최종 Logger schema와 보존 용량은 TBD이다.
+
+PAGE 15
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 15
+10.2 Logger overflow
+Log Queue가 full이면 내부 Log가 유실될 수 있다. 이 경우 Queue health와 drop count에 반영할지, Logger drop을 QUEUE_DROP과 동일 Severity로 볼지는 현재 기준에서 명확하지 않다.
+EventQueue를 Fault propagation과 Logger가 공유할 경우 다중 Consumer fan-out semantics를 먼저 결정해야 한다.
+11. FreeRTOS Task / Queue 관계
+11.1 Task 책임과 수치 상태
+Task
+Trigger
+문서로 확인되는 timing
+Priority
+Stack size
+상태
+CANRxTask
+CANRxQueue receive
+Event-driven. Numeric period 없음
+TBD
+TBD
+Draft
+RoutingTask
+Cache update 또는 routing trigger
+Numeric period 없음. Snapshot 기반
+TBD
+TBD
+Draft
+LINSchedulerTask
+Schedule trigger
+10 ms slot / 100 ms supercycle
+TBD
+TBD
+Draft
+HealthTask
+Nominal poll + critical deadline/event wake
+100 ms Health polling reference, VCU 30 ms deadline/event path
+TBD
+TBD
+Draft
+LoggerTask
+Log/Event queue receive
+Event-driven
+TBD
+TBD
+Draft
+핸드북의 high/medium/low Priority 예시는 일반 구조 참고값이며, 현재 02/05 기준으로 Gateway 구현의 확정 수치로 사용하지 않는다.
+11.2 Task / Queue Interface Table
+Producer
+RTOS Object / Interface
+Consumer
+전달 Data
+Overflow Policy
+Overflow 영향
+Related Requirement
+CAN RX ISR
+CANRxQueue
+CANRxTask
+Raw CAN Frame
+Full 시 drop counter 증가. Queue
+depth와 ISR send API TBD
+VCU/Status frame 유실, Cache age
+증가, Alive/Timeout 2차 Fault 가능
+SYS_REQ_001, 017, 019-023,
+053-055
+CANRxTask
+Signal Cache write API
+Routing Manager,
+HealthTask
+Decoded CAN Signal + validation
+result
+Queue overflow 없음. Cache write
+conflict/snapshot protection TBD
+Partially updated snapshot 또는
+stale routing 위험
+SYS_REQ_008, 015-017, 019-023
+LIN Master Response handoff
+LIN RX validation/Cache writer
+(Task TBD)
+Routing Manager,
+HealthTask
+Response + actual RX timestamp
++ validation/Alive observation
+Response buffer/driver queue,
+writer Task and failed-response
+event path TBD
+Door/Light/Window stale/offline
+판단 지연 또는 invalid 전파 누락
+SYS_REQ_005, 006, 010, 012, 013,
+021, 041-044, 057; AR-02/09
+Routing Manager
+LINTxRequestQueue or LIN
+command shadow
+LINSchedulerTask
+Destination LIN Signal update /
+frame request
+Depth, coalescing, last-value-wins,
+drop policy TBD
+Command 전달 지연/유실.
+Window/Door/Light destination
+상태 영향
+SYS_REQ_005, 006, 015, 041-044
+Routing Manager / Status
+Publisher
+CAN TX request path
+CAN Interface
+Vehicle_Status, Body_Status,
+Gateway_Status cyclic TX intent
+Object/name/depth/overflow TBD
+Cluster/PC 상태 frame 지연 또는
+stale 유지
+SYS_REQ_007, 015, 016, 025, 029,
+030
+LINSchedulerTask
+Schedule timer/notification
+LINSchedulerTask
+Current slot trigger
+Timer/notification mechanism TBD
+Slot timing 지연, LIN capture
+failure
+SYS_REQ_010, 012, 013, 041, 043
+Health deadline monitor
+Critical deadline/event signal
+HealthTask
+VCU deadline exceeded indication
+Missed wake-up handling and API
+TBD
+30 ms VCU Fault detection 지연
+SYS_REQ_020, 055
+HealthTask
+Direct function call
+FaultManager
+HealthObservation:
+age/valid/alive/offline/queue
+Not a Queue. Call
+contract/reentrancy TBD
+Fault state transition 누락 또는
+중복 평가
+SYS_REQ_017-026, 050-058
+HealthTask/FaultManager
+FaultEventQueue or publication
+callback
+CAN Interface / status path
+FaultCode, ECUOffline,
+RecoveryState, SystemState event
+Event full, retry/order/loss policy
+TBD
+Cluster/PC Fault propagation 누락.
+Queue drop evidence 발생
+SYS_REQ_018, 025, 026, 050,
+052-058
+HealthTask/FaultManager
+LogEventQueue or event fan-out
+LoggerTask
+Fault/Health/Queue/Recovery log
+event
+Queue depth and drop handling
+TBD
+Diagnostic evidence loss, Queue
+health ambiguity
+SYS_REQ_030, 031, 056, 058
+
+PAGE 16
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 16
+11.3 Queue ownership rule
+●
+Queue는 생성 주체, item ownership, Producer, Consumer를 코드와 Test Plan에 남긴다.
+●
+CANRxQueue는 ISR -> CANRxTask 단일 방향으로 소유한다.
+●
+Signal Cache는 Queue가 아니라 Module API와 Snapshot 경계로 취급한다.
+●
+EventQueue를 여러 Consumer가 직접 경쟁 소비하는 구조는 피한다. Fault propagation과 Logger가 같은 Event를 모두 받아야 하면 fan-out 또는 별도 Queue를 결정해야 한다.
+●
+Queue depth, item size, high-water 기준, drop recovery는 구현/시험 전 Freeze해야 한다. 현재 수치는 임의로 만들지 않는다.
+12. Interface Dependency
+12.1 Interface Dependency Table
+Interface
+Gateway Module
+Data/Responsibility
+Source of truth
+Review
+CAN VCU_Command 0x100
+CANRxTask, Signal Cache, Routing Manager,
+HealthTask
+TorqueRequest, Gear, Brake, AliveCounter 수신.
+VCU age/alive/valid 관찰
+02
+CAN_Message_Definition/CAN_Signal_Definition;
+05 SYS_REQ_020-023
+VCU + Motor + CAN + Gateway
+CAN Motor_Status 0x110
+CANRxTask, Signal Cache, Routing Manager,
+HealthTask
+RPM/TorqueApplied/MotorState/Alive 수신
+02; 05 SYS_REQ_004, 022
+Motor + CAN + Gateway
+CAN Vehicle_Status 0x120
+CAN Interface, status publication
+RPM/Gear/Brake/NetworkState, Speed. Speed
+conversion coefficient TBD
+02; 05 SYS_REQ_007, 017
+Gateway + Motor + Cluster
+CAN Body_Status 0x200
+CAN Interface, Routing Manager
+Door/Light/Window status, ReverseLamp,
+DoorOpen
+02; 01; DBC candidate
+Gateway + Cluster + Door/Light/Window
+CAN Gateway_Status 0x300
+HealthTask/FaultManager, CAN Interface
+GatewayAlive, QueueUsage
+02; 05 SYS_REQ_017, 054
+Gateway + Cluster/PC
+CAN Fault_Status 0x310
+FaultManager, CAN Interface
+Fault transition event and representative
+SystemState
+02; 05 SYS_REQ_018, 025-026, 050-058
+Gateway + CAN + Cluster + PC + Test
+LIN Door_Status/Command 0x10/0x11
+LIN Master, Signal Cache, Routing Manager
+Door polling, command publish, offline/alive
+02 LIN sheets; LDF candidate
+Gateway + Door + LIN Common + Test
+LIN Light_Status/Command 0x13/0x12
+LIN Master, Signal Cache, Routing Manager
+Lamp command/status, 50 ms command
+delivery
+02 LIN sheets; LDF candidate
+Gateway + Light + LIN Common + Test
+LIN Window_Status/Command 0x15/0x14
+LIN Master, Signal Cache, Routing Manager
+Window status/command, 2-cycle offline, local
+command timeout boundary
+02/05 Window FIX; LDF candidate
+Gateway + Window + LIN Common + Test
+CAN/LIN Matrix / DBC / LDF
+All Interface modules
+Derived implementation artifacts
+05 change control; current DBC/LDF candidates
+상대 담당자 리뷰 필요
+12.2 External propagation path
+HealthTask/FaultManager
+   -> CAN Interface
+      -> Fault_Status 0x310 event -> Cluster / PC Tool
+      -> Gateway_Status 0x300 cyclic -> CAN nodes / Cluster / PC Tool
+      -> Vehicle_Status 0x120 NetworkState -> Cluster / PC Tool
+      -> Body_Status 0x200 invalid/status -> Cluster / PC Tool
+
+PAGE 17
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 17
+12.3 Requirement Traceability
+The table below traces the Gateway SW Architecture boundary to the current 05__요구사항_명세서_ver1.2.xlsx requirement register. Requirements owned by another ECU are included as
+boundary requirements so that Gateway does not accidentally absorb Local Fail-safe responsibility.
+Architecture element / flow
+SYS_REQ
+Trace interpretation
+Verification / evidence
+CAN network and Gateway CAN node
+SYS_REQ_001, 009, 011, 014
+CAN control/status exchange, 500 kbps, node
+topology, Gateway CAN participation
+CAN raw/decode, topology, Gateway CAN/LIN
+bring-up
+LIN Master and body slave interface
+SYS_REQ_005, 006, 010, 012, 013, 021, 041-044
+Door/Light/Window command/status, 19.2 kbps,
+Master/Slave, Schedule and rate adaptation
+LIN capture, Schedule/PulseView, Window E2E
+CAN RX, validation, decode, Cache
+SYS_REQ_001, 008, 014, 017, 019-023
+Message reception, meaning-preserving Signal use,
+age/alive/online health
+CAN raw/decode, timeout/alive injection, health log
+CAN -> LIN Routing Manager
+SYS_REQ_002, 008, 015, 041, 043
+CAN input Snapshot to LIN destination request.
+Detailed route rows remain in Routing Table scope
+CAN-LIN E2E, routing table, decoded values
+LIN -> CAN Routing Manager
+SYS_REQ_002, 008, 016, 041, 043
+LIN response Snapshot to Body/Vehicle CAN status
+LIN-CAN E2E, Body_Status decode, Cluster/PC display
+Status aggregation/publication
+SYS_REQ_007, 015, 016, 025, 029, 030, 050, 052, 056,
+058
+Vehicle/Body/Gateway/Fault status and representative
+state propagation
+Cluster/PC display, Fault_Status event, status capture
+Health Manager / HealthTask
+SYS_REQ_017, 019-023, 041, 052-055, 057
+Timeout, Alive, ECU online/offline, Queue health,
+critical deadline, Window policy
+timeout/offline/alive/queue injection and recovery
+evidence
+FaultManager
+SYS_REQ_018, 019-026, 050-058
+Fault detection, independent ACTIVE/CLEARED,
+severity, recovery, external propagation
+Fault state transition, multi-fault, recovery log,
+Fault_Status
+Local Fail-safe boundary
+SYS_REQ_024, 050, 051, 059
+Motor/Window local action is outside Gateway
+command responsibility. Gateway observes and
+propagates where required
+Motor local fail-safe, Window local safe-stop, Gateway
+fault evidence
+Logger and fault evidence
+SYS_REQ_018, 025, 030, 031, 033-036, 056, 058
+Gateway event/log path supports PC observation and
+repeatable evidence. PC file logger remains PC Tool
+scope
+UART/internal log, PC log, pytest, KPI/evidence record
+Scope constraints
+SYS_REQ_038-040
+No real vehicle/high-voltage/function-safety
+certification; CAN FD/UDS/HIL remain outside MVP
+Scope review and roadmap record
+12.3.1 Requirements not owned by Gateway
+SYS_REQ_003 and SYS_REQ_004 are VCU/Motor functional owners. SYS_REQ_024 and SYS_REQ_051 are Motor Local Fail-safe requirements. SYS_REQ_045~SYS_REQ_049 are physical
+device or downstream ECU requirements. Gateway Architecture shall expose the required interfaces and evidence path, but shall not duplicate their control logic.
+
+PAGE 18
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 18
+13. TBD / Open Decision
+Open Item
+영향 Module
+필요한 결정
+결정 담당
+관련 문서
+Interface 영향 여부
+Task priority/stack size
+CANRxTask, RoutingTask,
+LINSchedulerTask, HealthTask,
+LoggerTask
+실제 worst-case load와 latency
+evidence를 기준으로 수치 Freeze
+Gateway SW + Test
+02/03/04/05; Handbook §8.1-8.3
+Internal. 공개 Signal 변경 시 Yes
+Task trigger/API
+LINSchedulerTask, HealthTask
+Timer, task notification, event group,
+direct wake-up 조합 결정
+Gateway SW
+SYS_REQ_013, 055; D-07 §6
+Internal
+Queue depth/item size
+CANRxQueue, LINTxRequestQueue,
+FaultEventQueue, LogEventQueue
+Queue depth, item ownership,
+high-water, full handling Freeze
+Gateway SW + Test
+05 SYS_REQ_053-055; Handbook §8.3
+Gateway_Status 의미에 영향 가능
+Queue overflow/coalescing
+Routing Manager, LIN Master, CAN TX
+path
+Cyclic command의
+last-value-wins/coalescing 여부와 drop
+처리 결정
+Gateway + affected ECU + Test
+Routing Table README; 02 POL-004
+LIN/CAN behavior 변경 시 Yes
+Signal Cache field type/timebase
+Signal Cache, HealthTask
+실제 수신시각 취득·전달, timebase/age
+단위, validity 결합, snapshot 보호 및
+reader 계약 결정
+Gateway SW
+첨부 Signal Cache 02/03; Routing
+POL-001; 이후 구현 검토
+No, unless exposed
+Light_Status timeout
+HealthTask, FaultManager, Light ECU
+timeout threshold,
+FaultCode/ECUOffline, recovery
+condition 결정
+Gateway + Light + Test
+01 검토 #9; 02 Fault Policy
+Yes if Fault mapping changes
+Motor_Status timeout
+HealthTask, FaultManager, Motor ECU
+timeout threshold와 Alive-only 정책의
+범위 결정
+Gateway + Motor + Test
+01 검토 #9; 02 Fault Policy
+Yes if external fault changes
+Fault_Status event ordering/retry/loss
+FaultManager, CAN Interface, Cluster,
+PC
+simultaneous Fault event ordering,
+retry, loss recovery, Active Fault resync
+결정
+Gateway + Cluster + PC + CAN + Test
+02 DBC comment; 05 SYS_REQ_058; 01
+검토 #5
+Yes
+ECUOffline mapping for generic faults
+FaultManager, CAN Interface
+ALIVE_ERROR source node,
+QUEUE_DROP=GATEWAY 등 mapping
+확정
+Gateway + affected ECU + Cluster/PC
+02 POL-003/004/008; 01 검토 #5
+Yes
+Body command CAN source
+Routing Manager, CANRxTask, VCU, LIN
+paths
+Routing v1.0의 Byte3 candidate를
+DBC/Matrix에 반영·상대 승인하고 기존
+Gear/Brake와 함께 검증
+VCU + Gateway + CAN +
+Door/Light/Window + LIN
+Routing v1.0 DEC-01/02, IFC-01~06;
+DBC/Matrix
+Yes
+Window Local Command Timeout
+Window boundary, LIN Master
+lower-level timeout 수치와 resume
+condition을 Window SW requirement로
+확정
+Window + Gateway/LIN Common +
+Test
+05 SYS_REQ_059; 02 POL-009
+Gateway Fault interface는 No,
+command behavior는 Review
+RPM -> Speed conversion
+Routing Manager, Vehicle_Status
+publication
+Virtual Motor model과 Speed 환산 계수
+확정
+Motor + Gateway + Cluster
+01 검토 #8; 02 CAN signal notes; DBC
+comment
+CAN semantic review
+LDF/DBC/Matrix synchronization
+CAN Interface, LIN Master, Routing
+Manager
+current DBC/LDF candidate를 02/05
+FIX와 diff, counterpart review, official
+Freeze
+CAN/LIN Common + Gateway + all
+affected owners
+02 Revision History; current DBC/LDF;
+05 SYS_REQ_058
+Yes
+LDF diagnostic response_error fields
+LIN Master, PC/Test, LIN slaves
+LDF candidate의 diagnostic signals를
+core interface로 인정할지 별도 scope로
+둘지 결정
+LIN Common + Gateway + affected
+ECU + Test
+current LDF; 02 LIN sheets
+Yes
+Logger/Event fan-out
+FaultManager, LoggerTask, CAN
+Interface
+one EventQueue fan-out vs dedicated
+queues, logger drop policy 결정
+Gateway SW + Test
+Handbook §8.3; 05 SYS_REQ_056
+Fault propagation evidence에 영향
+
+PAGE 19
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 19
+14. Review Required
+Review item
+Reason
+Required participants
+Exit evidence
+CAN Interface baseline
+02/05, DBC candidate, Signal range/invalid/receiver
+alignment
+CAN owner, VCU, Motor, Gateway, Cluster/PC
+Approved 02/05 diff, DBC validation, raw/decode
+evidence
+LIN Interface and Schedule
+Window Frame/PID, BODY_10ms, slot, checksum,
+protected PID
+LIN Common, Gateway, Door, Light, Window, Test
+Matrix/LDF/Schedule sync + PulseView evidence
+Routing Manager input/output ports
+Byte3 Body command DBC/Matrix approval, route
+ownership and per-destination invalid behavior
+Routing owner, Gateway, VCU, Door, Light, Window,
+CAN/LIN
+Route source/destination review record
+Signal Cache API
+Snapshot consistency, quality field meaning, age/time
+base
+Gateway SW, Health/Fault, Routing, Test
+API contract + concurrency/quality test plan
+Fault_Status event semantics
+one event per transition, multi-fault ordering/retry/loss
+Gateway, CAN, Cluster, PC, Test
+Event sequence/recovery/resync evidence
+Health/Fault responsibility
+Gateway Fault state vs Motor/Window Local Fail-safe
+Gateway, Motor, Window, VCU, Test
+SCN-05/08/09/10 responsibility trace
+Queue policy
+Queue depth/overflow/drop/recovery and
+QueueUsage semantics
+Gateway SW, Test, Cluster/PC
+Queue stress/drop/recovery evidence
+Logger boundary
+ISR non-blocking, Event fan-out, logger overflow
+Gateway SW, Test, PC Tool
+Logger schema and fault evidence
+15. Architecture Freeze Checklist
+●
+[ ] Module boundaries and ownership reviewed by Gateway SW owner.
+●
+[ ] CANRxQueue overflow and QueueUsage observation path defined.
+●
+[ ] Signal Cache actual RX timestamp, frame grouping, validity/Health contract and snapshot consistency are defined; C type/timebase remain marked until decided.
+●
+[ ] LIN Schedule implementation trigger and frame response path defined.
+●
+[ ] HealthTask nominal poll and critical deadline/event mechanism implemented and tested.
+●
+[ ] FaultManager transition/event/recovery unit tests defined.
+●
+[ ] Fault_Status event ordering/retry/loss policy reviewed by CAN, Cluster, PC, Test.
+●
+[ ] IFC-02~06 and DBC/Matrix approval completed before C2L-003~007 implementation.
+●
+[ ] Light/Motor timeout policies decided without copying unsupported thresholds.
+●
+[ ] DBC/LDF/Matrix/02/05 synchronization and counterpart review completed.
+●
+[ ] Cluster/PC external propagation evidence included for Detection -> State -> Action -> Propagation -> Recovery.
+
+PAGE 20
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 20
+15. 상세설계 기준
+15.1 목적과 적용 범위
+이 장부터는 앞의 Architecture 구조를 Firmware 구현 전에 검토할 수 있는 Detailed Design 수준으로 구체화한다. 구조설계에서 확정된 책임 경계와 프로젝트 원문에서 확인된 Interface는
+[확정]으로 표시한다. 원문에 정량값이 없지만 구현 시작을 위해 필요한 초기값은 [초기값 - 수정 가능]으로 표시하며, 실제 보드의 Timing과 Memory 측정 후 최종 확정한다.
+이번 설계 정합은 Gateway_Routing_Table_v1.0_최종 (1).xlsx의 CAN→LIN/LIN→CAN Route와 Gateway_Signal_Cache_Design_Final.xlsx의 Cache/접근 계약을 선행 기준으로 사용한다.
+다만 Routing Table 내부의 Review/OPEN, Cache 문서의 Draft/TBD 및 외부 DBC/LDF/Matrix 미동기화 항목은 확정으로 승격하지 않는다. FreeRTOS 담당자 설계서는 이번 범위에서 수정하지
+않고, 다음 단계에서 이 Architecture 계약에 맞춘다.
+15.2 상태 및 수정 가능성 표기
+표기
+의미
+수정 가능 여부
+적용 방법
+[확정]
+02 Message Definition, 05 Requirements 또는 최신 Freeze에서 확인된 값
+임의 수정 불가
+변경 시 DBC/LDF/Matrix와 상대 담당자 Change Control 필요
+[초기값 - 수정 가능]
+구현 착수를 위한 제안값
+수정 가능
+구현 후 측정 결과에 따라 Configuration과 문서를 갱신
+[측정 후 확정]
+Target 보드에서 Timing/Memory를 측정해야 하는 값
+수정 가능
+WCET, High-water, Bus Load, Queue Load Evidence로 확정
+[검토 필요]
+다른 ECU, PC, DBC, LDF, Test 담당자와 합의가 필요한 값
+승인 전 수정 가능
+Matrix/Jira와 Review 기록을 연결
+[미정]
+원문에 정의되지 않았거나 문서 간 충돌이 있는 값
+임의 확정 금지
+Owner와 결정 기한을 Open Decision에 등록
+15.3 구현 원칙
+●
+ISR은 Raw Frame 전달과 최소 Timestamp 취득만 수행한다. Decode, Cache Write, Fault 판단, Log 생성은 Task Context에서 수행한다.
+●
+Signal Cache는 최신값 저장소이지 Fault 상태의 소유자가 아니다. HealthTask와 FaultManager가 Age, Timeout, Offline, Representative SystemState를 계산한다.
+●
+Gateway는 Motor/Window의 Local Fail-safe 출력을 직접 제어하지 않는다. Gateway는 관련 상태를 감시하고 CAN/PC/Cluster로 전파한다.
+●
+CAN/LIN Interface 변경은 Routing Table, DBC/LDF, Firmware, PC Tool, Test의 동시 검토를 요구한다.
+●
+모든 [초기값 - 수정 가능] 값은 코드 주석과 Configuration 문서에 PROPOSED_REVIEW로 표시한다.
+
+PAGE 21
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 21
+16. Module 상세설계
+16.1 Module 책임과 API 경계
+Module ID
+제안 파일/Module
+상세 책임
+주요 API 경계
+실행 문맥
+변경 가능성
+관련 근거
+MOD-CAN-IF
+can_if.c/.h
+CAN Peripheral 초기화, Rx Callback,
+Tx 제출, Bus 오류 관찰
+CAN_IF_Init, CAN_IF_TxSubmit,
+CAN_IF_RxEnqueueFromISR
+ISR/Task
+[초기값 - 수정 가능]
+SYS_REQ_001, 009, 011
+MOD-CAN-RX
+can_rx_task.c
+CANRxQueue 수신, ID/DLC 검사,
+DBC Decode, Alive/Range 검증,
+Cache 갱신
+CAN_RX_TaskEntry
+Task
+[초기값 - 수정 가능]
+SYS_REQ_001, 017, 019-023
+MOD-CAN-CODEC
+can_codec.c/.h
+Raw Byte와 Signal 간 변환, Payload
+Encoding
+CAN_CODEC_Decode,
+CAN_CODEC_Encode
+Task
+[검토 필요]
+02 Message Definition, DBC 후보
+MOD-LIN-IF
+lin_if.c/.h
+LIN Header/Response Driver 경계,
+Checksum과 Response Error 수집
+LIN_IF_SendHeader,
+LIN_IF_ReadResponse
+ISR/Task
+[초기값 - 수정 가능]
+SYS_REQ_010, 012, 014
+MOD-LIN-SCHED
+lin_scheduler_task.c
+BODY_10ms Schedule, Slot Trigger,
+Header/Response Transaction 소유
+LIN_SCHED_Start,
+LIN_SCHED_OnSlot
+Task/Timer Notification
+[검토 필요]
+SYS_REQ_013, 041, 043
+MOD-LIN-CODEC
+lin_codec.c/.h
+PID/Frame Length/Checksum 검증,
+LIN Signal 변환
+LIN_CODEC_Decode,
+LIN_CODEC_Encode
+Task
+[검토 필요]
+02 Message Definition, LDF 후보
+MOD-CACHE
+signal_cache.c/.h
+같은 RX Frame의 수신값/실제
+수신시각, Entry validity, 그룹
+Health를 일관된 Snapshot으로 관리
+SignalCache_UpdateFrameGroup,
+SignalCache_ReadSnapshot (논리
+API)
+CAN: CANRxTask / LIN writer Task
+TBD
+[검토 필요]
+RT-C2L-001~007, RT-L2C-001~006;
+AR-01~09
+MOD-ROUTING
+routing_manager.c/.h
+Source Validity 확인, Condition,
+Conversion, Destination 갱신/요청
+생성
+Routing_Execute,
+Routing_ValidateSource
+Task
+[검토 필요]
+SYS_REQ_008, 015, 016, 041, 043
+MOD-ROUTE-TABL
+E
+routing_table.c/.h 또는 생성
+테이블
+현재 Route baseline의 Route
+Descriptor와 Version/Checksum 관리
+RoutingTable_GetByTrigger
+Read-only
+[검토 필요]
+Gateway Routing Table v1.0;
+DBC/LDF/Matrix sync pending
+MOD-HEALTH
+health_task.c
+주기 Health Polling, VCU Critical
+Deadline Wake, Queue Health 관찰
+HealthTask_ReportObservation
+Task
+[초기값 - 수정 가능]
+SYS_REQ_017, 019-023, 053-057
+MOD-FAULT
+fault_manager.c/.h
+Fault ACTIVE/CLEARED, Recovery
+Counter, Representative State,
+FaultEvent 관리
+FaultManager_Report,
+FaultManager_GetSystemState
+Task
+정책 [확정], API [초기값 - 수정
+가능]
+SYS_REQ_018, 025, 026, 050-058
+MOD-STATUS
+status_publisher.c/.h
+Vehicle_Status 0x120, Body_Status
+0x200, Gateway_Status 0x300,
+Fault_Status 0x310 생성
+StatusPublisher_PublishCyclic,
+StatusPublisher_PublishFaultEvent
+Task
+[검토 필요]
+SYS_REQ_007, 025, 058
+MOD-LOGGER
+logger_task.c, log_codec.c
+Event Queue 수신, Compact
+Diagnostic Record, PC/Log Sink 경계
+Logger_PublishFromTask,
+LoggerTask
+Task
+[초기값 - 수정 가능]
+SYS_REQ_027-036, 054, 056
+MOD-TIMEBASE
+timebase.c/.h
+Monotonic millisecond time과 Age
+계산
+Timebase_NowMs,
+Timebase_ElapsedMs
+ISR/Task
+[초기값 - 수정 가능]
+SYS_REQ_019, 020, 041
+16.2 초기화 순서
+1
+Timebase와 CAN/LIN Low-level Interface를 초기화한다.
+2
+Signal Cache와 FaultManager를 CLEAR/NORMAL 상태로 초기화한다.
+3
+Static Queue와 Task를 생성하되, Bus 수신을 열기 전에 Queue Handle 유효성을 확인한다.
+
+PAGE 22
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 22
+4
+승인된 DBC/LDF/Route Table Version과 Checksum을 확인한다. 검토 필요 상태이면 통신을 차단하거나 Diagnostic-only Mode로 진입한다.
+5
+CAN 수신과 LIN Master Schedule을 시작한다.
+6
+Gateway_Status 초기 Frame을 준비하고 Logger에 Boot Event를 기록한다.
+초기화 실패 시 ISR에서 무한 재시도하지 않는다. 초기화 결과를 Boot Fault로 기록하고 Fault/Diagnostic 정책에 따른 제한 모드로 남긴다. 제한 모드의 외부 Encoding은 [검토 필요]이다.
+17. Data Model과 Signal Cache 상세설계
+17.1 논리 데이터와 Frame 수신시각
+아래는 Cache API가 제공해야 할 논리 데이터 계약이다. C 자료형·정렬·시간 단위·폭을 확정하는 ABI 정의가 아니다.
+논리 데이터
+범위
+의미
+Entry.key
+Entry
+선행 Routing Table의 Signal key와 1:1 내부 매핑. 이름/enum 및 lookup 방식은 TBD
+Entry.value
+Entry
+수신 입력값. bit/enum 추출 소비는 raw 보존을 우선 제안하며, 신호별 raw/physical 표현은 별도 확인
+Group.rx_stamp
+하나의 수신 Frame
+실제 Frame 수신시각. 같은 Frame의 여러 Entry가 공유하며, Cache commit 시각과 구분
+Entry.validity
+Entry
+미수신/기본 응답 검사/신호 판정 결과. 그룹 Alive·age/offline 결과와 결합하여 Route 사용 가능성을
+판단
+Group.health_ref
+Frame/신호 그룹
+Alive·age·offline 등 같은 시점의 Health 정보에 연결
+Group.received_state
+초기 상태 구분
+Boot/Reset 후 미수신과 실제 수신값을 구분. validity와 별도인지 여부 TBD
+Snapshot
+Reader 사본
+같은 Frame의 값, rx_stamp, validity 및 Health를 서로 다른 갱신에서 섞이지 않게 제공
+첨부 Cache 설계의 입력 Inventory는 총 27개(기존 19개 + 신규 VCU command 5개 + LIN ResponseError 3개)다. 신규 VCU 5개는 IFC-02~06이 반영되기 전까지 미활성으로 두고,
+ResponseError 3개는 신호 수신/저장과 error에 따른 Fault·복구 정책을 별개로 승인한다.
+CAN 수신시각은 가능하면 CAN 수신 경계에서 취득하고 원래 timestamp를 Queue와 CANRxTask 처리까지 전달한다. CANRxTask가 Queue에서 꺼낸 시각이나 Cache commit 시각으로 source
+수신시각을 대체하면 안 된다. VCU source age는 Routing baseline의 POL-001 age > 30 ms 판정에 연결한다. Clock, 단위, 폭, wrap, 실제 timestamp 취득 위치와 commit 별도 계측 여부는
+TBD이다.
+
+PAGE 23
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 23
+17.2 Cache 소유권 및 갱신 규칙
+데이터
+Writer
+Reader
+갱신/사용 계약
+미확정 사항
+CAN Frame 입력 그룹
+CANRxTask
+RoutingTask, HealthTask, StatusPublisher
+같은 VCU_Command/Motor_Status Frame 값과
+실제 수신 timestamp를 함께 반영
+신규 VCU 명령 5개는 IFC-02~06 반영 후 활성화
+LIN Frame 입력 그룹
+LIN RX writer Task TBD
+RoutingTask, HealthTask, StatusPublisher
+정상 Response 기본 검사 후 값과 Frame
+수신시각을 연결. 실패 Response는
+정상값/정상시각을 갱신하지 않음
+구체 Task, 실패 관찰 보존 경로, ResponseError
+원문 일치
+Entry validity / Group Health
+기본검사는 RX 경계, Alive/age/offline은 Health
+책임
+RoutingTask, HealthTask, StatusPublisher
+수신 유효성, 신호 유효성, 그룹 통신상태를
+구분하고 Route 사용 때 함께 판정
+최종 validity 결합·commit/API, 상태 복사/참조
+방식
+Age
+현재시각과 실제 rx_stamp 차이
+RoutingTask, HealthTask, FaultManager
+Cache commit 시각을 source age로 오인하지
+않음. 사용 시점에도 age 재평가
+Clock/timebase 및 계산 소유자
+Fault State / Representative SystemState
+FaultManager
+StatusPublisher, LoggerTask, PC Tool path
+Cache에 Fault ACTIVE/CLEARED를 중복
+저장하지 않음
+외부 Event 재전송/순서는 별도 Open
+ResponseError 3개 입력은 신호 추출/저장 가능성 검토와 error=1의 invalidation·Fault·recovery 정책 결정을 분리한다. 현재 첨부 자료에서 이 정책은 Draft/원문 일치 확인 불가이므로 승인 전
+활성화하지 않는다.
+17.3 Frame 단위 Snapshot 및 수신 이벤트
+●
+DoorOpen과 DoorLocked는 같은 Door_Status Frame 그룹에서 읽는다. DoorStatus와 별도 DoorOpen 출력을 같은 CAN Body_Status payload 평가 때 같은 Snapshot으로 계산한다.
+●
+LampState는 LightStatus와 bit-4 기반 ReverseLamp 출력에 공통으로 사용한다. 두 값은 동일 Light_Status Snapshot에서 산출한다.
+●
+WindowState와 같은 Window Frame의 Alive/상태정보도 Frame 단위 일관성을 갖는다. 서로 다른 Frame 수신을 하나의 원자적 snapshot으로 가정하지 않는다.
+●
+새 Frame마다 Alive를 한 번 평가한다. Cache를 반복 읽은 횟수로 Alive 오류·복구 카운트를 증가시키지 않는다. 빠른 연속 Frame에서 최신 Cache 덮어쓰기 전 필요한 평가 결과를 전달할
+RX/Health 이벤트 경로는 TBD이다.
+●
+읽기 중 일관성 보호 방법, Snapshot 수명, retry/실패 처리와 LIN RX cache writer Task는 미정이다. 이를 FreeRTOS Task 설계 단계에서 확정한다.
+18. FreeRTOS Task 및 Queue 상세설계
+18.1 Task 설정 초기 기준값
+아래 값은 구현 시작점이며 공식 프로젝트 요구사항이 아니다. FreeRTOS Stack 값은 Word 단위이다. Priority 숫자가 클수록 높은 우선순위라는 가정은 선택한 Port에서 확인한다.
+Task
+Trigger
+초기 Priority
+초기 Stack
+Period/Deadline
+주요 실행 기준
+변경 가능성
+CANRxTask
+CANRxQueue 수신
+5
+512 words
+Event-driven. Critical Frame 즉시 처리
+Bounded Batch 처리, Decode/Cache 갱신,
+Critical 관찰 시 Health Wake
+[측정 후 확정]
+LINSchedulerTask
+10 ms Slot Notification
+5
+768 words
+BODY_10ms Slot, 100 ms Supercycle
+다음 Slot Deadline 전에 Header/Response 완료
+[측정 후 확정]
+RoutingTask
+Cache 갱신 또는 Route Trigger
+4
+768 words
+Event-driven, Bounded Execution
+LIN Slot Owner를 Block하지 않음
+[측정 후 확정]
+HealthTask
+100 ms Health Tick + Critical Wake
+4
+768 words
+Normal 100 ms Poll, VCU 30 ms Deadline/Event
+Critical VCU 검사를 다음 100 ms까지 기다리지
+않음
+[측정 후 확정]
+LoggerTask
+LogEventQueue 수신
+1
+1024 words
+Event-driven
+Safety/Communication Task를 Block하지 않음
+[측정 후 확정]
+
+PAGE 24
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 24
+Task
+Trigger
+초기 Priority
+초기 Stack
+Period/Deadline
+주요 실행 기준
+변경 가능성
+StatusTxTask
+Cyclic Status Timer 또는 Fault Event
+3
+512 words
+Message Definition의 10/20/100 ms
+Tx Enqueue 실패 시 Queue Health/Drop Counter
+갱신
+[측정 후 확정]
+Priority와 Stack 값은 Worst-case Execution Time과 High-water Mark 측정 후 변경한다. 측정 근거가 첨부되기 전에는 Frozen으로 부르지 않는다.
+18.2 Queue 설정 초기 기준값
+RTOS Object
+Item Type
+초기 Depth
+Producer
+Consumer
+Full 동작
+Fault 영향
+변경 가능성
+CANRxQueue
+CanRxFrame_t
+32
+CAN RX ISR
+CANRxTask
+FIFO 보존, Drop Counter 기록. 세부 Drop
+Policy 검토 필요
+QUEUE_DROP, DEGRADED. VCU Age 정책은
+별도 적용
+[측정 후 확정]
+LINResponseQueue
+LinResponse_t
+8
+LIN Driver/Response Handler
+LINSchedulerTask 또는 LIN Decode Handler
+처리 전 Response Overwrite 금지
+LIN Response Loss 및 Source Health 평가
+[측정 후 확정]
+LINTxRequestQueue
+LinTxRequest_t
+16
+RoutingTask, StatusPublisher
+LINSchedulerTask
+Request 거부와 Drop Counter 증가. Schedule
+소유권 보존
+Destination Command/Status가 Stale해질 수
+있음
+[측정 후 확정]
+CANStatusTxQueue
+CanTxRequest_t
+16
+RoutingTask, StatusPublisher
+CAN Interface
+Reject와 기록. Publisher Block 금지
+External Status Loss와 Queue Health 근거
+[측정 후 확정]
+FaultEventQueue
+FaultEvent_t
+16
+FaultManager
+StatusPublisher, LoggerTask Fan-out
+ACTIVE/CLEARED 증거를 보존하는
+Coalescing/Retry 정책 필요
+Cluster/PC 전파 위험
+[검토 필요]
+LogEventQueue
+LogEvent_t
+64
+각 Task
+LoggerTask
+승인된 경우 낮은 Diagnostic Severity부터 Drop.
+모든 Drop 기록
+Diagnostic Evidence Loss,
+QueueUsage/DEGRADED 정책
+[측정 후 확정]
+18.3 Queue Sizing 방법
+각 Queue의 최종 Depth는 다음 기준으로 산정한다.
+Depth >= 최대 Service Blocking 시간 동안의 Peak Arrival + Burst Margin + Recovery Margin
+측정 기록에는 Frame Arrival Rate, 최대 Task Blocking 시간, Queue High-water Mark, Drop Count, Test Duration을 포함한다. 위 초기값은 첫 번째 Sizing 후보일 뿐이다. SYS_REQ_053의
+Queue Recovery는 QueueUsage 80% 미만, 신규 Drop 없음, HealthTask 3회 평가를 요구한다.
+18.4 Static Allocation과 RTOS Object 규칙
+초기 기준은 xQueueCreateStatic과 xTaskCreateStatic을 사용하여 Memory 소유권을 명확히 하는 것이다. Dynamic Allocation은 프로젝트 Memory Policy가 허용할 때만 사용한다. ISR에서는
+printf, Heap Allocation, Bounded되지 않은 Loop를 사용하지 않는다. ISR Queue 전송은 FromISR API를 사용하며 필요한 경우에만 Context Switch를 요청한다. Static/Dynamic 선택은 [검토
+필요]이다.
+19. CAN RX 상세설계
+19.1 처리 순서
+1
+CAN Peripheral이 Frame을 수신하고 최소 ISR Callback을 호출한다.
+2
+ISR은 Bounded Raw Frame을 CanRxFrame_t에 복사하고 Timestamp를 기록한 뒤 CANRxQueue에 Enqueue한다.
+3
+Queue가 가득 차면 ISR은 Drop Counter를 증가시키고 Deferred Queue Health Event를 설정한다. ISR이 SystemState를 직접 변경하지 않는다.
+4
+CANRxTask가 Channel, ID, DLC, 예상 Message Format을 검증한다.
+
+PAGE 25
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 25
+5
+CAN Codec이 Raw Value를 Decode하고 Message Definition/DBC 기준의 Range/Enum을 검증한다.
+6
+Alive Counter가 정의된 Message에는 Alive 검증을 적용한다. VCU Invalid/Alive Error는 Critical 정책을 적용하고 Non-critical Message는 POL-003을 적용한다.
+7
+유효한 Signal은 Timestamp, Quality, Alive 결과, Generation과 함께 Signal Cache를 갱신한다.
+8
+CANRxTask는 Bounded Route Trigger를 Post하고 필요한 경우 VCU Critical 관찰에 대해 HealthTask를 즉시 Wake한다.
+9
+Invalid Frame은 원인과 함께 Diagnostic Event로 기록하며 Last good Engineering Value를 덮어쓰지 않는다.
+19.2 CAN Message 처리 기준
+Message
+ID/Cycle
+Gateway 처리
+후속 영향
+요구사항/근거
+변경 가능성
+VCU_Command
+0x100 / 10 ms
+TorqueRequest, Gear, Brake, AliveCounter Decode 및
+Age/Alive 추적
+Gateway Health/Fault. Motor가 Local Fail-safe 소유
+SYS_REQ_020, 022, 024, 051
+[확정]
+Motor_Status
+0x110 / 10 ms
+최신 Status Decode 및 Cache
+승인 Routing 기준에 따른 Vehicle/Status Publish
+SYS_REQ_001, 007
+[확정 경계]
+Vehicle_Status
+0x120 / 20 ms
+Gateway Status Publisher가 생성
+Cluster/PC Status
+SYS_REQ_007, 025
+[확정]
+Body_Status
+0x200 / 100 ms
+LIN Cache를 이용해 Gateway가 생성
+Cluster/PC Body Status
+SYS_REQ_005-007, 015-016
+[확정 경계]
+Gateway_Status
+0x300 / 100 ms
+GatewayAlive와 QueueUsage Publish
+Network Health 가시화
+SYS_REQ_017, 025, 058
+[확정]
+Fault_Status
+0x310 / Event
+Fault ACTIVE/CLEARED Transition마다 Event Publish
+Cluster/PC Fault 가시화
+SYS_REQ_018, 025, 052, 058
+[확정 정책]
+Routing Table v1.0의 Gear 기준은 0..3 정상, 4..6 Reserved, 7 Invalid이다. 기존 Message Definition/DBC candidate의 Range와 일치하는지 확인하고 해당 산출물을 동기화하기 전에는
+CAN_CODEC_Decode 범위를 Freeze하지 않는다. Window raw 6 RESERVED와 DBC [0..5] 표기도 별도 대조 대상이다. [검토 필요]
+20. LIN Master 및 Schedule 상세설계
+20.1 BODY_10ms Schedule
+현재 Routing Table v1.0 설계 기준은 10 ms Slot과 100 ms Supercycle이다. 아래 Slot은 Gateway SW의 Route 실행/전송 경계를 맞추는 입력 기준이다. DBC/LDF/Matrix 동기화, 실제
+Protected PID, Checksum 및 Bus Capture가 끝나기 전에는 공식 Freeze로 간주하지 않는다.
+Slot
+Frame
+방향
+Data
+Cycle/Supercycle 역할
+Gateway 동작
+변경 가능성
+0
+Door_Status 0x10
+Slave -> Master
+1 byte
+100 ms
+Header/Response 경계. 검증된 같은 Frame 값은
+Door Cache group 입력
+[Route 기준 / Review]
+10
+Window_Command 0x14
+Master -> Slave
+1 byte
+100 ms supercycle 안의 Slot
+최신 유효 Window command를 읽어 Encode/전송
+[Route 기준 / Review]
+20
+Light_Command 0x12
+Master -> Slave
+1 byte
+20 ms 및 70 ms의 두 전송 Slot
+Head/Turn/Hazard/Brake/ReverseLamp
+command를 승인 규칙으로 전송
+[Route 기준 / Review]
+30
+Window_Status 0x15
+Slave -> Master
+2 bytes
+100 ms
+Header/Response 경계. Window Cache group
+갱신은 RX writer Task TBD
+[Route 기준 / Review]
+40
+Light_Status 0x13
+Slave -> Master
+2 bytes
+100 ms
+Header/Response 경계. Light Cache group 갱신은
+RX writer Task TBD
+[Route 기준 / Review]
+50
+Reserved/Idle
+-
+-
+100 ms supercycle 안의 미할당 Slot
+Application Transaction 없음
+[LDF/Matrix 확인 필요]
+
+PAGE 26
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 26
+Slot
+Frame
+방향
+Data
+Cycle/Supercycle 역할
+Gateway 동작
+변경 가능성
+60
+Door_Command 0x11
+Master -> Slave
+1 byte
+100 ms supercycle 안의 Slot
+최신 유효 LockCommand를 Encode/전송.
+RequestState는 별도 route 아님
+[Route 기준 / Review]
+70
+Light_Command 0x12
+Master -> Slave
+1 byte
+20 ms Slot과 짝을 이루는 두 번째 전송 Slot
+최신 유효 Light command를 재전송/갱신
+[Route 기준 / LDF·Matrix Capture 필요]
+80
+Reserved/Idle
+-
+-
+후보 LDF Idle
+Application Transaction 없음
+[검토 필요]
+90
+Reserved/Idle
+-
+-
+후보 LDF Idle
+Application Transaction 없음
+[검토 필요]
+Gateway LIN Master/Scheduler는 10 ms slot의 Header/Response bus transaction과 100 ms schedule을 소유한다. RoutingTask는 slot 전에 command shadow/request를 준비한다. LIN
+response decode와 Signal Cache commit의 구체 Task는 별도이며 TBD이다. 70 ms Light_Command는 Routing Table의 두 번째 지정 Slot으로 반영했으며, 최종 전송 의미·PID·capture는
+LDF/Matrix로 확인한다.
+20.2 LIN Response 검증
+Response 경로는 Protected PID/Parity, Expected Length, Enhanced Checksum, Response Error 및 Source Frame Identity를 검증한다. 검증 실패 시 이전 정상값과 정상 rx_stamp는 그대로
+두고, 실패 관찰을 별도 진단 경로에 보존한다. ResponseError 신호 수신/bit 추출과 error=1의 invalid/Fault/recovery 동작은 별도 검토한다. 검증되지 않은 Response를 정상 Body Status로
+CAN에 Routing하지 않는다.
+Window Offline 정책은 연속 2회의 Response 미수신이다. Door Offline 정책은 연속 3회의 No-response이다. Light Timeout은 현재 우선 문서에서 권위 있는 정량값을 찾지 못했으므로
+[미정]이다.
+21. Routing 상세설계
+21.1 Route 평가 알고리즘
+각 Route는 다음 순서로 평가한다.
+1
+Route Table Version과 Route Enable 조건을 확인한다.
+2
+Signal Cache에서 일관된 Source Snapshot을 읽는다.
+3
+Source Entry validity와 같은 Frame Group의 rx_stamp, received state, Alive/age/offline Health를 일관된 Snapshot으로 확인한다. Route 사용 시점에 age를 다시 계산한다.
+4
+Route Condition을 적용한다. Invalid 또는 Stale한 Critical Source로 정상 Destination 값을 만들지 않는다.
+5
+승인된 Signal Definition에 따라 Conversion, Range, Clamp를 적용한다.
+6
+Destination Command Shadow 또는 Status Aggregation Object를 갱신한다.
+7
+소유 Bus Interface를 통해 Bounded CAN 또는 LIN Request를 제출한다.
+8
+진단을 위해 Route 결과, Source Generation, Destination, Reject Reason을 기록한다.
+위 알고리즘은 Architecture의 Route 실행 계약이다. 구체 행은 첨부 Routing Table v1.0을 반영했으며, 해당 표가 Review/OPEN이거나 DBC/LDF/Matrix 동기화가 필요한 항목은 검토 상태를
+그대로 유지한다.
+
+PAGE 27
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 27
+21.2 CAN → LIN Route 정합표
+모든 C2L Route는 VCU_Command의 same-frame Cache Snapshot을 사용한다. VCU 입력의 실제 Frame 수신시각으로 POL-001의 age를 계산하며, invalid/stale/fault 입력에는 아래 Route별
+safe output을 적용한다. 신규 Byte3 Signal은 IFC-02~06 승인 전 DBC에 구현하지 않는다.
+Route ID
+Source / Decode
+Destination / Slot
+변환·invalid 처리
+상태 / Gate
+RT-C2L-001
+VCU_Command.Gear; raw 0-3 normal, 4-6 reserved, 7
+invalid
+Light_Command.ReverseLamp; LIN Frame ID 0x12,
+Slot 20/70
+Gear=3이면 1, 아니면 0. invalid/stale/fault → OFF(0)
+Review: Message Definition/DBC 범위 대조
+RT-C2L-002
+VCU_Command.Brake; 0/1 모두 정상값
+Light_Command.BrakeLamp; Frame ID 0x12, Slot
+20/70
+invalid/stale/fault → OFF(0). Brake invalid raw=1을
+쓰지 않고 N/A로 동기화
+Review: IFC-01 DBC/Matrix/정의서 동기화
+RT-C2L-003
+신규 HeadLampRequest; Byte3 bit 24, 0 OFF / 1 ON
+Light_Command.HeadLamp; Frame ID 0x12, Slot
+20/70
+invalid/stale/fault → OFF(0)
+OPEN: IFC-02 DBC/Matrix 반영·상대 승인
+RT-C2L-004
+신규 TurnLampRequest; Byte3 bits 25-26, 0 OFF / 1
+LEFT / 2 RIGHT / 3 INVALID
+Light_Command.TurnLamp; Frame ID 0x12, Slot
+20/70
+3 또는 invalid/stale/fault → OFF(0). Hazard 우선순위는
+Light ECU가 소유
+OPEN: IFC-03 승인
+RT-C2L-005
+신규 HazardLampRequest; Byte3 bit 27, 0 OFF / 1 ON
+Light_Command.HazardLamp; Frame ID 0x12, Slot
+20/70
+invalid/stale/fault → OFF(0). 실제 출력 우선순위는
+Light ECU가 소유
+OPEN: IFC-04 승인
+RT-C2L-006
+신규 DoorLockRequest; Byte3 bits 28-29, 0
+NO_ACTION / 1 LOCK / 2 UNLOCK / 3 INVALID
+Door_Command.LockCommand; Frame ID 0x11, Slot
+60
+3 또는 invalid/stale/fault → NO_ACTION(0).
+RequestState는 route하지 않음
+OPEN: IFC-05 승인; Door_Status는 schedule polling
+RT-C2L-007
+신규 WindowCommand; Byte3 bits 30-31, 0 STOP / 1
+UP / 2 DOWN / 3 INVALID
+Window_Command.WindowCommand; Frame ID
+0x14, Slot 10
+3 또는 invalid/stale/fault → STOP(0). Window ECU
+local command timeout은 ECU 책임
+OPEN: IFC-06 승인; SYS_REQ_059 local policy 분리
+기존 VCU Gear/Brake는 신규 Byte3 입력과 다르게 기존 Message 경로를 사용한다. C2L 행은 데이터 변환과 인터페이스 후보를 명시하지만 전체 Routing Table의 Review 및 DBC/Matrix
+동기화가 끝나기 전 공식 Freeze가 아니다.
+21.3 LIN → CAN Route 정합표
+Route ID
+Source / Cache Group
+Destination / 변환
+invalid/offline 기준
+상태 / Gate
+RT-L2C-001
+Door_Status.DoorOpen; Frame ID 0x10 / 100 ms
+Body_Status.DoorStatus = 2*DoorOpen +
+DoorLocked; CAN 0x200 / 100 ms
+RT-L2C-002와 같은 Snapshot/payload. 3회
+no-response 또는 Alive 오류 시 raw invalid 0xFF. 정상
+Door+Alive 새 Frame 3회로 recovery
+Review; same-frame 그룹 준수
+RT-L2C-002
+Door_Status.DoorLocked; Frame ID 0x10 / 100 ms
+위와 같은 DoorStatus 결합 출력
+RT-L2C-001과 같은 invalid/recovery 동작
+Review; 단독 독립 payload 갱신 금지
+RT-L2C-003
+같은 Door Snapshot의 DoorOpen
+Body_Status.DoorOpen 별도 출력
+1-bit invalid output 0 또는 hold는 미결; Cache
+초기값과 별도로 결정
+PARTIAL: CONS-06 결정 필요
+RT-L2C-004
+Light_Status.LampState; Frame ID 0x13 / 100 ms
+Body_Status.LightStatus로 6-bit raw pass-through;
+CAN 0x200 / 100 ms
+0x3F는 유효한 모든 램프 ON. Alive 오류 시 정상 Route
+사용 금지. Light timeout 수치는 미정
+OPEN: CONS-07 timeout/Fault policy
+RT-L2C-005
+RT-L2C-004와 같은 LampState Snapshot
+Body_Status.ReverseLamp = bit 4
+invalid 1-bit 출력 0 또는 hold는 미결
+PARTIAL: CONS-06 결정 필요
+RT-L2C-006
+Window_Status.WindowState; Frame ID 0x15 / 100
+ms
+Body_Status.WindowStatus; CAN 0x200 / 100 ms
+raw 0-5 normal, raw 6 RESERVED, raw 7 invalid→0xFF.
+2회 no-response/Alive 오류 시 invalid output; 3개의
+별도 정상 Frame으로 recovery
+OPEN: DBC [0..5]와 raw 6 표기 대조( CONS-08 )
+같은 주기의 모든 Body status 출력은 하나의 Body_Status payload로 갱신한다. Door와 Light의 1-bit invalid 출력 동작은 Routing Table에서 0/hold 중 선택되지 않았으므로 구현 전에
+결정한다. Frame ID 0x10-0x15와 실제 protected PID는 구분하고, PID/parity는 승인 LDF/Bus capture로 검증한다.
+21.4 LIN Local Processing (비-Route)
+다음 항목은 LIN 수신/진단/Health 처리이지 직접 CAN Destination으로 가는 Route가 아니다. Route Table의 13개 경로와 분리해 둔다.
+
+PAGE 28
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 28
+항목
+설계 입력
+처리 경계
+상태
+Door/Light/Window Alive
+새 LIN Frame의 counter (prev+1) mod 16 비교; 오류
+시 해당 Frame 입력 invalid, 정상 서로 다른 Frame
+3회로 recovery 후보
+Frame별 새 RX 관찰로 1회만 평가
+LP-LIN-001/003/009 Review; Fault/status mapping
+검토 유지
+Door/Light ResponseError
+ResponseError 3개 입력은 정상 응답 후 수신·저장·추출
+대상으로 검토
+error=1의 invalid/Fault/recovery는 승인 전 활성화
+금지
+LP-LIN-002/005/010 Draft; LDF 원문 대조 필요
+Light DiagnosticState
+0 NORMAL / 1 WARNING / 2 FAULT / 3 INVALID 후보
+Local Diagnostic; 정상 Body route와 분리
+LP-LIN-004 Draft
+Window Upper/LowerLimit 및 MotorState
+WindowState와의 일관성 확인 후보; MotorState 0
+STOPPED / 1 UP / 2 DOWN / 3 FAULT 후보
+Local processing; CAN Motor_Status.MotorState와
+동일 신호로 취급 금지
+LP-LIN-006~008 Draft
+21.5 Routing Reject 규칙
+Reject 원인
+Cache/Route 동작
+외부 영향
+변경 가능성
+Source 미수신
+Destination Shadow 유지 또는 승인된 Safe Default 적용
+Route Reject 기록. 정상 Status를 임의 생성하지 않음
+[검토 필요]
+Source Stale/Timeout
+정상 Command 발행 금지
+Health/Fault 정책이 Fault_Status 관리
+[확정 정책]
+Alive Error
+Critical Route에는 사용 금지. Non-critical은 정책 적용
+FaultManager가 Source별 분류
+[확정 정책]
+Range/Enum Invalid
+Signal Reject, Last good Value는 Status용으로만 유지
+Diagnostic Event
+[초기값 - 수정 가능]
+Destination Queue Full
+Source Task Block 금지
+Queue Drop/DEGRADED 정책
+[검토 필요]
+Route Table Version 불일치
+해당 Route Group 비활성화
+Boot/Diagnostic Event 및 검토 Gate
+[검토 필요]
+22. Health 및 Fault State Machine 상세설계
+22.1 내부 상태 모델
+외부 Message Encoding은 02/05 정의를 따른다. 내부적으로 각 Fault는 CLEAR 또는 ACTIVE, 연속 실패 Counter, Recovery Counter, First/Last Timestamp, Event Generation을 가진다.
+Representative System State는 FAIL_SAFE > OFFLINE > DEGRADED > NORMAL 순서로 계산한다.
+Fault/Policy
+Detection
+State/Action
+외부 전파
+Recovery
+변경 가능성
+VCU Timeout
+Expected 10 ms, Age >30 ms
+FAIL_SAFE. Motor는 Local Fail-safe 수행
+Fault_Status Event, SystemState FAIL_SAFE,
+Gateway Health Status
+Valid VCU + Valid + Alive 3회. VCU Recovery
+독립 처리
+[확정]
+VCU Alive Error
+Counter가 (previous + 1) mod 16이 아님
+FAIL_SAFE 분류
+Fault_Status Event
+Valid Alive 3회
+[확정]
+Door Offline
+100 ms No-response 3회 연속
+Door OFFLINE, Body Door Status Invalid
+Fault_Status Event와 Invalid Body_Status
+Valid Response + Alive 3회
+[확정]
+Window Offline
+100 ms No-response 2회 연속
+Window OFFLINE, Body Window Status
+Invalid
+Fault_Status Event와 Invalid Body_Status
+Normal Response + Alive 3회
+[확정]
+Non-critical Alive Error
+Motor/Door/Light/Window/Gateway_Status
+Alive Error
+더 높은 상태가 없으면 DEGRADED
+Fault_Status Event
+Source별 Valid Alive 3회
+[확정]
+Queue Drop
+CAN Rx/Event Queue Full 또는 Drop 관찰
+DEGRADED, QueueUsage/Drop Counter 갱신
+Gateway_Status와 Fault/Log Evidence
+신규 Drop 없음, QueueUsage <80%,
+HealthTask 3회 평가
+[확정]
+LIN Checksum/Response Error
+Frame Validation 실패
+Source Quality Invalid. Source 정책이 Offline
+결정
+정책 전환 시 Fault_Status, 그 전 Log/Health
+Source 정책에 따른 Valid Response
+[검토 필요]
+
+PAGE 29
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 29
+Fault/Policy
+Detection
+State/Action
+외부 전파
+Recovery
+변경 가능성
+Window Command Local Timeout
+Window ECU의 Command Freshness Timeout
+Window ECU가 Motor를 Local Stop
+POL-009에 따라 Gateway 별도 Fault_Status
+Event 없음
+Window ECU Local Recovery
+[확정 정책]
+22.2 HealthTask Wake 경로
+HealthTask는 두 가지 논리적 Wake 경로를 가진다.
+●
+Normal 경로: 모든 Online/Offline 및 Queue Recovery 정책을 100 ms마다 평가한다.
+●
+Critical 경로: VCU Age가 30 ms 요구사항에 접근하거나 초과할 때 즉시 Deadline/Event Wake한다. Task는 VCU Timeout을 보고하기 전에 Cache Timestamp를 다시 읽는다. 100 ms
+Polling만으로는 SYS_REQ_055를 만족하지 못한다.
+구체적인 RTOS Mechanism은 TaskNotify, EventGroup, 전용 Deadline Queue 중에서 선택한다. Timing Requirement는 [확정]이지만 RTOS Primitive는 [검토 필요]이다.
+22.3 Fault Event 규칙
+FaultManager는 Fault ACTIVE Transition마다 한 개, Fault CLEARED Transition마다 한 개의 FaultEvent_t를 생성한다. Event에는 FaultId, New State, Representative SystemState, Timestamp,
+Source Quality, Event Generation을 포함한다. 동시에 여러 Transition이 발생하면 결정적 순서 또는 Event Sequence Field가 필요하며, 재전송/유실 동작은 [검토 필요]이다.
+23. C API 및 Interface 상세설계
+23.1 제안 API 계약
+API
+Caller
+Callee/Owner
+Context
+Input
+Return/Error
+요구사항
+변경 가능성
+CAN_IF_RxEnqueueFromISR
+CAN ISR
+CANRxQueue
+ISR
+CanRxFrame_t, Wake Flag
+Queue Full
+SYS_REQ_001, 054
+[초기값 - 수정 가능]
+SignalCache_UpdateCanFrameGroup
+CANRxTask
+Signal Cache
+Task
+Frame Group, Values, original RX timestamp,
+validation result
+Invalid ID/Range; preserve original RX time
+RT-C2L-001~007; AR-01/05/07
+[검토 필요]
+SignalCache_UpdateLinFrameGroup
+LIN RX writer Task TBD
+Signal Cache
+Task
+Frame Group, Value(s), actual rx_stamp,
+basic validation result
+Invalid Response must not refresh normal
+value/time
+RT-L2C-001~006; AR-02/07
+[검토 필요]
+SignalCache_ReadSnapshot
+Routing/Health/Status
+Signal Cache
+Task
+Signal Group, values + rx_stamp + validity +
+consistent Health Snapshot
+Retry/Inconsistent/Not received
+RT-L2C-001~006; AR-03/07
+[검토 필요]
+Routing_Execute
+RoutingTask
+Routing Manager
+Task
+Trigger/Source Generation
+Reject Reason
+SYS_REQ_015, 016, 041
+[검토 필요]
+LIN_SCHED_OnSlot
+LINSchedulerTask
+LIN Master
+Task
+Slot Index/Time
+Slot Deadline Miss
+SYS_REQ_013, 041, 043
+[검토 필요]
+FaultManager_Report
+HealthTask/Queue Monitor
+FaultManager
+Task
+FaultId, Observation
+Invalid Transition
+SYS_REQ_018, 052, 053
+[초기값 - 수정 가능]
+FaultManager_GetSystemState
+Status/Logger
+FaultManager
+Task
+없음
+Representative State
+SYS_REQ_052, 058
+[초기값 - 수정 가능]
+StatusPublisher_PublishFaultEvent
+FaultManager
+CAN Tx Path
+Task
+Fault Event
+Tx Queue Full
+SYS_REQ_025, 058
+[검토 필요]
+Logger_PublishFromTask
+ISR를 제외한 각 Task
+LogEventQueue
+Task
+LogEvent
+Queue Full
+SYS_REQ_027-036
+[초기값 - 수정 가능]
+23.2 API 규칙
+●
+API Caller는 다른 Module이 소유한 State를 직접 Write하지 않는다.
+●
+Bus Driver API는 Hardware Transaction Status를 소유하지만 SystemState를 결정하지 않는다.
+
+PAGE 30
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 30
+●
+FaultManager API는 Observation을 받으며 Raw CAN/LIN Hardware를 직접 검사하지 않는다.
+●
+StatusPublisher는 FaultManager State와 Cache Snapshot을 읽지만 Fault를 Clear하지 않는다.
+●
+Logger API는 Safety/Communication Task를 Block하지 않으며 명시적인 Drop Counter를 가진다.
+24. Timing, Memory 및 Resource 설계
+24.1 Timing Budget 기준
+경로
+요구사항 근거
+초기 Engineering Target
+측정 근거
+변경 가능성
+CAN ISR Enqueue -> CANRxTask Start
+CAN Communication
+목표 1 ms 이하
+GPIO/Trace Timestamp와 Queue Latency
+[측정 후 확정]
+CAN Decode + Cache Update
+VCU/Motor 10 ms Cycle
+가용 Cycle Margin 내 완료
+Worst-case Execution Time
+[측정 후 확정]
+Critical VCU Deadline Observation
+SYS_REQ_020, 055
+30 ms Age 판단 전에 Health Wake
+Timestamp Deadline Test
+[확정 요구], 수치는 측정
+LIN Slot Trigger -> Header
+BODY_10ms
+10 ms Slot Boundary 유지
+LIN Analyzer Capture
+[측정 후 확정]
+LIN Response -> Cache Update
+SYS_REQ_005, 006, 042, 043
+Dependent Status Publish 전에 완료
+Trace와 Schedule Capture
+[측정 후 확정]
+Fault ACTIVE -> Fault_Status Request
+SYS_REQ_018, 025, 058
+Event-driven. Critical Event를 100 ms만큼 지연하지
+않음
+End-to-end Timestamp
+[검토 필요]
+Queue Drop -> DEGRADED Observation
+SYS_REQ_054, 055
+ISR이 State를 직접 바꾸지 않되 Bounded 처리
+Drop Injection Test
+[확정 정책], 시간은 측정
+CPU Utilization, Worst-case Execution Time, Bus Load, Stack High-water Mark, Heap Usage는 Source 문서에 없으므로 Target Hardware에서 측정해야 한다. 위 Target은 Acceptance
+의도이며 측정값이 아니다.
+24.2 Memory 소유권
+모든 Queue Item Type은 Fixed Size로 둔다. CAN/LIN Buffer는 설정된 최대 Payload로 제한한다. Cache Storage는 SignalId Table 기준으로 Static Allocation한다. Logger Record는 Fixed-size
+또는 Bounded Variable-size로 구성하고 Truncation Flag를 둔다. 어떤 Module도 ISR이 소유한 임시 Buffer의 Pointer를 Enqueue 이후 보유하지 않는다. 실제 Memory 사용량은 [측정 후
+확정]이다.
+25. Logger 및 PC Diagnostic 상세설계
+25.1 Log Record
+typedef struct {
+    uint32_t timestamp_ms;
+    uint16_t event_id;
+    uint16_t fault_id;
+    uint32_t source_id;
+    uint32_t generation;
+    uint8_t  severity;
+    uint8_t  system_state;
+    uint16_t queue_usage_permille;
+    uint32_t drop_count;
+    int32_t  value;
+} LogEvent_t;
+
+PAGE 31
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 31
+최소 기록 대상은 Boot, CAN/LIN Validation Failure, Alive Error, Timeout/Offline Transition, Queue Drop, Fault ACTIVE/CLEARED, Route Reject, Recovery이다. 구체적인 PC Tool Transport와
+Log Retention/Clear 정책은 Gateway Architecture Freeze 범위 밖이며 [미정]이다.
+25.2 Logger Failure 처리
+Logger Overflow가 Health, CAN RX, LIN Schedule을 Block하면 안 된다. LoggerTask는 자체 Drop Count를 Health Observation 경로로 전파한다. Logger 전용 Drop을 Queue Drop Fault로
+분류할지 낮은 Severity Diagnostic Event로 분류할지는 상대 담당자 합의가 필요하며, 현재 설계에서 이를 자동으로 FAIL_SAFE로 분류하지 않는다. [검토 필요]
+26. Verification 및 Test 상세설계
+26.1 Unit Test 그룹
+Test 그룹
+범위
+대표 Case
+Pass 기준
+변경 가능성
+UT-CAN-CODEC
+CAN Decode/Encode
+DLC, Endian, Gear 0..3/4..6/7, Brake Invalid=N/A, 신규 Byte3
+enum, Alive 15 -> 0
+동기화·승인된 DBC/정의와 일치. Invalid는 정상 input으로
+사용하지 않음
+[검토 필요]
+UT-LIN-CODEC
+LIN Decode/Encode
+PID/Parity, Length, Enhanced Checksum, Response Error
+Invalid Response가 정상 Cache 값이 되지 않음
+[확정 방향], Case는 수정 가능
+UT-CACHE
+Cache 일관성
+Actual RX timestamp vs commit time, same-frame groups,
+invalid response, validity/Health snapshot, repeat-read vs
+new-RX count
+Queue delay does not mask source age; failed response
+does not refresh normal value/time; no partial
+Door/Light/Window group
+[검토 필요]
+UT-ROUTE
+Routing Manager
+RT-C2L-001~007, RT-L2C-001~006 enum conversion,
+fallback, shared output payload, OPEN rows
+Source policy가 허용할 때만 Route 실행; raw Cache input은
+fallback으로 덮어쓰지 않음
+Review/IFC gates clear 후 Freeze
+UT-FAULT
+FaultManager
+ACTIVE/CLEARED, Order, Recovery 3회, Representative State
+Transition마다 한 개의 Event. 순서 결정적
+[확정 정책]
+UT-QUEUE
+Queue Monitor
+Full, Drop, High-water, Recovery
+SYS_REQ_053/054에 맞는 DEGRADED와 Evidence
+Depth 확정 후 보완
+UT-LOGGER
+Logger
+Full Queue, Truncation, Severity, Event Encoding
+Safety Task가 Block되지 않음
+PC Policy에 따라 수정 가능
+26.2 Integration 및 HIL Test
+1
+VCU Frame을 10 ms로 주입하고 31 ms 동안 정지하여 Critical Wake, Fault_Status Event, Motor Local Fail-safe 관찰을 확인한다.
+2
+VCU Alive Sequence Error와 15 -> 0 Wrap을 주입하여 분류를 확인한다.
+3
+Door Response 3 Cycle 및 Window Response 2 Cycle 누락, Alive mismatch, 별도 정상 Frame 3회 복구를 주입해 Body_Status invalid/recovery 출력을 확인한다.
+4
+CANRxQueue/EventQueue Full을 주입하여 QueueUsage, Drop Count, DEGRADED, 3회 평가 Recovery를 확인한다.
+5
+LIN Analyzer로 BODY_10ms를 Capture하고 Slot 0/10/20/30/40/60/70 및 Reserved Slot을 Routing Table v1.0·LDF·Matrix와 대조한다. Light_Command 20/70 두 Slot과 protected PID를
+확인한다.
+6
+Fault_Status가 Event-driven인지, SystemState가 승인 없이 Gateway_Status에 중복되지 않는지 확인한다.
+7
+신규 C2L-003~007이 IFC-02~06의 DBC/Matrix 승인 전에는 Disable 또는 Diagnostic-only인지 확인한다. IFC-01 Brake invalid 표기도 함께 대조한다.
+8
+Load Test를 충분히 실행하여 Queue High-water, Stack High-water, CPU Utilization, Bus Load, Logger Loss를 기록한다.
+
+PAGE 32
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 32
+26.3 Evidence Package
+각 Test 결과에는 Firmware Commit, DBC/LDF/Route Table Version, Test Input, 측정 Timestamp, Expected/Actual Status, CAN/LIN Capture, Log Extract, Reviewer를 포함한다. 이는 프로젝트
+Change Control인 Jira/Matrix -> 상대 담당자 검토 -> DBC/LDF -> Firmware/PC/Test -> PR/Evidence 순서를 따른다. Test Duration과 Pass Threshold는 [검토 필요]이다.
+27. Build 및 Configuration 설계
+27.1 Configuration 항목
+Configuration
+담당
+기본 상태
+Gate
+변경 가능성
+CAN Bitrate 500 kbps
+CAN Interface
+확정
+DBC/Vehicle Bus 검토
+[확정]
+LIN Bitrate 19.2 kbps
+LIN Interface
+확정
+LDF/Vehicle Bus 검토
+[확정]
+LIN Schedule BODY_10ms
+LIN Scheduler
+확정 기준
+LDF/Matrix Capture
+[검토 필요]
+VCU Timeout 30 ms
+Health/Fault
+확정
+SYS_REQ_020/055 Test
+[확정 요구]
+Door Offline 3 Cycle
+Health/Fault
+확정
+SYS_REQ_021 Test
+[확정 요구]
+Window Offline 2 Cycle
+Health/Fault
+확정
+SYS_REQ_057 Test
+[확정 요구]
+Queue Recovery <80%, 3 Evaluation
+Health/Fault
+확정
+SYS_REQ_053 Test
+[확정 요구]
+Task Priority/Stack
+RTOS Configuration
+초기 제안
+Target Measurement
+[측정 후 확정]
+Queue Depth
+RTOS Configuration
+초기 제안
+Burst/Load Measurement
+[측정 후 확정]
+Body Command CAN Source
+Network/VCU
+Routing v1.0 Byte3 candidate; IFC-02~06 미승인
+02/05/DBC/Matrix update and counterpart approval
+[검토 필요]
+27.2 Version Compatibility Gate
+Firmware는 Build 시 DBC/LDF/Route Table Version을 기록한다. 다른 Signal Definition Version에서 생성된 Route Table은 Compatibility Check를 통과하지 못하면 Build 또는 Runtime에서
+차단하거나 Diagnostic-only Mode로 둔다. Version Check만으로 Semantic Compatibility를 증명할 수 없으므로 Change Review Record가 계속 필요하다. 이 Gate 구현 방식은 [검토 필요]이다.
+28. 구현 순서와 Acceptance Gate
+28.1 권장 구현 순서
+1
+Routing v1.0과 Signal Cache 입력을 DBC/LDF/Matrix/기존 정의서와 대조한다. Gear/Brake/Window 범위, IFC 및 Frame ID/PID 차이를 해소하기 전에는 관련 Interface를 Freeze하지 않는다.
+2
+실제 RX timestamp 전달/timebase, CAN/LIN Driver 경계, Static RTOS Object, Boot Version Check를 구현한다.
+3
+CAN Codec, LIN Codec, Signal Cache와 Unit Test를 구현한다.
+4
+LIN Schedule을 구현하고 Target에서 BODY_10ms Timing을 Capture한다.
+5
+승인된 LIN→CAN Route부터 같은 Frame Snapshot과 Body_Status 단일 payload 규칙에 따라 Routing Manager를 구현한다.
+6
+HealthTask/FaultManager를 구현하고 VCU 30 ms Critical Path를 검증한다.
+7
+StatusPublisher와 Fault_Status Event 전파를 구현한다.
+
+PAGE 33
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 33
+8
+신규 C2L-003~007은 IFC-02~06 및 DBC/Matrix가 승인된 뒤에만 활성화한다.
+9
+LoggerTask/PC Evidence와 Fault Injection Test를 추가한다.
+10
+Priority, Stack, Queue Depth, Timing을 측정값으로 조정하고 이 문서와 Configuration Baseline을 갱신한다.
+28.2 Firmware Coding 시작 조건
+●
+Module Ownership과 API Table을 검토했다.
+●
+CAN/LIN Source Definition과 Version을 식별했다.
+●
+Fault Transition과 Recovery Rule을 Test할 수 있다.
+●
+각 Queue의 Overflow 동작을 정의했다.
+●
+Task Priority/Stack/Queue 값이 초기 제안 또는 Frozen으로 표시되어 있다.
+●
+모든 TBD 값에 Owner와 Decision Due Point가 있다.
+28.3 Detailed Design 완료 조건
+●
+초기 제안값을 측정/Frozen 값 또는 승인된 예외로 대체했다.
+●
+Route Table, DBC, LDF, Firmware Configuration, PC Tool, Test Case가 동일 Version Set을 사용한다.
+●
+Timing Capture, Stack High-water, Queue High-water, Bus Load, Fault Injection Evidence를 첨부했다.
+●
+모든 검토 필요 항목에 상대 담당자 승인이 있거나 Release에서 명시적으로 제외했다.
+
+PAGE 34
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 34
+29. 상세설계 Open Decision List
+ID
+Decision
+현재 제안
+Owner/Reviewer
+필요 Evidence
+수정 여부
+DD-001
+Task Priority Convention과 값
+Priority 5/4/3/1 초기 기준
+Firmware/RTOS
+WCET와 Scheduling Trace
+측정 후 수정 가능
+DD-002
+Stack Size
+Section 18.1 초기값
+Firmware
+Load 상황 High-water Mark
+측정 후 수정 가능
+DD-003
+Queue Depth
+Section 18.2 초기값
+Firmware/Test
+Burst/Load Test
+측정 후 수정 가능
+DD-004
+Queue Full 동작
+FIFO 보존, Drop 기록, 직접 FAIL_SAFE 금지
+Firmware/Safety
+Drop Injection과 Recovery Evidence
+검토 후 수정 가능
+DD-005
+Snapshot 보호
+Sequence Counter 또는 Short Mutex
+Firmware/RTOS
+Critical Section Timing
+측정 후 수정 가능
+DD-006
+VCU Critical Wake Primitive
+Task Notification/Event Path
+Firmware/RTOS
+30 ms Deadline Trace
+검토 후 수정 가능
+DD-007
+Fault Event 재전송/순서
+Transition마다 한 개. 순서/재전송 TBD
+Gateway/Cluster/PC
+Loss/Reordering Test
+합의 후 수정 가능
+DD-008
+Light/Motor Timeout 값
+Door/Window 값을 복사하지 않음
+System/ECU Owner
+승인된 Timeout Policy
+별도 확정 필요
+DD-009
+신규 Body Command 입력/DBC 반영
+Routing v1.0의 VCU_Command Byte3 bit 24-31 후보;
+IFC-02~06 미반영
+VCU/Network/CAN
+DBC/Matrix 갱신과 상대 승인
+합의 전 수정 가능
+DD-010
+Gear/Brake/Window raw range 동기화
+Gear 0..3 normal, 4..6 reserved, 7 invalid; Brake
+invalid=N/A; Window raw6 reserved
+Network/Motor/Window
+DBC·Message Definition diff 및 Decode Test
+합의 후 수정 가능
+DD-011
+BODY_10ms slot/PID/70 ms Light slot
+10 ms slots, 100 ms supercycle, Light_Command
+slots 20/70
+LIN/Body
+Approved LDF/Matrix 및 Bus capture
+검토 후 수정 가능
+DD-012
+Logger Storage와 PC Transport
+Queue/Log Record 정의. Retention/Clear TBD
+PC/Diagnostics
+PC Tool과 Memory Policy
+별도 확정 필요
+DD-013
+DoorOpen/ReverseLamp invalid output
+1-bit destination fallback 0 또는 hold 미결
+Gateway/Body/Light/Cluster
+Route review와 Body_Status invalid 시험
+별도 확정 필요
+DD-014
+LIN ResponseError 처리
+3개 ResponseError 입력; error=1
+invalid/Fault/recovery 정책은 Draft
+LIN Common/Gateway/ECU owners
+LDF 원문 대조, fault ownership/recovery approval
+합의 후 수정 가능
+DD-015
+Signal Cache LIN writer/snapshot contract
+LIN RX writer Task, final validity API, clock/type,
+protection TBD
+Gateway SW/FreeRTOS/Test
+Access Rule AR-02/03/07/09 review 및
+concurrency/RX burst test
+구현 단계 확정
+이 상세설계는 구현 지향 문서지만, [초기값 - 수정 가능], [측정 후 확정], [검토 필요], [미정]으로 표시된 값은 Evidence와 상대 담당자 승인이 첨부되기 전까지 공식 Interface Freeze로
+취급하지 않는다.
+
+PAGE 35
+Gateway SW Architecture + Detailed Design
+FreeRTOS CAN-LIN Gateway | Architecture + Detailed Design
+Page 35
+Source Notes
+●
+02__메시지_정의서_ver1.2.xlsx: Message_Summary rows 24-36, CAN_Message_Definition rows 5-20, LIN_Frame_Definition rows 5-27, Fault_Timeout_Policy rows 5-31, Revision_History
+rows 5-24.
+●
+05__요구사항_명세서_ver1.2.xlsx: Requirements rows 5-64, Traceability rows 5-64, Open_Decisions rows 4-15, Sources rows 3-15.
+●
+03__기능_정의서_ver1.2.xlsx: Gateway ECU rows 31-60, Logger/PC rows 113-137.
+●
+04__시스템_기능_분석_ver1.2.xlsx: Gateway Communication/Health/Fault rows 16-26.
+●
+02__시스템 아키텍처 사양서.pdf: Sections 1-3, 4-8, 9.2-10.1, 11-13, especially pp. 5-22.
+●
+FreeRTOS_CAN_LIN_Project_핸드북_kr_초기버전.pdf: §§7.3, 8.2-8.5, 10.1-10.5, Appendix A.
+●
+03__CAN-LIN_D07_Fault_Failsafe_설계보고서_v1.0.pdf: §§3-8, 10-12.
+●
+01__통신사양서_ver1.2.xlsx: 통신 사양서 rows 6-56, 검토 항목 rows 18-49.
+●
+Gateway_Routing_Table_v1.0_최종 (1).xlsx: CAN_to_LIN, LIN_to_CAN, Gateway_Local_Processing, Decision_Baseline, Required_Interface_Changes, Consistency_Summary.
+●
+Gateway_Signal_Cache_Design_Final.xlsx: 01_Signal_Cache, 02_Cache_Structure, 03_Access_Rule.

@@ -1,0 +1,14 @@
+../Core/Src/freertos.c:50:13:wait_next	24	static
+../Core/Src/freertos.c:57:13:state_lock	8	static
+../Core/Src/freertos.c:64:13:state_unlock	8	static
+../Core/Src/freertos.c:69:6:MX_FREERTOS_Init	8	static
+../Core/Src/freertos.c:89:6:MotorRTOS_CaptureISR	48	static
+../Core/Src/freertos.c:101:6:MotorBoard_Transmit	48	static
+../Core/Src/freertos.c:109:6:CanRxTask	40	static
+../Core/Src/freertos.c:129:6:MotorControlTask	32	static
+../Core/Src/freertos.c:152:6:ActuatorTask	24	static
+../Core/Src/freertos.c:169:6:CanTxTask	40	static
+../Core/Src/freertos.c:189:6:StartDefaultTask	24	static
+../Core/Src/freertos.c:204:6:vApplicationMallocFailedHook	8	static
+../Core/Src/freertos.c:205:6:vApplicationStackOverflowHook	16	static
+../Core/Src/freertos.c:211:6:vApplicationGetIdleTaskMemory	24	static

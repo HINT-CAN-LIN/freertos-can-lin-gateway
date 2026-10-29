@@ -1,0 +1,536 @@
+PAGE 1
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+CAN/LIN GATEWAY PROJECT 
+D-07 Fault Handling & Fail-safe 
+설계 결정 보 고 서 
+현 재 까 지 설계 · 토의 · 의 사 결 정 종 합 본 
+문서 버전 v0.9 (Team Draft) 
+기 준 일 2026-09-12 
+기준 문서 CAN-LIN Gateway Handbook v1.0 
+대상 7 인 팀 설계 공유 / Architecture Review 
+문서 읽는 법 
+[확정]은 팀 설계 결정, [제안]은 다음 회의 확정 필요, [Handbook]은 기준 문서 고 정 사 항 입 니 다. 
+핸 드 북 에 없는 수 치 는 팀 결 정 으 로 명 확 히 분 리 했 습 니 다. 
+  
+PAGE 2
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+1. 팀원 5 분 요약 
+ 한 줄 결론 
+Gateway 는 통신/시 스 템 Fault 를 감지·관리·전 파 하 고, 실제 안 전 출 력 은 해당 
+ECU 가 직접 수 행 합 니 다. Gateway 가 Motor 에 Fail-safe 명 령 을 내 려 야 만 
+안 전 해 지 는 중앙집중 구조는 사용하지 않습니다. 
+ 
+항목 현재 결론 상태 
+책임 분리 Gateway = 시스템 Health/Fault 관리·전파 / 각 ECU = 실제 Fail-safe 출력·기능 Recovery 확정 
+VCU Timeout VCU_Command 10 ms expected, age > 30 ms → VCU_TIMEOUT  Handbook 
+Motor 안전동작 Motor 가 VCU_Command 를 직접 감시, Fault 시 TorqueApplied=0 / target_rpm=0, RPM 은 0 으로 수렴 확정 
+Fault State NORMAL / DEGRADED / FAIL_SAFE /  OFFLINE 4 개만 사용 확정 
+Recovery 통신 Fault 는 정상 조건 3 회 연속 확인 후 복구 팀 결정 
+Queue Drop QUEUE_DROP 자체는 DEGRADED, drop 횟수만으로 FAIL_SAFE 전환하지 않음 확정 
+다중 Fault 각 Fault 를 ACTIVE/CLEARED 로 독립 관리, 대표 State 는 FAIL_SAFE > OFFLINE > DEGRADED > 
+NORMAL 
+확정 
+표시 정책 Cluster = 대표 상태 + 주요 Fault / PC Tool = 모든 Active Fault + 상세 로그 확정 
+Gateway SW HealthTask 가 감시, FaultManager C 모 듈 이 Fault 상태/복구/우선순위 관리 확정 
+Critical Timeout 30 ms VCU Timeout 을 100 ms Health 주 기 에 만 의존하지 않고 deadline/event 경로로 즉시 처리 확정 
+UDS MVP 에는 미 포 함, M4/M5 이후 여유가 있 으 면 Stretch Goal 로 재검토 잠정 결정 
+ 
+ 가장 자주 헷갈린 부분 
+대표 System State는 Motor 를 멈추게 하는 명 령 이 아 닙 니 다. Motor 의 
+Fail-safe 는 Motor 가 직접 수 행 합 니 다. 대표 System State 는 Gateway 가 
+전체 Fault 심 각 도 를 요약해 Cluster/PC 에서 활 용 하 기 위한 상 태 입 니 다. 
+ 
+근거: Handbook 9.2, 10.1~10.5, 8.1~8.3, 1.2  
+  
+PAGE 3
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+2. 프로젝트 구조와 D-07 설계 목표 
+2.1 전체 네트워크 관점 
+PC Diagnostic Tool (CANable)  
+          │ 
+          ▼ 
+================ CAN BUS ================  
+   VCU        Motor        Gateway        Cluster  
+                            │ 
+                            │ LIN Master 
+                            ▼ 
+================ LIN BUS ================  
+                    Door ECU   Light ECU 
+ 
+ CAN 제어 영 역 과 LIN Body 영역을 Gateway 가 연결하며, Gateway 는 Routing 과 Health/Fault 감시를 동시에 수 행 합 니 다. 
+ 기본안은 Virtual Motor ECU이며 실제 모터·인 버 터 는 Stretch Goal 입니다. 
+ PC Diagnostic Tool은 CANable 을 통해 CAN 상태, Health/Fault, Logging, Fault Injection, Test를 수행합니다. 
+근거: Handbook 1.1~1.4, 11 장 
+2.2 D-07 이 해결해야 하는 질문 
+질문 이번 설 계 에 서 정한 방향 
+누가 Fault 를 감 지 하 는 가? Gateway 가 시 스 템/통신 Health 를 감 지 하 며, 안 전 이 필 요 한 ECU 도 필 요 한 입 력 을 직접 감 시 합 니 다. 
+누가 Fail-safe 를 실 행 하 는 가? 실제 안 전 출 력 은 해당 ECU 가 직접 수 행 합 니 다. 
+Fault 가 여러 개면? 모든 Fault 를 독립 보 존 하 고 대표 System State 만 Severity 로 요 약 합 니 다. 
+언제 정 상 으 로 복 구 하 는 가? 통신 Fault 는 정상 조건 3 회 연속 확인 후 복 구 합 니 다. 
+어 떻 게 외부에 알 리 는 가? Fault_Status 를 이용해 Cluster/PC 에 전 파 하 는 구조를 유 지 합 니 다. 
+30 ms Timeout 을 어 떻 게 제때 찾는가? 일반 Health 주 기 와 별 도 로 Critical deadline/event 감시 경 로 를 사 용 합 니 다. 
+ 
+ D-07 완료의 의미 
+Fault Detection 만 구 현 하 면 완료가 아닙니다. 감지 기준 → 상태 전이 → 
+Fail-safe → 외부 전파 → Recovery 까지 하나의 흐름으로 검 증 되 어 야 
+합 니 다. 
+ 
+근거: Handbook 10 장: Fault Handling 정의 및 15.6 Fault 추가 DoD 
+  
+PAGE 4
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+3. 책임 분리: Gateway 판단 vs ECU Fail-safe 
+3.1 최종 책임 경계 [확정] 
+구성요소 주 책임 하지 않는 것 
+Gateway 
+Timeout/Alive/Offline/Queue 등 시스템 Health 감지, Fault State 관리, 외부 
+전파 
+모든 ECU 의 실제 안전출력을 대신 실행하지 않음 
+Motor ECU VCU_Command 직접 수신/감시, VCU Fault 시 TorqueApplied=0 적용 Gateway 의 별도 Fail-safe 명령을 기 다 리 지 않음 
+VCU ECU 제어 명령 생성, Alive/정상 송신 Gateway FaultManager 역할 수행하지 않음 
+Cluster 대표 상태/주요 Fault 표시 Fault 원인 판정 주체가 아님 
+PC Tool 전체 Active Fault/Health 관찰·기록·시험 실시간 안전출력 실행 주체가 아님 
+ 
+3.2 토의 쟁점과 결정 이유 
+쟁점 검토한 방식 최종 판단 
+VCU Timeout 시 Motor 정지는 
+누가 트리거? 
+Gateway 가 Motor 에 Fail-safe 명령 / Motor 가 직접 
+VCU_Command 감시 
+Motor 직접 감시 + Gateway 독립 감시 
+왜 분산 구조인가? 
+Gateway 가 죽거나 지연되면 Motor 안 전 동 작 까 지 종속될 수 
+있음 
+안전동작을 Gateway 생 존 성 에 종속시키지 않기 위함 
+Gateway 역할은 단순 중계인가? 단순 Messenger / Network Health Manager  Timeout/Alive/Offline/Queue 를 판단하는 시스템 Health 
+Manager 
+ 
+3.3 VCU Timeout 실제 흐름 
+VCU_Command 정상 수신 중 
+      │ 
+      ├──────────────► Motor ECU: 마 지 막 수 신 시 간/Alive 감시 
+      │                         │ 
+      │                         └─ 30 ms 초과/critical invalid → Local Fail -safe 
+      │                                            → TorqueApplied = 0  
+      │ 
+      └──────────────► Gateway: 마 지 막 수 신 시 간/Alive 감시 
+                                │ 
+                                └─ VCU_TIMEOUT → FaultManager → Fault_Status → Cluster/PC  
+ 
+ TorqueApplied=0 의 의미 
+“모터 RPM 을 즉시 0 으로 강제”가 아 니 라 “구동 토크를 더 이상 적용하지 
+않음”입 니 다. Virtual Motor 모 델 에 서 는 target_rpm=0 으로 두고 현재 
+RPM 을 decay_to_zero()로 0 에 수 렴 시 킵 니 다. 
+ 
+PAGE 5
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+근거: Handbook 9.2 Virtual Motor, 10.1/10.5 VCU Timeout  
+  
+PAGE 6
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+4. Fault 감지 기준과 State Mapping 
+4.1 Handbook 고정 기준 
+Fault 감지 기준 Handbook Action / 전파 
+VCU_TIMEOUT VCU_Command expected 10 ms, age > 30 ms  Motor torque=0, Fault_Status → Cluster/PC  
+DOOR_ECU_OFFLINE Door_Status 100 ms, 3 cycle 연속 no response Door invalid/offline, Body_Status + Fault_Status → 
+Cluster/PC 
+ALIVE_ERROR AliveCounter 0..15 순환, 기대 다음값 불연속 해당 Message invalid, Fault_Status + log 
+QUEUE_DROP CANRxQueue 또는 EventQueue full KPI fail 또는 DEGRADED, Gateway_Status + log  
+ 
+근거: Handbook 10.1 표 10-1, 10.2 
+4.2 Fault State 4 개만 사용 [확정] 
+State 의미 대표 예 
+NORMAL 모든 age/alive 가 정상 정상 통신 
+DEGRADED 이상은 있으나 즉시 안전출력까지 요구하지 않는 상태 QUEUE_DROP, non-critical Alive Error 
+FAIL_SAFE 안전을 위해 실제 안 전 동 작 이 필요한 상태 VCU_TIMEOUT, critical fault 
+OFFLINE ECU/Node 통 신 이 사실상 끊긴 상태 Door 3-cycle no response 
+ 
+4.3 현재 Fault → State Mapping [확정/부분 미확정] 
+Fault State 비고 
+VCU_TIMEOUT FAIL_SAFE 확정 
+DOOR_ECU_OFFLINE OFFLINE 확정 
+QUEUE_DROP DEGRADED 확정 
+ALIVE_ERROR (Critical Message) FAIL_SAFE 정책 확정, Critical Message 목록은 미확정 
+ALIVE_ERROR (Non-critical Message) DEGRADED 정책 확정, 분류 목록은 미확정 
+ 
+ 남은 결정 
+Critical / Non-critical Message 목록은 아직 Freeze 하지 않 았 습 니 다. 
+“유효하지 않을 때 제어 안전에 직접 영향을 주는 메시지인가?”를 기 준 으 로 
+분 류 하 고 CAN Interface 담 당 과 리 뷰 해 야 합니다. 
+ 
+근거: Handbook 10.3 표 10-2 + 팀 D07-4 결정 
+  
+PAGE 7
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+5. Recovery 와 다중 Fault 관리 
+5.1 Recovery 기본 정책 [확정] 
+ 핵심 원칙 
+정상 Frame 1 개가 들 어 왔 다 고 즉시 정 상 복 귀 하 지 않습니다. 통신 Fault 는 
+정상 조건을 연속 확인한 뒤 복 구 합 니 다. 
+ 
+Fault 복구 조건 근거/상태 
+VCU_TIMEOUT 정상 VCU_Command + Valid + Alive 를 3 회 연속 확인 3 회 = 팀 결정 
+DOOR_ECU_OFFLINE 정상 Door Response + Alive 를 3 회 연속 확인 
+Detection 3-cycle 은 Handbook / 
+Recovery 3 회는 팀 결정 
+ALIVE_ERROR 정상 Alive sequence 를 3 회 연속 확인 3 회 = 팀 결정 
+QUEUE_DROP Queue Full 해소 + 추가 Drop 없음 + Queue Health 정상화 3-frame 규칙 미적용, 정량 정상화 기준 미확정 
+ 
+5.2 다중 Fault 독립 관리 [확정] 
+Active Fault Table 
+VCU_TIMEOUT       ACTIVE    → FAIL_SAFE  
+DOOR_OFFLINE      ACTIVE    → OFFLINE  
+QUEUE_DROP        ACTIVE    → DEGRADED  
+ALIVE_ERROR       CLEARED   → - 
+ 
+Representative System State = 가장 높은 Severity = FAIL_SAFE 
+ 
+상황 대표 System State 
+VCU_TIMEOUT + DOOR_OFFLINE + QUEUE_DROP 모두 ACTIVE FAIL_SAFE 
+VCU_TIMEOUT 만 복구, DOOR_OFFLINE + QUEUE_DROP ACTIVE  OFFLINE 
+Door 도 복구, QUEUE_DROP 만 ACTIVE DEGRADED 
+모든 Fault CLEARED NORMAL 
+ 
+ 대표 State 의 역할 
+대표 System State는 ECU Fail-safe 명령이 아니라 “현재 시스템 전체 
+심 각 도 요약”입 니 다. 실제 Fail-safe 는 각 ECU 가 자기 Fault 기 준 으 로 독립 
+수 행 합 니 다. 
+ 
+5.3 표시 정책 [확정] 
+PAGE 8
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+대상 표시 정책 
+Gateway 내부 모든 Fault 를 ACTIVE/CLEARED 로 보존 
+Cluster 대표 System State + 사 용 자 에 게 중요한 주요 Active Fault 표시 
+PC Diagnostic Tool 모든 Active Fault + Source/State/Recovery/History 등 상세 표시·기록 
+ 
+ Interface 주의 
+Cluster 에 SystemState 를 별도 CAN Signal 로 넣 을 지 는 아직 
+미 확 정 입 니 다. 새 Signal 추가/변경 시 CAN Matrix/DBC가 바 뀌 므 로 상대 
+담 당 자 리뷰 필요. 
+ 
+6. Gateway 내부 SW 구조 
+6.1 HealthTask + FaultManager 모듈 [확정] 
+CANRxTask / LINScheduler / Queue counters 
+                │ 
+                ▼ 
+           HealthTask 
+   - age / alive 확인 
+   - ECU online/offline 확인 
+   - Queue Health 확인 
+                │  함수 호출 
+                ▼ 
+          FaultManager (C Module) 
+   - Fault ACTIVE / CLEARED  
+   - Fault → State Mapping 
+   - Recovery counter/condition  
+   - 다중 Fault Severity 계산 
+                │ 
+                ├──► Fault Event / Logging 
+                └──► 대표 System State 
+ 
+항목 HealthTask FaultManager 
+정체 FreeRTOS Task 일반 C Module 
+누가 실행? FreeRTOS Scheduler 가 실행 HealthTask 등 호 출 자 가 함수를 호출할 때 실행 
+주 역할 현재 통신/Health 이상을 검사 Fault 상태·복구·우 선 순 위 정책을 관리 
+Priority Task Priority 존재 독립 Priority 없음 
+장점 감시 시점을 관리 Fault 정책을 분 리 해 단위 테 스 트/확장 용이 
+ 
+6.2 왜 별도 FailSafeTask 를 만들지 않는가? 
+PAGE 9
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+ 실제 Fail-safe 출력은 Motor 등 해당 ECU 가 직접 수 행 하 므 로 Gateway에 “FailSafeTask”를 하나 더 둘 필요성이 낮습니다. 
+ Fault 정책은 FaultManager 모듈로 분리하면 별도 Task/Queue/동기화 복잡도를 추 가 하 지 않고 테 스 트 할 수 있 습 니 다. 
+ Gateway 의 역할은 system health 판단·상태 관리·전파이며, ECU local action의 실행 컨 텍 스 트 를 대 신 하 지 않 습 니 다. 
+6.3 30 ms VCU Timeout vs 100 ms Health 주기 문제 [확정] 
+ 발견된 설계 충돌 
+Handbook 예 시 에 서 는 Health 100 ms Task 주 기 를 제 시 하 지 만, 
+VCU_TIMEOUT 기 준 은 age > 30 ms 입 니 다. HealthTask 가 100 
+ms 마다 polling 만 하면 30 ms Fault 를 늦게 검 출 할 수 있습니다. 
+ 
+정상 VCU_Command 수신 
+       │ 
+       └─ Critical deadline 감시 갱신 
+                    │ 
+             30 ms 초과 Event 
+                    │ 
+                    ▼ 
+            HealthTask 즉시 Wake-up 
+                    │ 
+             실제 age 재 확 인 
+                    │ 
+                    ▼ 
+               FaultManager 
+                    │ 
+               VCU_TIMEOUT 
+ 
+ D07-8 결정 
+일반 Health 감 시 는 기존 HealthTask 가 담당하되, Health 기본 주 기 보 다 
+짧은 Critical Timeout은 deadline/event 기반 감시 경 로 를 사 용 합 니 다. 
+Software Timer/Task Notification 등 구체 API 는 Gateway SW 
+Architecture 단 계 에 서 선 택 합 니 다. 
+ 
+7. Fault 외부 전파와 CAN Message 역할 
+7.1 Handbook 기준 Message 역할 
+Message 주기 주 역할 
+Gateway_Status 0x300 100 ms Gateway Health, Queue usage, Alive 등 주기 상태 전달 
+Fault_Status 0x310 Event Fault code, ECU offline, recovery state 를 Cluster/PC 에 전달 
+ 
+근거: Handbook 5.2 표 5-1 
+7.2 현재 D07-9 제안안 [아직 미확정] 
+PAGE 10
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+ 추천 구조 
+Fault 하나의 ACTIVE/CLEARED 상 태 가 바뀔 때 마 다 Fault_Status 
+Event 를 개별 전 송 하 고, Cluster/PC 가 수신 Event 를 이용해 Active Fault 
+목 록 을 갱 신 하 는 방 식 입 니 다. 
+ 
+VCU_TIMEOUT : CLEARED → ACTIVE  
+        ↓ 
+Fault_Status Event #1 
+        ↓ 
+Cluster / PC : VCU_TIMEOUT ACTIVE 저장 
+ 
+DOOR_OFFLINE : CLEARED → ACTIVE  
+        ↓ 
+Fault_Status Event #2 
+        ↓ 
+Cluster / PC : DOOR_OFFLINE ACTIVE 추가 
+ 
+VCU_TIMEOUT : ACTIVE → CLEARED  
+        ↓ 
+Fault_Status Event #3 
+        ↓ 
+Cluster / PC : VCU_TIMEOUT 제거/복구 표시 
+ 
+확정된 것 아직 정해야 할 것 
+Fault_Status 는 Event Message 이며 Cluster/PC 가 수신 대상 Fault_Status 에 Active/Cleared 를 어떤 Signal/bit 로 넣을지 
+외부 Fault 전파는 반드시 구 현 해 야 함 Source, Severity, Recovery, Multi -fault 표현 방식 
+Gateway_Status 는 주기 Health Message 대표 SystemState 를 Gateway_Status 에 넣을지 여부 
+ 
+ Interface Change 
+Fault_Status/Gateway_Status Signal을 새로 추가·변경하면 CAN 
+Matrix → Review → DBC → Firmware/PC Tool/Test → PR/HW 
+Evidence 순으로 변 경 해 야 합 니 다. 상대 담 당 자 리뷰 필요. 
+ 
+근거: Handbook 4.3 Interface Change, 5.2, 10.1/10.5  
+  
+PAGE 11
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+8. QUEUE_DROP 처리 정책 
+8.1 Queue Drop 이 무엇인가? 
+CAN Frame 수신 
+    ↓ 
+CAN HW FIFO / RX Interrupt  
+    ↓ 
+CAN ISR 
+    ↓ xQueueSend 실패 (Queue Full) 
+CANRxQueue  ───────► CANRxTask  
+ 
+→ HW 에서 Frame 을 받 았 더 라 도 SW Queue 가 Full 이면 상위 처리 전에 Frame 이 유실될 수 있음 
+ 
+ CAN Hardware FIFO 와 FreeRTOS Queue는 서로 다른 계 층 입 니 다. 
+ ISR 은 최소 작업만 수 행 하 고 Queue 로 Task 에 넘 기 는 것이 Handbook 기본 구 조 입 니 다. 
+ Queue Drop 이 반복되면 특정 Message 의 Alive 누락/age 증가가 발생해 2 차 Fault 로 이 어 질 수 있 습 니 다. 
+근거: Handbook 8.1~8.3, 10.1 
+8.2 D07 Queue 정책 [확정] 
+ 결정문 
+QUEUE_DROP 자 체 는 DEGRADED 로 관리합니다. Drop 횟수만을 
+기 준 으 로 별도 FAIL_SAFE 임 계 값 을 두지 않 습 니 다. 반복 Drop 때문에 
+Critical Message Timeout/Alive Error가 발생하면 “그 2 차 Fault”의 
+State 로 전 이 합 니 다. 
+ 
+상황 처리 
+Queue 1 회 Full / Drop QUEUE_DROP ACTIVE → DEGRADED  
+Drop 반복, 하지만 Critical Timeout 없음 DEGRADED 유지 + log/KPI 
+Drop 영향으로 VCU_Command age > 30 ms VCU_TIMEOUT 발생 → FAIL_SAFE 
+Queue 가 정상화됨 추가 Drop 없음 + Queue Health 정 상 화 후 QUEUE_DROP 
+Recovery 
+ 
+ 미결정 
+Queue Health “정 상 화”의 정량 기준(예: occupancy %, no-drop 
+duration)은 아직 만들지 않 았 습 니 다. 임의 수 치 를 넣지 않고 실제 Queue 
+depth/부하 설계와 함께 Gateway SW Architecture에서 Freeze 합니다. 
+ 
+  
+PAGE 12
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+9. UDS / MVP / Stretch Goal 판단 
+9.1 개념 정리 
+용어 프 로 젝 트 에 서 의 의미 
+MVP 
+이 프로젝트가 성공했다고 말할 수 있는 최소 필수 완성 범위. CAN/LIN Routing, Fault/Fail-safe/Recovery, PC Tool, Test 가 
+핵심. 
+Stretch Goal MVP 를 안 정 적 으 로 끝낸 뒤 시간과 인력이 남을 때 추가하는 확장 목표. 
+UDS 
+PC Tester 가 ECU 에 진단 요청을 보내고 ECU 가 진단 정보를 응 답 하 는 정식 차량 진단 프로토콜 계열. 현재 Handbook 은 UDS 
+자체를 필수로 지정하지 않음. 
+ 
+9.2 Gateway 진 단 과 UDS 진단의 차이 
+구분 Gateway Fault/Health 판단 UDS 를 붙인 PC 진단 
+누가 판단? Gateway HealthTask/FaultManager 가 자동 판단 PC 는 Gateway/ECU 에 진단 요청 
+예 VCU_TIMEOUT, ALIVE_ERROR, Door Offline 판단 “저장된 Fault 정보 읽기” 같은 요청/응답 
+필수성 MVP 핵심 MVP 필수 아님 
+관계 Fault 를 만들어/저장하는 쪽 이미 판단된 정보를 읽거나 진단 동작을 요청하는 쪽 
+ 
+9.3 장단점과 현재 판단 
+장점 단점 
+자동차 진단 구조 경 험 을 포트폴리오에 추가 가능 요청/응답, ECU Handler, Test 범위가 새로 늘어남 
+FaultManager 와 PC Tool 을 진단 인터페이스로 연결 가능 CAN/LIN Gateway 핵심 개발 일정 분산 위험 
+정식 진단 관점의 설계 경험 Handbook 기본 MVP 범위 밖이며 상용 진단 규격 전체 구현은 제외 
+ 
+ 현재 합리적 판단 
+UDS 는 MVP 에서 제 외 합 니 다. 먼저 M4 Fault Handling 과 M5 
+Integration 을 안 정 적 으 로 PASS 한 뒤, 일정 여유가 있 으 면 “최소 진단 
+시 나 리 오” 수준의 Stretch Goal 로 재 검 토 합 니 다. 
+ 
+근거: Handbook 1.2: 정식 차량 진단 프 로 토 콜 = Stretch Goal, 상용 진단 규격 전체 구현 = MVP 제외 
+  
+PAGE 13
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+10. D-07 Decision Log 
+ID 쟁점 결정 상태 
+D07-1 책임 경계 Gateway = 시 스 템 Fault 감지/상태/전파, 각 ECU = 실제 Fail-safe/기능 Recovery 확정 
+D07-2 Fail-safe Trigger Motor 직접 VCU_Command 감시 + Gateway 독립 감시, 별도 GW→Motor Fail-safe 명령 없음 확정 
+D07-3 Fault State NORMAL / DEGRADED / FAIL_SAFE / OFFLINE  확정 
+D07-4 Fault Mapping 
+VCU_TIMEOUT→FAIL_SAFE, Door→OFFLINE, Queue→DEGRADED, Alive 는 Critical 
+여부에 따라 분기 
+확정(분 류 목 록 미정) 
+D07-5-1 Recovery 원칙 정상 1 회 수 신 으 로 즉시 복 구 하 지 않음 확정 
+D07-5-2 Recovery 횟수 통신 Fault 정상 조건 3 회 연속 확정(팀 신 규 값) 
+D07-5-3 QUEUE_DROP DEGRADED 유지, drop count 만 으 로 FAIL_SAFE 임 계 값 없음 확정 
+D07-6 다중 Fault Fault 별 ACTIVE/CLEARED 독립 관리, 대표 State = 최고 Severity 확정 
+D07-7 Gateway 내부 구조 HealthTask + 별도 FaultManager C Module 확정 
+D07-8 Critical Timeout Health 기본 주 기 에 종 속 하 지 않는 deadline/event 경로 확정 
+D07-9 Fault 전파 방식 Fault 상태 변 화 마 다 Fault_Status Event 개별 전송 제안 / 미 확 정 
+EXT-UDS 정식 진단 프 로 토 콜 MVP 제외, M4/M5 이후 Stretch Goal 재 검 토 잠정 결정 
+ 
+10.1 Handbook 기준과 팀 신규 결정 구분 
+Handbook 고정/기준 팀에서 새로 정한 것 
+VCU_Command 10 ms expected / 30 ms timeout  Recovery 정상 연속 N=3 
+Door_Status 100 ms / 3-cycle no response Motor 직접 감시 + Gateway 독립 감시 책임 경계 
+Alive 0..15 불연속 → ALIVE_ERROR Critical/Non-critical Alive Error Severity 정책 
+4 개 Fault State 다중 Fault Severity Priority 
+Fault_Status → Cluster/PC 외부 전파 HealthTask + FaultManager 모듈 분리 
+HealthTask 가 age/alive/queue/online/Fault state 관리 30 ms Critical deadline/event 감시 보완 
+ 
+  
+PAGE 14
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+11. 미결정 항목과 다음 Architecture Review 순서 
+ 중요 
+아래 항목은 아직 “확 정 된 설계”로 전달하면 안 됩니다. 다음 팀 회 의 에 서 
+순 서 대 로 Freeze 해야 합니다. 
+ 
+우선순위 미결정 항목 결정 시 영향 
+1 D07-9 Fault_Status Event 상세 방식 확정 Gateway / Cluster / PC Tool 
+2 Critical vs Non-critical Message 목록 Fault State / Motor·VCU·Gateway 판단 
+3 Fault_Status Signal 구성 (Code, Source, Active/Cleared, Recovery 등) CAN Matrix / DBC / Cluster / PC Tool  
+4 대표 SystemState Signal 을 CAN 에 실을지 여부 Gateway_Status 또는 Fault_Status Interface 
+5 Queue Health 정량 Recovery 기준 Queue depth / Task design / KPI 
+6 FAIL_SAFE Recovery 의 “state reset” 상세 의미 Gateway FaultManager / Motor Local Recovery  
+7 Fault History/Clear 정책 PC Tool / UDS Stretch Goal 연계 가능 
+8 UDS 최종 Go/No-Go M4/M5 결과와 잔여 일정 기반 
+ 
+11.1 변경 관리 원칙 
+Jira Issue 
+  → Matrix Update 
+  → 상대 담 당 자 Review 
+  → DBC / LIN Schedule Update  
+  → Firmware / PC Tool / Test Update  
+  → PR Review 
+  → HW / Automated Evidence  
+  → Done 
+ 
+ 필수 문구 
+CAN/LIN Interface 변 경 은 반 드 시 상대 담당자 리뷰 필요. Merge 만으로 
+Done 처리하지 않 습 니 다. 
+ 
+근거: Handbook 4.3 Interface Change, 15.6~15.11 
+  
+PAGE 15
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+12. 검증 시나리오와 구현 착수 기준 
+12.1 최소 Fault Test Set 
+Test 입력/조건 기대 결과 
+VCU Timeout VCU_Command 를 30 ms 초과 미 수 신 
+Motor local torque=0, Gateway VCU_TIMEOUT, FAIL_SAFE, 
+Cluster/PC 전파 
+VCU Recovery 정상 VCU_Command + Valid + Alive 3 회 연속 VCU_TIMEOUT CLEARED, 잔여 Fault 기 준 으 로 System State 재 계 산 
+Door Offline Door_Status 3 cycle 연속 no response 
+DOOR_ECU_OFFLINE, Door invalid/offline, OFFLINE, Cluster/PC 
+전파 
+Door Recovery 정상 Door Response + Alive 3 회 연속 Door Fault CLEARED, 잔여 Fault 기준 재 계 산 
+Alive Error Alive 값 불 연 속 Message invalid, Critical/Non-critical 정책에 따라 State 전이 
+Queue Drop CANRxQueue/EventQueue full 재현 QUEUE_DROP DEGRADED + log, drop 자 체 로 FAIL_SAFE 금지 
+Multi-fault VCU Timeout + Door Offline + Queue Drop 세 Fault 모두 ACTIVE 보존, 대표 State FAIL_SAFE 
+Highest fault clear 위 상 태 에 서 VCU 만 복구 System State 가 OFFLINE 으로 내 려 가 며 나 머 지 Fault 유지 
+ 
+근거: Handbook 10 장, 12.3/12.4, 15.6 표 15-7 + 팀 Recovery/다중 Fault 결정 
+12.2 Jira Task 분할 제안 (1~3 일 크기) 
+예시 Task 완료조건 예 
+GW-xx FaultManager skeleton Fault enum/table, Set/Clear/GetSystemState 단위 테스트 PASS 
+GW-xx Health input adapters age/alive/queue/online 입력을 FaultManager 에 연결 
+GW-xx Critical VCU timeout path 30 ms threshold 재현 + HealthTask wake-up evidence 
+MOTOR-xx Local VCU fail-safe VCU timeout 시 TorqueApplied=0, target_rpm=0, recovery test  
+GW/CLUSTER/PC Fault propagation Fault_Status 수신/표시/로그 E2E evidence 
+TEST-xx Fault regression timeout/offline/alive/queue/multi-fault/recovery pytest 결과 
+ 
+12.3 Fault 기능 Done 조건 
+ Fault code 와 threshold 가 설계/Matrix 와 일 치 해 야 합 니 다. 
+ Fail-safe action 이 실제로 재현되어야 합니다. 
+ Cluster/PC 외부 전 파 가 확 인 되 어 야 합 니 다. 외부 전파가 빠지면 완 료 로 보지 않습니다. 
+ Recovery 조건과 Recovery log 가 재현되어야 합 니 다. 
+ PR Review + HW/Automated Test Evidence + 문서/Jira 업 데 이 트 까 지 완 료 되 어 야 합 니 다. 
+근거: Handbook 15.6 표 15-6/15-7, 14 장 Step 20~23 
+  
+PAGE 16
+CAN/LIN Gateway · D-07 Fault Handling & Fail-safe 
+Team Design Report v0.9 · 2026-09-12 
+13. 팀 공유용 최종 문장 
+ 회의 시작 시 30 초 요약 
+“D-07 은 Gateway 가 Fault 를 중 앙 에 서 모두 실 행 하 는 구조가 아 닙 니 다. 
+Gateway 는 네트워크 Health 를 감지하고 Fault 를 관리·전파하며, 실제 
+안 전 출 력 은 해당 ECU 가 직접 수 행 합 니 다. Fault 는 
+ACTIVE/CLEARED로 독립 관리하고 대표 System State 는 
+요 약 용 입 니 다. 통신 Recovery는 3 회 연속 정상 확 인 으 로 정했고, 
+Gateway 는 HealthTask 와 FaultManager 모 듈 로 분 리 합 니 다. 30 ms 
+Critical Timeout 은 100 ms Health polling에 종속시키지 않습니다.” 
+ 
+13.1 팀원이 구현 전에 반드시 확인할 것 
+확인 항목 체크 
+내가 수 정 하 는 Fault 기 준 이 Handbook 고 정 값 인 가, 팀 신규 결 정 인 가? □ 
+CAN/LIN Signal/Message/PID 를 바 꾸 는 가? → 상대 담당자 리뷰 필요 □ 
+Fault 감지 후 Cluster/PC 전 파 까 지 있 는 가? □ 
+Recovery 조 건 과 Test Evidence 가 있 는 가? □ 
+Merge 이후 실제 Test 를 수 행 했 는 가? □ 
+ 
+13.2 기준 문서 인덱스 
+Handbook 위치 본 보 고 서 에 서 사용한 내용 
+1.2 범위와 명시적 제외 MVP / Stretch Goal / 정식 진단 프로토콜 범위 
+4.3 변경 추적 흐름 Interface Change 절차 
+5.1~5.2 CAN Matrix Gateway_Status / Fault_Status / Message 규칙 
+8.1~8.4 Gateway FreeRTOS HealthTask, Queue, ISR, Signal Cache 구조 
+9.2 Virtual Motor TorqueApplied=0, target_rpm=0, RPM decay  
+10.1~10.5 Fault Handling Fault 기준, State, Recovery, 전파, Injection 
+14 장 Step 20~23 Fault / PC Tool / pytest 구현 단계 
+15.6~15.11 DoD, Branch/PR/Review/Test/Done 규칙 
+ 
+— END OF CURRENT DESIGN BASELINE — 
+다음 개정 시: D07-9 확정 → Fault_Status Signal Freeze → Critical Message 분류 → Queue Recovery 기준 → Fault Test Plan Freeze 
