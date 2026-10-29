@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<cangaroo-workspace workspace-version="1" cangaroo-version="0.7.0">
+  <tabs>
+    <tab type="TraceWindow" title="AliveCounter - load cluster_cyclic.py in Script" mode="aggregated" TimestampMode="0" ActiveTab="0">
+      <AggregatedTraceView SortColumn="1" />
+      <TraceFilter showTx="1" showRx="1" />
+    </tab>
+  </tabs>
+  <setup>
+    <network name="Cluster CAN">
+      <interfaces>
+        <interface driver="SLCAN" name="COM7" bus-type="can" type="can" configure="1" bitrate="500000" sample-point="875" can-fd="0" listen-only="0" one-shot="0" enabled="1" />
+      </interfaces>
+      <databases>
+      </databases>
+    </network>
+  </setup>
+</cangaroo-workspace>

@@ -1,0 +1,2 @@
+../Middlewares/Third_Party/lvgl/src/widgets/button/lv_button.c:50:12:lv_button_create	1
+../Middlewares/Third_Party/lvgl/src/widgets/button/lv_button.c:62:13:lv_button_constructor	1

@@ -1,0 +1,5 @@
+../Middlewares/Third_Party/lvgl/src/draw/sw/blend/lv_draw_sw_blend_to_a8.c:165:28:lv_draw_sw_blend_color_to_a8	17
+../Middlewares/Third_Party/lvgl/src/draw/sw/blend/lv_draw_sw_blend_to_a8.c:240:28:lv_draw_sw_blend_image_to_a8	3
+../Middlewares/Third_Party/lvgl/src/draw/sw/blend/lv_draw_sw_blend_to_a8.c:302:35:a8_image_blend	21
+../Middlewares/Third_Party/lvgl/src/draw/sw/blend/lv_draw_sw_blend_to_a8.c:368:35:mask_only_image_blend	17
+../Middlewares/Third_Party/lvgl/src/draw/sw/blend/lv_draw_sw_blend_to_a8.c:650:44:drawbuf_next_row	1

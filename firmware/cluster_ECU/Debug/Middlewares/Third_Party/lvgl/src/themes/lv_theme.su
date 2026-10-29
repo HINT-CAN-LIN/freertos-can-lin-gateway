@@ -1,0 +1,16 @@
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:40:14:lv_theme_get_from_obj	16	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:48:14:lv_theme_create	16	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:54:6:lv_theme_delete	16	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:59:6:lv_theme_copy	16	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:66:6:lv_theme_apply	24	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:78:6:lv_theme_set_parent	16	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:85:6:lv_theme_set_apply_cb	16	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:92:6:lv_theme_set_user_data	16	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:98:19:lv_theme_get_font_small	24	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:104:19:lv_theme_get_font_normal	24	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:110:19:lv_theme_get_font_large	24	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:116:12:lv_theme_get_color_primary	24	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:122:12:lv_theme_get_color_secondary	24	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:128:8:lv_theme_get_user_data	16	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:148:13:apply_theme	24	static
+../Middlewares/Third_Party/lvgl/src/themes/lv_theme.c:159:13:apply_theme_recursion	24	static

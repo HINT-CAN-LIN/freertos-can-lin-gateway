@@ -1,0 +1,15 @@
+../Middlewares/Third_Party/lvgl/include/lvgl/stdlib/lv_string.h:73:20:lv_memzero	16	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.h:105:20:lv_array_is_empty	16	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.c:36:13:lv_array_init	32	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.c:51:6:lv_array_init_from_buf	24	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.c:64:6:lv_array_deinit	16	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.c:75:6:lv_array_copy	24	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.c:124:6:lv_array_shrink	16	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.c:131:13:lv_array_remove	32	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.c:157:13:lv_array_remove_unordered	24	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.c:184:13:lv_array_erase	40	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.c:210:6:lv_array_resize	24	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.c:230:13:lv_array_concat	24	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.c:263:13:lv_array_push_back	24	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.c:285:8:lv_array_at	16	static
+../Middlewares/Third_Party/lvgl/src/misc/lv_array.c:295:13:lv_array_assign	32	static

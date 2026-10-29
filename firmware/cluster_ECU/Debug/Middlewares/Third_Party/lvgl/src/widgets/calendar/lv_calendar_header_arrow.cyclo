@@ -1,0 +1,4 @@
+../Middlewares/Third_Party/lvgl/src/widgets/calendar/lv_calendar_header_arrow.c:56:12:lv_calendar_add_header_arrow	2
+../Middlewares/Third_Party/lvgl/src/widgets/calendar/lv_calendar_header_arrow.c:69:13:my_constructor	2
+../Middlewares/Third_Party/lvgl/src/widgets/calendar/lv_calendar_header_arrow.c:108:13:month_event_cb	9
+../Middlewares/Third_Party/lvgl/src/widgets/calendar/lv_calendar_header_arrow.c:151:13:value_changed_event_cb	6
