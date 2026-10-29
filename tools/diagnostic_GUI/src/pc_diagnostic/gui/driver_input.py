@@ -9,9 +9,11 @@ from time import time
 ACCELERATOR_MIN = 0.0
 ACCELERATOR_MAX = 100.0
 GEAR_CHOICES = ("P", "N", "D", "R")
-IGNITION_CHOICES = ("OFF", "ON", "RUN")  # 내부 문자열이며 CAN Enum Encoding은 TBD다.
+IGNITION_CHOICES = ("OFF", "ON", "RUN")
 WINDOW_CHOICES = ("OPEN", "CLOSE")
 LIGHT_CHOICES = ("ON", "OFF")
+DOOR_CHOICES = ("LOCK", "UNLOCK")
+STEERING_CHOICES = ("CENTER", "LEFT", "RIGHT")
 HISTORY_CAPACITY = 128  # PC 메모리 표시 상한; CAN 주기/Timeout과 무관하다.
 MOCK_MODE = "Mock"
 LIVE_MODE = "Live"
@@ -34,7 +36,9 @@ class DriverInputs:
     gear: str | None = None
     window: str | None = None
     light: str | None = None
-    ignition: str | None = None  # 기존 위치 인자를 보존하기 위해 마지막에 추가한다.
+    ignition: str | bool | None = None
+    door: str | None = None
+    steering_direction: str | None = None
 
     def validated(self):
         # 미선택과 OFF/0을 구분하고, 범위 밖 값을 조용히 보정하지 않는다.
@@ -42,11 +46,16 @@ class DriverInputs:
         if value is not None and (type(value) not in (int, float)
                                   or not ACCELERATOR_MIN <= value <= ACCELERATOR_MAX
                                   or not isfinite(value)):
-            raise ValueError("Accelerator must be a finite number in Mock range 0..100%.")
+            raise ValueError("Accelerator must be a finite number in range 0..100%.")
         if self.brake is not None and type(self.brake) is not bool:
-            raise ValueError("Brake must be an explicit Mock ON/OFF value.")
-        for name, choices in (("gear", GEAR_CHOICES), ("window", WINDOW_CHOICES), ("light", LIGHT_CHOICES),
-                              ("ignition", IGNITION_CHOICES)):
+            raise ValueError("Brake must be an explicit ON/OFF value.")
+        # bool remains accepted for existing callers; the GUI uses explicit states.
+        if (self.ignition is not None and type(self.ignition) is not bool and
+                (type(self.ignition) is not str or self.ignition not in IGNITION_CHOICES)):
+            raise ValueError("Ignition must be OFF, ON, or RUN.")
+        for name, choices in (("gear", GEAR_CHOICES), ("window", WINDOW_CHOICES),
+                              ("light", LIGHT_CHOICES), ("door", DOOR_CHOICES),
+                              ("steering_direction", STEERING_CHOICES)):
             value = getattr(self, name)
             if value is not None and (type(value) is not str or value not in choices):
                 raise ValueError(f"Unsupported Mock {name} choice.")

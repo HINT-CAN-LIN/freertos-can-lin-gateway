@@ -97,43 +97,38 @@ def polish_mapping(view, *, ecu=False):
 
 
 def polish_driver(view):
-    # 기존 입력 모델과 ChoiceStrip을 재사용하고 UART 상태는 연결 가능 여부만 표시한다.
+    # Driver UI에는 UART 포트/키보드 컨트롤이 함께 있어 고정 layout index로 재배치하지 않는다.
+    # 기존 history 상세 표시와 choice-strip은 각 입력 카드의 소유 layout에 유지한다.
     view.choice_strips = {}
-    for name, choices in (("ignition", ("OFF", "ON", "RUN")), ("brake", ("OFF", "ON")), ("gear", ("P", "N", "D", "R"))):
+    for name, choices in (("ignition", ("OFF", "ON", "RUN")), ("brake", ("OFF", "ON")),
+                          ("gear", ("P", "N", "D", "R"))):
         combo = getattr(view, name + "_combo")
         strip = ChoiceStrip(combo, choices, view)
-        form = view._input_boxes[0].layout()
-        form.replaceWidget(combo, strip)
+        view._input_boxes[0].layout().replaceWidget(combo, strip)
         combo.hide()
         view.choice_strips[name] = strip
     body_form = view._input_boxes[1].layout()
-    for name, choices, buttons in (
-        ("window", ("OPEN", "CLOSE"), (view.window_open_button, view.window_close_button)),
-        ("light", ("ON", "OFF"), (view.light_on_button, view.light_off_button)),
+    for row_index, name, choices, buttons in (
+        (0, "window", ("OPEN", "CLOSE"), (view.window_open_button, view.window_close_button)),
+        (1, "light", ("ON", "OFF"), (view.light_on_button, view.light_off_button)),
     ):
-        row = body_form.itemAt(0 if name == "window" else 1, body_form.ItemRole.FieldRole).layout()
+        row = body_form.itemAt(row_index, body_form.ItemRole.FieldRole).layout()
         take_items(row)
         strip = ChoiceStrip(getattr(view, name + "_combo"), choices, view, buttons=buttons)
         row.addWidget(strip)
         view.choice_strips[name] = strip
+    view.configure_history_table_display()
     layout, items = reset_page(view)
-    caption(layout, "UART Driver Input · PC ↔ VCU · MOCK ONLY · Protocol PENDING · UART TX/RX Disabled")
-    put_item(layout, items[6])  # Mock Apply/Reset은 좁은 화면에서도 앞에 둔다.
-    put_item(layout, items[1])  # UART 비활성 상태를 Driver 페이지에서 항상 식별한다.
-    put_item(layout, items[4])
-    result_box = items[7].widget()
-    result_layout = result_box.layout()
-    result_layout.removeWidget(view.accepted_label)
-    view.receipt_summary = QLabel()
-    result_layout.insertWidget(1, view.receipt_summary)
+    caption(layout, "PC → VCU UART · ACK는 VCU 패킷 검증 응답 · CAN TX는 계속 차단")
+    put_item(layout, items[5])  # Apply/Reset 및 UART 연결
+    put_item(layout, items[3], 1)  # 입력 카드
+    put_item(layout, items[4])  # torque 관측 안내
+    put_item(layout, items[6])  # 요청/ACK 결과
+    fold(view, layout, "Input source / approval / UART receipt details", [items[0], items[1], items[2]])
     put_item(layout, items[7])
-    fold(view, layout, "Mock input source / approval / receipt details",
-         [items[0], items[2], items[3], items[5], QWidgetItem(view.accepted_label)])
-    put_item(layout, items[8])
-    caption(layout, "Selected PC input history · full values / result; ECU response remains unverified")
-    put_item(layout, items[10])
-    view.history_table.setMinimumHeight(HISTORY_MIN_HEIGHT)
-    put_item(layout, items[9], 1)
+    caption(layout, "Selected PC input history · ECU response remains unverified")
+    put_item(layout, items[8], 1)
+    put_item(layout, items[9])
     sync_driver_presentation(view)
 
 def polish_graph(view):

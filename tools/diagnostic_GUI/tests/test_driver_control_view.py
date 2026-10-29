@@ -20,7 +20,7 @@ def test_panel_initial_state_does_not_require_receiver_or_dbc(window_factory):
     assert window.tabs.tabText(window.tabs.indexOf(view)) == "Driver Control"
     assert view.model.state == InputState.NOT_CONFIGURED
     assert not view.live_tx_button.isEnabled() and view.apply_button.isEnabled()
-    assert "UART" in view.approval_label.text() and "pending approval" in view.approval_label.text()
+    assert "115200 8N1" in view.approval_label.text() and "100 ms TX" in view.approval_label.text()
     assert "ECU Response Not Verified" in view.ecu_label.text()
     assert "No Data" in view.torque_label.text()
     assert window.worker is None
@@ -115,7 +115,7 @@ def test_live_source_discards_mock_and_direct_slots_remain_blocked(window_factor
         view.choose_body(view.window_combo, "OPEN")
         QTest.mouseClick(view.live_tx_button, CLICK)
     assert calls == [] and not view.apply_button.isEnabled()
-    assert "UART TX DISABLED" in view.state_label.text()
+    assert "Live TX Blocked" in view.state_label.text()
     window.connection_view.mode_combo.setCurrentText("Mock")
     view.model._adapter_factory = MockDriverAdapter
     assert view.model.state == InputState.NOT_CONFIGURED and view.apply_button.isEnabled()

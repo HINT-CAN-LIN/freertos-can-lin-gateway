@@ -66,7 +66,7 @@ class DashboardView(QWidget):
                                          [QWidgetItem(self.network_view)])
         self.scope_label = role(QLabel(
             "Network / KPI: observed RX panel above · 실제 Fault Injection: Not Implemented\n"
-            "Driver Input: Mock only / UART TX Disabled / Protocol Pending"), "warning")
+            "Driver Input: VCU UART is available when connected · CAN TX remains blocked"), "warning")
         self.scope_label.setWordWrap(True)
         layout.addWidget(self.scope_label)
         layout.addStretch()

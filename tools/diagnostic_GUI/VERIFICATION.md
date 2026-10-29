@@ -2495,3 +2495,11 @@ Git add/Commit/Push/PR/Merge/Jira등록·Done 미실행.
 - After 1280×920: `hint48-phase3n4-20261017/native-final/driver-uart-1280x920.png`
 
 Evidence is stored outside the Repository. It is native Windows Qt capture and does not demonstrate physical UART/CAN hardware operation.
+
+## 2026-10-29 — PC UART Diagnostic GUI integration
+
+- Merged the PC-side VCU UART frame codec, serial worker, connection log, Driver Control fields (including door/window and keyboard steering), and protocol tests into `tools/diagnostic_GUI`; kept the existing fault-injection and detailed input-history features.
+- UART protocol checks: CRC-8/ATM check vector, 15-byte driver-input encoding, and ACK decoding passed using the PC tool virtual environment.
+- Offscreen Qt smoke: Driver Control instantiated, UART controls rendered, right-arrow steering indicator changed to RIGHT and returned to CENTER on key release, and Mock Apply succeeded. No serial connection or CAN monitor was opened.
+- `python3 -m compileall` could not write bytecode because this host redirects cache output to a protected macOS cache directory. Full pytest also could not run: pytest is absent from the available Python environment and package-index DNS/network access is unavailable.
+- Physical USB-UART/VCU ACK, VCU firmware compatibility, 500 ms timeout, Gateway/CAN propagation, and actuator behavior are NOT VERIFIED. The current checkout has no VCU application sources. CAN TX remains blocked in the PC GUI.

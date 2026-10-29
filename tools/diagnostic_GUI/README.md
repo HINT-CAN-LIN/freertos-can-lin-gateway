@@ -1590,12 +1590,12 @@ CAN/LIN Interface 변경은 **상대 담당자 리뷰 필요**이며 핸드북4.
 Git add/Commit/Push/PR/Merge/Jira Done 미실행.
 
 
-## Phase 3N-4 — PC↔VCU UART 전환 준비 UI
+## Phase 3N-5 — PC Diagnostic Tool UART source integration
 
-Driver Control은 운전자 입력 경로를 `PC ↔ VCU UART`로 표시합니다. `Interface: UART`, `Target: VCU`, `Connection: NOT CONFIGURED`, `Protocol: PENDING APPROVAL`, `UART TX: DISABLED`, `UART RX: NOT VERIFIED`를 구분하며 Connect/Disconnect는 비활성 상태입니다. 포트, Baudrate, Frame, ID, Payload, Timeout 또는 ACK 규약은 정의하지 않았습니다.
+The Driver Control page now has an optional PC→VCU USB-UART path in addition to its in-process Mock adapter. The GUI opens a serial port at 115200 8N1, sends the version-2 15-byte driver-input frame immediately and every 100 ms, and reads matching 8-byte VCU ACK frames on the same full-duplex port. The connection log records TX bytes, ACKs, timeout status, and transport errors. pyserial is an optional dependency (`pip install -e ".[gui,uart]"`).
 
-`gui/driver_transport.py`는 opaque bytes의 Connect/Disconnect/State/Send/Receive/Error/Cleanup 계약만 제공합니다. 실제 Serial/UART 구현과 포트 탐색은 없습니다. 테스트의 메모리 Transport 대역은 테스트 코드 안에서만 쓰며 자동 ACK를 만들지 않습니다. GUI는 아직 이 추상화에 연결되지 않습니다.
+The frame carries Ignition OFF/ON/RUN, integer Accelerator percent, Brake, Gear, Door lock request, Window command, and Steering direction. Light remains Mock-only. Arrow keys must be explicitly armed; Up ramps accelerator, Down applies brake, and Left/Right steer with visible key indicators. Releasing the keys returns the corresponding input to its neutral value.
 
-Ignition, Accelerator, Brake, Gear, Window, Light, Apply/Reset 및 PC 내부 이력은 기존 in-process Mock 경로를 유지합니다. Mock Accepted는 VCU Accepted가 아니며 응답 영역은 `NOT IMPLEMENTED / NOT VERIFIED`입니다. Window/Light는 별도 Mock Body 입력이고 UART Driver Input payload에 포함되지 않습니다. CAN Monitor는 독립 CAN Interface/Worker로 동작하며 CAN RX를 UART 응답으로 취급하지 않습니다. 기존 CAN 0x600 제안은 역사 기록으로만 남고 GUI에서 표시하거나 UART Packet ID로 사용하지 않습니다.
+CAN TX remains blocked by the GUI. UART ACK means only that the VCU accepted/validated the input packet; it does not prove Gateway routing or actuator behavior. This repository checkout does not contain the VCU application source, so matching firmware behavior and the stated 500 ms safe-input timeout require separate firmware/hardware verification. The UART wire format must stay synchronized with the VCU implementation.
 
-실제 UART 연결·송수신과 VCU Firmware 반영은 구현하지 않았습니다. 상세 UART framing, port/pins/logic level, baud/framing, payload/encoding, response/timeout/fail-safe는 **상대 담당자 리뷰 필요** 및 승인 대기입니다. CANable/ECU Hardware와 사용자 수동 UI 확인은 NOT VERIFIED입니다.
+Validation performed for this integration: UART CRC/frame/ACK vectors passed; offscreen Qt GUI smoke passed for Driver Control controls, keyboard steering indicators, and Mock Apply without opening physical serial/CAN. Full pytest was unavailable in the current environment (`pytest` missing and package index unreachable). Hardware UART/VCU behavior remains NOT VERIFIED.

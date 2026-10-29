@@ -14,6 +14,7 @@ gui = ["PySide6>=6.10,<7"]
 can = ["python-can>=4.6,<5"]
 slcan = ["python-can[serial]>=4.6,<5"]
 gs-usb = ["python-can[gs-usb]>=4.6,<5"]
+uart = ["pyserial>=3.5,<4"]
 dbc = ["cantools>=40,<45"]
 test = ["pytest>=8,<10", "python-can>=4.6,<5", "cantools>=40,<45"]
 

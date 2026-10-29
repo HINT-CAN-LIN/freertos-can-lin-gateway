@@ -99,7 +99,7 @@ def test_ignition_actions_navigation_and_labels_accessible(window_factory, qt_ap
                    view.apply_button, view.reset_button, view.live_tx_button, view.history_table):
         expose(window, widget, qt_app)
     assert window.navigation.count() == 9 and (window.width(),window.height()) == size
-    assert "UART" in view.approval_label.text() and "pending approval" in view.approval_label.text()
+    assert "115200 8N1" in view.approval_label.text() and "100 ms TX" in view.approval_label.text()
 
 
 def test_monitor_rx_does_not_imply_ignition_applied(window_factory, forbidden_can):
@@ -117,5 +117,5 @@ def test_monitor_rx_does_not_imply_ignition_applied(window_factory, forbidden_ca
         assert view.model.last_accepted == receipt
     window.clear_monitor()
     view.refresh()
-    assert "ECU Applied: NOT VERIFIED" in view.observation_label.text()
-    assert "UART TX: Disabled" in view.observation_label.text() and not forbidden_can
+    assert "ECU Response Not Verified" in view.ecu_label.text()
+    assert "CAN TX Blocked" in view.error_label.text() and not forbidden_can

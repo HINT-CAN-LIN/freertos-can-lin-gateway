@@ -79,7 +79,7 @@ def install_workspace(owner, layout):
     title_row.addWidget(owner.app_title, 1)
     owner.source_badge = role(QLabel(), "badge")
     owner.hardware_badge = role(QLabel("Hardware NOT VERIFIED"), "warning")
-    owner.tx_badge = role(QLabel("UART TX DISABLED · Protocol Pending"), "warning")
+    owner.tx_badge = role(QLabel("CAN TX BLOCKED · VCU UART available when connected"), "warning")
     for label in (owner.source_badge, owner.hardware_badge, owner.tx_badge):
         label.setWordWrap(True)
         title_row.addWidget(label)

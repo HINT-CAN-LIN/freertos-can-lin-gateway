@@ -90,7 +90,7 @@ def main():
             assert receipt.command.inputs == expected_inputs
             expose(view.observation_label)
             assert "ECU Applied: NOT VERIFIED" in view.observation_label.text()
-            assert "UART TX: Disabled" in view.observation_label.text()
+            assert "UART TX: Disabled / not sent" in view.observation_label.text()
             capture(f"driver-accepted-{width}x{height}.png")
             expose(view.history_table)
             assert view.history_table.rowCount() == len(view.model.history)
