@@ -36,3 +36,6 @@ Release/
 *.swp
 *.swo
 *~
+
+# Temporary Motor ECU audit extraction/copy
+tmp/motor_audit_develop/

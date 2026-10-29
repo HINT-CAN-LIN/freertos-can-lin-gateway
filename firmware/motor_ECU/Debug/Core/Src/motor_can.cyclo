@@ -1,5 +1,0 @@
-../Core/Src/motor_can.c:4:13:matches	6
-../Core/Src/motor_can.c:10:17:read_u16	1
-../Core/Src/motor_can.c:15:6:motor_can_decode_vcu	3
-../Core/Src/motor_can.c:28:6:motor_can_decode_gateway	3
-../Core/Src/motor_can.c:36:6:motor_can_encode_status	13

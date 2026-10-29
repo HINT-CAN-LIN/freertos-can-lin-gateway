@@ -1,3 +1,0 @@
-../Core/Src/vcu_driver_input_mock.c:16:21:vcu_driver_input_read	24	static
-../Core/Src/vcu_driver_input_mock.c:25:6:vcu_driver_input_update	16	static
-../Core/Src/vcu_driver_input_mock.c:56:6:vcu_driver_input_reset	16	static

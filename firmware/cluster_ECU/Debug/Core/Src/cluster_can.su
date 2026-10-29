@@ -1,6 +1,0 @@
-../Core/Src/cluster_can.c:21:26:initialize_can	104	static
-../Core/Src/cluster_can.c:53:19:cluster_can_init	16	static
-../Core/Src/cluster_can.c:61:6:cluster_can_get_diagnostics	24	static
-../Core/Src/cluster_can.c:78:6:HAL_CAN_RxFifo0MsgPendingCallback	72	static
-../Core/Src/cluster_can.c:95:6:HAL_CAN_ErrorCallback	24	static
-../Core/Src/cluster_can.c:128:6:cluster_can_process	48	static
