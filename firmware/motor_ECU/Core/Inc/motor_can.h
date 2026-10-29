@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* motor_ecu.dbc: base 0.4 + local SteeringAngle/diagnostics extension 0.6. */
+/* network/can/CAN__DB_펌웨어 전 최종본_v0.1.dbc is the source of truth. */
 #define MOTOR_CAN_VCU_ID 0x100u
 #define MOTOR_CAN_STATUS_ID 0x110u
 #define MOTOR_CAN_GATEWAY_ID 0x300u
@@ -27,7 +27,7 @@ typedef struct {
 typedef struct {
     uint16_t torque_raw;
     uint8_t gear, brake, alive;
-    int16_t steering_raw; /* VCU Byte4..5; Byte3 is not steering. Signed 0.1 degree; -450=left45, +450=right45. */
+    int16_t steering_raw; /* Not present in VCU_Command; decoder holds center (0). */
 } MotorVcuCommand;
 
 typedef struct { uint8_t alive, queue_usage; } MotorGatewayStatus;
@@ -38,7 +38,7 @@ typedef struct {
     uint16_t rpm, torque_raw;
     MotorState state;
     uint8_t alive;
-    int16_t steering_raw; /* Validated target echo; not measured shaft angle. */
+    int16_t steering_raw; /* Internal actuator target; not present in Motor_Status DBC. */
     uint8_t fault_flags, firmware_revision;
 } MotorStatus;
 

@@ -54,49 +54,44 @@ static void test_dbc(void)
     f.dlc = 8; f.extended = true; assert(!motor_can_decode_vcu(&f, &c));
     f.extended = false; f.remote = true; assert(!motor_can_decode_vcu(&f, &c));
     MotorStatus status = { .rpm = 1200, .torque_raw = 4000,
-        .state = MOTOR_RUN, .alive = 15 };
+        .state = MOTOR_RUN, .alive = 15, .steering_raw = 200,
+        .fault_flags = 15, .firmware_revision = 15 };
     assert(motor_can_encode_status(&status, &f));
     assert(f.id == 0x110 && f.dlc == 8 && !f.extended && !f.remote);
     assert(f.data[0] == 0xB0 && f.data[1] == 4 &&
            f.data[2] == 0xA0 && f.data[3] == 0x0F && f.data[4] == 0x3E);
     assert(f.data[5] == 0 && f.data[6] == 0 && f.data[7] == 0);
 }
-static void test_steering_request(void)
+static void test_reserved_vcu_bytes_do_not_steer(void)
 {
     MotorApp a;
     MotorVcuCommand c;
     MotorCanFrame f = command(4000, 2, false, 0);
-    f.data[4] = 0x38; f.data[5] = 0xFF; /* -20 degrees */
-    assert(motor_can_decode_vcu(&f, &c) && c.steering_raw == -200);
-    /* Every Body Byte3 pattern must leave steering and drive bits unchanged. */
-    for (unsigned body = 0; body < 256; ++body) {
-        f.data[3] = (uint8_t)body;
-        assert(motor_can_decode_vcu(&f, &c) && c.steering_raw == -200);
+    /* Byte 3 is DoorLockRequest/WindowCommand; Byte4..7 are reserved. */
+    for (unsigned value = 0; value < 256; ++value) {
+        f.data[3] = (uint8_t)value;
+        f.data[4] = (uint8_t)value;
+        f.data[5] = (uint8_t)~value;
+        assert(motor_can_decode_vcu(&f, &c) && c.steering_raw == 0);
         assert(c.torque_raw == 4000 && c.gear == 2 && c.brake == 0);
     }
-    f.data[3] = 0;
     ready(&a, true, 0, 4000);
     assert(motor_app_receive(&a, &f, 40));
     motor_app_step(&a, 40, capture, NULL);
-    assert(a.steering_target_raw == -200 && a.status.torque_raw == 4000);
-    assert(a.status.steering_raw == -200 && a.status.firmware_revision == 4);
+    assert(a.steering_target_raw == 0 && a.status.torque_raw == 4000);
+    assert(a.status.steering_raw == 0 && a.status.firmware_revision == 4);
     assert(a.status.fault_flags == 0);
     MotorCanFrame echo;
     assert(motor_can_encode_status(&a.status, &echo));
-    assert(echo.data[5] == 0x38 && echo.data[6] == 0xFF && echo.data[7] == 0x40);
-    f.data[4] = 0xC2; f.data[5] = 1; /* +45 degrees */
-    assert(motor_app_receive(&a, &f, 50));
-    motor_app_step(&a, 50, capture, NULL);
-    assert(a.steering_target_raw == 450);
+    assert(echo.data[5] == 0 && echo.data[6] == 0 && echo.data[7] == 0);
     motor_app_step(&a, 81, capture, NULL);
     assert(a.steering_target_raw == 0 && a.watchdog.inhibit);
     assert(a.status.fault_flags & MOTOR_FAULT_TIMEOUT);
     ready(&a, true, 100, 4000);
-    f.data[4] = 0xFF; f.data[5] = 0x7F; /* INVALID */
+    f.data[4] = 0xFF; f.data[5] = 0x7F; /* Reserved bytes stay ignored. */
     assert(motor_app_receive(&a, &f, 140));
     motor_app_step(&a, 140, capture, NULL);
-    assert(a.watchdog.invalid_input && a.status.torque_raw == 0 && a.steering_target_raw == 0);
-    assert(a.status.fault_flags & MOTOR_FAULT_INVALID);
+    assert(!a.watchdog.invalid_input && a.status.torque_raw == 4000 && a.steering_target_raw == 0);
 }
 static void test_servo_mapping(void)
 {
@@ -108,19 +103,12 @@ static void test_servo_mapping(void)
     assert(motor_servo_pulse_us(-200, 1500, true) == 1611);
     assert(motor_servo_pulse_us(INT16_MIN, 1500, false) == 1250);
     assert(motor_servo_pulse_us(INT16_MAX, 1500, false) == 1750);
-    MotorApp a;
-    MotorDrive d;
-    ready(&a, true, 0, 0);
+    /* The servo mapping remains available internally, but VCU_Command has no
+     * steering signal, so the CAN decoder must keep the actuator centered. */
     MotorCanFrame f = command(0, 0, false, 0);
+    MotorVcuCommand decoded;
     f.data[4] = 200;
-    motor_app_receive(&a, &f, 40);
-    motor_app_step(&a, 40, capture, NULL);
-    motor_drive_init(&d, 0);
-    motor_drive_step(&d, &a, 40);
-    assert(d.duty == 0 && a.steering_target_raw == 200); /* P does not block bench steering */
-    motor_app_step(&a, 71, capture, NULL);
-    assert(a.steering_target_raw == 0);
-    assert(motor_servo_pulse_us(a.steering_target_raw, 1500, false) == 1500);
+    assert(motor_can_decode_vcu(&f, &decoded) && decoded.steering_raw == 0);
 }
 static void test_bench_and_stops(void)
 {
@@ -217,7 +205,7 @@ static void test_tx_timing(void)
 }
 int main(void)
 {
-    test_steering_request();
+    test_reserved_vcu_bytes_do_not_steer();
     test_servo_mapping();
     test_dbc(); test_bench_and_stops(); test_invalid_and_strict_alive();
     test_reversal_and_rollover(); test_tx_timing();

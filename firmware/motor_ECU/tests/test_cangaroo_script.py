@@ -43,7 +43,7 @@ class MockAPI:
 class ScriptTests(unittest.TestCase):
     def auto_controller(self):
         c = motor.Controller(MockAPI(), 256)
-        c.status = {"state": 1, "firmware_revision": 4, "fault_flags": 0}
+        c.status = {"state": 1, "alive": 0}
         c.status_at = 10
         c.set_command(motor.parse_command("auto"), now=10)
         return c
@@ -53,12 +53,12 @@ class ScriptTests(unittest.TestCase):
         now = 10
         self.assertEqual(sum(step[0] for step in motor.AUTO_STEPS), 30)
         for index in range(len(motor.AUTO_STEPS) + 1):
-            seconds, percent, gear, angle = motor.AUTO_STEPS[index % len(motor.AUTO_STEPS)]
+            seconds, percent, gear = motor.AUTO_STEPS[index % len(motor.AUTO_STEPS)]
             c.status_at = now
             payload, reason = c.next_payload(now)
             self.assertIn("AUTO step", reason)
-            self.assertEqual(payload, motor.command_bytes(percent, gear, 0, (index * 2) % 16, angle))
-            self.assertEqual(payload[3], 0)
+            self.assertEqual(payload, motor.command_bytes(percent, gear, 0, (index * 2) % 16))
+            self.assertEqual(payload[3:], b"\0\0\0\0\0")
             c.status_at = now + seconds / 2
             self.assertIsNone(c.next_payload(c.status_at)[1])
             now += seconds
@@ -66,7 +66,7 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(c.auto_index, 0)
 
     def test_auto_stop_fault_loss_and_no_restart(self):
-        for failure in ("stale", "failsafe", "off", "revision"):
+        for failure in ("stale", "failsafe", "off"):
             with self.subTest(failure=failure):
                 c = self.auto_controller()
                 c.next_payload(10)
@@ -74,15 +74,13 @@ class ScriptTests(unittest.TestCase):
                     now = 10.151
                 else:
                     now = 10.01
-                    c.status["state"] = 3 if failure == "failsafe" else 0 if failure == "off" else 1
-                    if failure == "revision":
-                        c.status["firmware_revision"] = 3
+                    c.status["state"] = 3 if failure == "failsafe" else 0
                 payload, reason = c.next_payload(now)
                 self.assertIn("AUTO stopped", reason)
                 self.assertEqual(payload[:3], bytes.fromhex("000010"))
                 self.assertEqual(payload[4:6], b"\0\0")
                 self.assertFalse(c.auto_active)
-                c.status = {"state": 1, "firmware_revision": 4}
+                c.status = {"state": 1, "alive": 0}
                 c.status_at = 100
                 self.assertEqual(c.next_payload(100)[0][:2], b"\0\0")
         c = self.auto_controller()
@@ -93,35 +91,34 @@ class ScriptTests(unittest.TestCase):
 
     def test_auto_pause_loss_manual_override_and_late_tick(self):
         c = self.auto_controller()
-        c.auto_index = 5
+        c.auto_index = 4
         payload, _ = c.next_payload(10)  # P/zero/center pause before reverse.
         self.assertEqual(payload[:3], b"\0\0\0")
         self.assertIsNotNone(c.next_payload(10.151)[1])
         self.assertFalse(c.auto_active)  # Even a stationary pause must disarm.
         c = self.auto_controller()
         c.next_payload(10)
-        c.set_command(motor.parse_command("left 20 5"), now=10.01)
+        with self.assertRaisesRegex(ValueError, "not defined by the current DBC"):
+            c.set_command(motor.parse_command("left 20 5"), now=10.01)
         payload, _ = c.next_payload(10.02)
-        self.assertFalse(c.auto_active)
-        self.assertEqual(payload[:2], b"\0\0")
-        self.assertEqual(int.from_bytes(payload[4:6], "little", signed=True), -200)
+        self.assertTrue(c.auto_active)
+        self.assertEqual(payload[4:6], b"\0\0")
         c = self.auto_controller()
         c.next_payload(10)
         c.status_at = 100
         c.next_payload(100)
         self.assertEqual(c.auto_index, 1)  # Advance one step; no stale replay.
-        self.assertEqual(c.auto_deadline, 103)
+        self.assertEqual(c.auto_deadline, 105)
 
-    def test_auto_requires_ready_and_current_firmware(self):
+    def test_auto_requires_ready_status(self):
         self.assertEqual(motor.parse_command("auto"), ("auto",))
         c = motor.Controller(MockAPI(), 256)
         with self.assertRaises(ValueError):
             c.set_command(("auto",), now=10)
         c.status_at = 10
-        c.status = {"state": 1, "firmware_revision": 3}
-        with self.assertRaises(ValueError):
-            c.set_command(("auto",), now=10)
-        self.assertFalse(c.auto_active)
+        c.status = {"state": 1, "alive": 0}
+        c.set_command(("auto",), now=10)
+        self.assertTrue(c.auto_active)
 
     def test_canonical_dbc_and_nonoverlapping_layout(self):
         local = SCRIPT.with_name("motor_ecu.dbc")
@@ -136,7 +133,7 @@ class ScriptTests(unittest.TestCase):
             sig = re.match(r"\s*SG_ (\w+)\s*:\s*(\d+)\|(\d+)@1([+-])", line)
             if sig:
                 messages[current][sig[1]] = (int(sig[2]), int(sig[3]), sig[4])
-        self.assertEqual(messages[0x100]["SteeringAngle"], (32, 16, "-"))
+        self.assertNotIn("SteeringAngle", messages[0x100])
         self.assertEqual(messages[0x100]["TorqueRequest"], (0, 16, "+"))
         self.assertEqual(messages[0x100]["Gear"], (16, 3, "+"))
         self.assertEqual(messages[0x100]["Brake"], (19, 1, "+"))
@@ -148,22 +145,17 @@ class ScriptTests(unittest.TestCase):
                 self.assertLessEqual(start + length, 64)
                 self.assertFalse(bits & occupied)
                 occupied |= bits
-        for angle in (-45, -20, 0, 20, 45):
-            payload = motor.command_bytes(25, 2, 0, 15, angle)
-            self.assertEqual(payload[3], 0)
-            self.assertEqual(payload[6:], b"\0\0")
-            self.assertEqual(int.from_bytes(payload[4:6], "little", signed=True), angle * 10)
+        payload = motor.command_bytes(25, 2, 0, 15)
+        self.assertEqual(payload[3:], b"\0\0\0\0\0")
+        with self.assertRaisesRegex(ValueError, "not defined by the current DBC"):
+            motor.command_bytes(25, 2, 0, 15, 5)
 
     def test_dbc_vectors(self):
         self.assertEqual(motor.command_bytes(10, 2, 0, 0).hex(), "a00f020000000000")
         self.assertEqual(motor.command_bytes(25, 3, 0, 15).hex(), "1027f30000000000")
         self.assertEqual(motor.command_bytes(100, 2, 1, 10).hex(), "409caa0000000000")
         self.assertEqual(motor.decode_status(bytes.fromhex("b004a00f3e000000")),
-                         {"rpm": 1200, "torque_nm": 400, "state": 2, "alive": 15,
-                          "steering_echo_deg": 0, "fault_flags": 0, "firmware_revision": 0})
-        self.assertEqual(motor.decode_status(bytes.fromhex("b004a00f3e38ff32"))["steering_echo_deg"], -20)
-        diag = motor.decode_status(bytes.fromhex("0000000003000032"))
-        self.assertEqual((diag["firmware_revision"], diag["fault_flags"]), (3, 2))
+                         {"rpm": 1200, "torque_nm": 400, "state": 2, "alive": 15})
 
     def test_parser(self):
         self.assertEqual(motor.parse_command("d 10 5"), ("drive", 10, 2, 0, 5))
@@ -187,7 +179,7 @@ class ScriptTests(unittest.TestCase):
 
     def test_direction_payload_and_alive(self):
         c = motor.Controller(MockAPI(), 256)
-        c.status = {"state": 1, "firmware_revision": 4}
+        c.status = {"state": 1, "alive": 0}
         c.status_at = 10
         c.set_command(motor.parse_command("reverse 25 3"), now=10)
         self.assertEqual(c.next_payload(10.01)[0], bytes.fromhex("1027030000000000"))
@@ -195,52 +187,29 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(c.next_payload(10.02)[0], bytes.fromhex("0000120000000000"))
 
     def test_steering_encoding_and_retention(self):
-        self.assertEqual(motor.command_bytes(10, 2, 0, 0, -20).hex(), "a00f020038ff0000")
-        self.assertEqual(motor.command_bytes(0, 0, 0, 0, 45).hex(), "00000000c2010000")
-        self.assertEqual(motor.parse_command("left 20 5"), ("steering", -20, 5))
-        self.assertEqual(motor.parse_command("right 20"), ("steering", 20, 5))
-        self.assertEqual(motor.parse_command("center"), ("steering", 0, 0))
-        for text in ("left -1", "right 46", "steer nan", "steer 20 0"):
-            with self.subTest(text=text), self.assertRaises(ValueError):
+        for angle in (-45, -20, 0, 20, 45):
+            if angle:
+                with self.subTest(angle=angle), self.assertRaisesRegex(
+                        ValueError, "not defined by the current DBC"):
+                    motor.command_bytes(10, 2, 0, 0, angle)
+        for text in ("left 20 5", "right 20", "steer -20 5", "center",
+                     "drive d 25 -20 5"):
+            with self.subTest(text=text), self.assertRaisesRegex(
+                    ValueError, "not defined by the current DBC"):
                 motor.parse_command(text)
-        c = motor.Controller(MockAPI(), 256)
-        c.status = {"state": 1, "firmware_revision": 4}
-        c.status_at = 10
-        c.set_command(motor.parse_command("left 20 5"), now=10)
-        self.assertEqual(c.next_payload(10.01)[0][4:6], bytes.fromhex("38ff"))
-        c.set_command(motor.parse_command("d 25 3"), now=10.02)
-        self.assertEqual(c.next_payload(10.03)[0][4:6], bytes.fromhex("38ff"))
-        c.stop_drive()
-        self.assertEqual(c.next_payload(10.04)[0][4:6], b"\0\0")
-        c.set_command(motor.parse_command("right 20 1"), now=10.05)
-        c.status_at = 11.1
-        self.assertEqual(c.next_payload(11.1)[0][4:6], b"\0\0")
-        c.set_command(motor.parse_command("left 10 1"), now=11.1)
-        c.set_command(motor.parse_command("d 25 5"), now=11.1)
-        c.status_at = 12.2
-        payload, _ = c.next_payload(12.2)
-        self.assertEqual(payload[:2], bytes.fromhex("1027"))
-        self.assertEqual(payload[4:6], b"\0\0")
 
-    def test_combined_drive_requires_new_firmware(self):
-        parsed = motor.parse_command("drive d 25 -20 5")
-        self.assertEqual(parsed, ("drive", 25, 2, 0, 5, -20))
+    def test_drive_uses_current_dbc_signals_only(self):
+        parsed = motor.parse_command("drive d 25 5")
+        self.assertEqual(parsed, ("drive", 25, 2, 0, 5))
         c = motor.Controller(MockAPI(), 256)
         c.status_at = 10
-        c.status = {"state": 1, "firmware_revision": 0}
-        with self.assertRaisesRegex(ValueError, "firmware revision"):
-            c.set_command(parsed, now=10)
-        c.status["firmware_revision"] = 3
-        with self.assertRaisesRegex(ValueError, "firmware revision"):
-            c.set_command(parsed, now=10)
-        c.status["firmware_revision"] = 4
+        c.status = {"state": 1, "alive": 0}
         c.set_command(parsed, now=10)
-        self.assertEqual(c.next_payload(10.01)[0], bytes.fromhex("1027020038ff0000"))
+        self.assertEqual(c.next_payload(10.01)[0], bytes.fromhex("1027020000000000"))
         c.status_at = 15
         payload, _ = c.next_payload(15)
         self.assertEqual(payload[:2], b"\0\0")
-        self.assertEqual(payload[4:6], b"\0\0")
-        for text in ("drive d 25 46 5", "drive n 25 20 5", "drive d 25 nan 5"):
+        for text in ("drive d 25 -20 5", "drive n 25 20 5", "drive d 25 nan"):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 motor.parse_command(text)
 

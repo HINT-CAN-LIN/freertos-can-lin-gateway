@@ -1,8 +1,8 @@
-"""CANgaroo 0.7.0 Script View: VCU simulator for four DC motors and two SG90 servos.
+"""CANgaroo 0.7.0 Script View: VCU_Command simulator for four DC motors.
 
 Load this file into CANgaroo, start a 500 kbit/s measurement, then press Run.
-Starts in P/zero torque. Enter auto to repeat speed/steering steps until s.
-Commands: drive d 25 -20 5 / left 20 5 / right 20 5 / center / s / status.
+Starts in P/zero torque. Enter auto to repeat forward/reverse steps until s.
+Commands: drive d 25 5 / reverse 10 5 / gear P / s / status.
 10 = PWM percent, 5 = seconds. All four motors get the same command.
 No external Python packages; run INSIDE CANgaroo, not regular Python.
 """
@@ -20,38 +20,29 @@ MAX_RUN_SECONDS = 60.0
 MAX_PERCENT = 100.0
 STATUS_NAMES = ("OFF", "READY", "RUN", "FAIL_SAFE")
 GEAR_NAMES = ("P", "N", "D", "R")
-SCRIPT_VERSION = "1.5 - repeating automatic speed/steering sequence"
-EXPECTED_FIRMWARE_REVISION = 4
-# seconds, PWM percent, gear (0=P, 2=D, 3=R), steering degrees.
-# One cycle is 30 seconds. Zero-torque centered pauses separate directions.
+SCRIPT_VERSION = "1.6 - current VCU DBC"
+# seconds, PWM percent, gear (0=P, 2=D, 3=R).
 AUTO_STEPS = (
-    (3.0, 20.0, 2, 0.0),
-    (3.0, 25.0, 2, -20.0),
-    (3.0, 35.0, 2, -40.0),
-    (3.0, 20.0, 2, 0.0),
-    (3.0, 25.0, 2, 20.0),
-    (3.0, 35.0, 2, 40.0),
-    (1.0, 0.0, 0, 0.0),
-    (3.0, 20.0, 3, -20.0),
-    (3.0, 25.0, 3, 0.0),
-    (3.0, 20.0, 3, 20.0),
-    (2.0, 0.0, 0, 0.0),
+    (5.0, 20.0, 2),
+    (5.0, 25.0, 2),
+    (5.0, 0.0, 0),
+    (5.0, 20.0, 3),
+    (5.0, 25.0, 3),
+    (5.0, 0.0, 0),
 )
 
 
 def command_bytes(percent, gear, brake, alive, steering_deg=0.0):
-    """DBC 0x100: TorqueRequest 0|16 Intel factor .1; Gear/Brake/Alive byte2."""
+    """Encode only signals defined by the current VCU_Command DBC."""
     if not math.isfinite(percent) or not 0 <= percent <= 100:
         raise ValueError("PWM percent must be 0..100")
     if gear not in (0, 1, 2, 3) or brake not in (0, 1) or not 0 <= alive <= 15:
         raise ValueError("Invalid Gear/Brake/Alive")
-    if not math.isfinite(steering_deg) or not -45 <= steering_deg <= 45:
-        raise ValueError("SteeringAngle must be -45..45 degrees")
-    steering_raw = round(steering_deg * 10) & 0xFFFF
+    if steering_deg != 0:
+        raise ValueError("SteeringAngle is not defined by the current DBC")
     # Firmware demo map: 4000 Nm -> target 12000 RPM -> PWM 100%.
     raw = round(percent * 400)
-    return bytes((raw & 255, raw >> 8, gear | (brake << 3) | (alive << 4),
-                  0, steering_raw & 255, steering_raw >> 8, 0, 0))
+    return bytes((raw & 255, raw >> 8, gear | (brake << 3) | (alive << 4), 0, 0, 0, 0, 0))
 
 
 def decode_status(data):
@@ -62,9 +53,6 @@ def decode_status(data):
         "torque_nm": int.from_bytes(data[2:4], "little") / 10,
         "state": data[4] & 3,
         "alive": (data[4] >> 2) & 15,
-        "steering_echo_deg": int.from_bytes(data[5:7], "little", signed=True) / 10,
-        "fault_flags": data[7] & 15,
-        "firmware_revision": data[7] >> 4,
     }
 
 
@@ -78,28 +66,16 @@ def parse_command(text):
     if name == "auto" and len(parts) == 1:
         return ("auto",)
     if name == "drive":
-        if len(parts) not in (4, 5) or parts[1] not in ("d", "r"):
-            raise ValueError("Use drive D/R PERCENT STEERING_DEG [SECONDS]")
-        seconds = parts[4] if len(parts) == 5 else str(DEFAULT_RUN_SECONDS)
-        drive = parse_command(f"{parts[1]} {parts[2]} {seconds}")
-        steering = parse_command(f"steer {parts[3]} {seconds}")
-        return drive + (steering[1],)
+        if len(parts) not in (3, 4) or parts[1] not in ("d", "r"):
+            if len(parts) >= 4 and parts[1] in ("d", "r"):
+                raise ValueError("SteeringAngle is not defined by the current DBC")
+            raise ValueError("Use drive D/R PERCENT [SECONDS]")
+        seconds = parts[3] if len(parts) == 4 else str(DEFAULT_RUN_SECONDS)
+        return parse_command(f"{parts[1]} {parts[2]} {seconds}")
     if name in ("steer", "left", "right"):
-        if len(parts) not in (2, 3):
-            raise ValueError("Use steer DEGREES [SECONDS], left ANGLE or right ANGLE")
-        angle = float(parts[1])
-        seconds = float(parts[2]) if len(parts) == 3 else DEFAULT_RUN_SECONDS
-        if not math.isfinite(angle) or not -45 <= angle <= 45:
-            raise ValueError("SteeringAngle must be -45..45 degrees")
-        if name in ("left", "right"):
-            if angle < 0:
-                raise ValueError("Use a positive angle with left/right")
-            angle *= -1 if name == "left" else 1
-        if not math.isfinite(seconds) or not 0 < seconds <= MAX_RUN_SECONDS:
-            raise ValueError("Duration must be >0 and <=60 seconds")
-        return ("steering", angle, seconds)
+        raise ValueError("SteeringAngle is not defined by the current DBC")
     if name == "center" and len(parts) == 1:
-        return ("steering", 0.0, 0.0)
+        raise ValueError("SteeringAngle is not defined by the current DBC")
     if name == "gear":
         if len(parts) != 2 or parts[1] not in ("p", "n", "d", "r"):
             raise ValueError("Use gear P/N/D/R; gear selection always sets zero torque")
@@ -146,8 +122,6 @@ class Controller:
         self.rx_count = 0
         self.threads = []
         self.last_payload = None
-        self.steering_deg = 0.0
-        self.steering_expiry = 0.0
         self.max_tx_gap_ms = 0.0
         self.last_tx_at = None
         self.auto_active = False
@@ -156,7 +130,6 @@ class Controller:
 
     def _clear_locked(self):
         self.command = (0.0, 0, 0, 0.0)
-        self.steering_deg = self.steering_expiry = 0.0
         self.auto_active = False
         self.auto_index = -1
         self.auto_deadline = 0.0
@@ -167,34 +140,29 @@ class Controller:
 
     def _auto_step_locked(self, now):
         self.auto_index = (self.auto_index + 1) % len(AUTO_STEPS)
-        seconds, percent, gear, angle = AUTO_STEPS[self.auto_index]
+        seconds, percent, gear = AUTO_STEPS[self.auto_index]
         self.command = (percent, gear, 0, 0.0)
-        self.steering_deg, self.steering_expiry = angle, 0.0
         # Skip missed time; never burst-replay past physical commands.
         self.auto_deadline = now + seconds
         return (f"AUTO step {self.auto_index + 1}/{len(AUTO_STEPS)}: "
-                f"{GEAR_NAMES[gear]}, PWM={percent:g}%, steer={angle:g} deg, {seconds:g}s")
+                f"{GEAR_NAMES[gear]}, PWM={percent:g}%, {seconds:g}s")
 
     def set_command(self, parsed, now=None):
         now = time.monotonic() if now is None else now
         with self.lock:
-            if parsed[0] in ("auto", "drive") or (parsed[0] == "steering" and parsed[1] != 0):
+            if parsed[0] in ("auto", "drive"):
                 if self.error or self.stop_event.is_set():
                     raise ValueError("Script worker stopped; restart the script")
                 if self.status_at is None or now - self.status_at > STATUS_TIMEOUT_S:
                     raise ValueError("No fresh 0x110 reply; verify ECU/interface/500 kbit/s")
                 if self.status["state"] in (0, 3):
                     raise ValueError("ECU not ready; keep P commands running, enter status for fault flags")
-                revision = self.status.get("firmware_revision", 0)
-                if revision != EXPECTED_FIRMWARE_REVISION:
-                    raise ValueError(f"ECU firmware revision={revision}; build/download new motor_ECU "
-                                     f"firmware (expected {EXPECTED_FIRMWARE_REVISION}) before drive/steer")
             if parsed[0] == "auto":
                 # Validate configurable steps before arming any physical output.
-                for seconds, percent, gear, angle in AUTO_STEPS:
+                for seconds, percent, gear in AUTO_STEPS:
                     if not math.isfinite(seconds) or not 0 < seconds <= MAX_RUN_SECONDS:
                         raise ValueError("Invalid AUTO step duration")
-                    command_bytes(percent, gear, 0, 0, angle)
+                    command_bytes(percent, gear, 0, 0)
                 if not AUTO_STEPS:
                     raise ValueError("AUTO_STEPS is empty")
                 self._clear_locked()
@@ -203,15 +171,6 @@ class Controller:
             if self.auto_active:
                 # A manual command takes over from a complete zero state.
                 self._clear_locked()
-            if parsed[0] == "steering":
-                self.steering_deg = parsed[1]
-                self.steering_expiry = now + parsed[2] if parsed[1] else 0
-                return
-            if parsed[0] == "stop":
-                self.steering_deg = self.steering_expiry = 0.0
-            elif len(parsed) == 6:
-                self.steering_deg = parsed[5]
-                self.steering_expiry = now + parsed[4] if parsed[5] else 0.0
             self.command = (parsed[1], parsed[2], parsed[3],
                             now + parsed[4] if parsed[0] == "drive" else 0.0)
 
@@ -223,34 +182,26 @@ class Controller:
                     auto_reason = "AUTO stopped: 0x110 reply lost; enter auto explicitly to restart"
                 elif self.status["state"] not in (1, 2):
                     auto_reason = (f"AUTO stopped: ECU {STATUS_NAMES[self.status['state']]} "
-                                   f"flags=0x{self.status.get('fault_flags', 0):X}; enter auto to restart")
-                elif self.status.get("firmware_revision", 0) != EXPECTED_FIRMWARE_REVISION:
-                    auto_reason = "AUTO stopped: firmware revision mismatch"
+                                   "state; enter auto to restart")
                 if auto_reason:
                     self._clear_locked()
                 elif now >= self.auto_deadline:
                     auto_reason = self._auto_step_locked(now)
             percent, gear, brake, expiry = self.command
             reason = auto_reason
-            if self.steering_expiry and now >= self.steering_expiry:
-                self.steering_deg = self.steering_expiry = 0.0
-                reason = "Steering duration finished -> requested angle 0 degrees"
-            if percent > 0 or self.steering_deg != 0:
+            if percent > 0:
                 stop_reason = None
                 if percent > 0 and expiry and now >= expiry:
                     stop_reason = "Duration finished -> P/zero torque"
                 elif self.status_at is None or now - self.status_at > STATUS_TIMEOUT_S:
                     stop_reason = "0x110 reply lost -> P/zero torque; explicit drive command required"
                 elif self.status["state"] == 3:
-                    flags = self.status.get("fault_flags", 0)
-                    stop_reason = (f"ECU FAIL_SAFE flags=0x{flags:X} "
-                                   f"({fault_names(flags)}) -> P/zero torque; enter status")
+                    stop_reason = "ECU FAIL_SAFE -> P/zero torque; enter status"
                 if stop_reason:
                     reason = stop_reason
                     self._clear_locked()
                     percent, gear, brake = 0.0, 0, 0
-                    self.steering_deg = self.steering_expiry = 0.0
-            payload = command_bytes(percent, gear, brake, self.alive, self.steering_deg)
+            payload = command_bytes(percent, gear, brake, self.alive)
             self.alive = (self.alive + 1) & 15
         return payload, reason
 
@@ -345,14 +296,12 @@ def print_status(controller):
         status = controller.status.copy() if controller.status else None
         age = None if controller.status_at is None else time.monotonic() - controller.status_at
         command = controller.command
-        steering_deg = controller.steering_deg
         auto_info = (controller.auto_active, controller.auto_index)
     print(f"TX={controller.tx_count} RX={controller.rx_count}; command={command[:3]}")
     print(f"AUTO={'ON' if auto_info[0] else 'OFF'}, step={auto_info[1] + 1}/{len(AUTO_STEPS)}")
     print(f"Order: Gear={GEAR_NAMES[command[1]]}, Brake={command[2]}, "
           f"TorqueRequest={command[0] * 40:.1f} Nm, demo PWM={command[0]:g}%")
-    print(f"Requested SteeringAngle={steering_deg:g} deg; "
-          f"max TX API interval={controller.max_tx_gap_ms:.1f}ms (not bus delivery timing)")
+    print(f"max TX API interval={controller.max_tx_gap_ms:.1f}ms (not bus delivery timing)")
     if controller.last_payload is not None:
         print("Last 0x100 payload:", controller.last_payload.hex(" ").upper())
     if status is None:
@@ -360,19 +309,13 @@ def print_status(controller):
     else:
         print(f"Virtual RPM={status['rpm']} TorqueApplied={status['torque_nm']:.1f} Nm "
               f"State={STATUS_NAMES[status['state']]} Alive={status['alive']} age={age:.3f}s")
-        revision = status.get("firmware_revision", 0)
-        flags = status.get("fault_flags", 0)
-        print(f"ECU firmware revision={revision} (expected {EXPECTED_FIRMWARE_REVISION}), "
-              f"faults=0x{flags:X} [{fault_names(flags)}]")
-        print(f"ECU validated steering target={status.get('steering_echo_deg', 0):g} deg "
-              "(not measured SG90 shaft angle)")
     if controller.error:
         print("Worker error:", controller.error)
 
 
 def print_help():
-    print("auto : repeat speed/left/center/right sequence, including reverse; s stops")
-    print("AUTO uses PWM 20..35%, steer -40..+40 deg; 30s/cycle, repeats until stopped")
+    print("auto : repeat forward/reverse speed sequence; s stops")
+    print("AUTO uses PWM 20..25% with P pauses between directions; repeats until stopped")
     print("Any manual command cancels AUTO; status/help/dbc only observe")
     print("forward 10 5 / d 10 5 : D, PWM 10%, 5 seconds (all four motors)")
     print("reverse 10 5 / r 10 5 : R, PWM 10%, 5 seconds (all four motors)")
@@ -382,11 +325,7 @@ def print_help():
     print("status : show 0x110 virtual RPM/state and command")
     print("quit   : send zero and end; help : show commands")
     print("Duration defaults to 5 seconds, maximum 60 seconds")
-    print("left 20 5 / right 20 5 : request left/right 20 degrees for 5 seconds")
-    print("steer -20 5 / center : signed angle request / angle zero")
-    print("drive d 25 -20 5 : DC forward 25% + left20 degrees, both for 5 seconds")
-    print("drive r 25 20 5 : DC reverse 25% + right20 degrees, both for 5 seconds")
-    print("Requires firmware revision 4; SG90 PWM on PA0/PA1, 50Hz, center 1500us.")
+    print("SteeringAngle is not defined in the current DBC and is not transmitted.")
     print("dbc : explain CAN command layout")
 
 
@@ -395,13 +334,10 @@ def print_dbc_orders():
     print("Byte0..1: TorqueRequest raw=Nm*10, Intel/little-endian, range 0..4000 Nm")
     print("Byte2 bits0..2: Gear 0=P, 1=N, 2=D(forward), 3=R(reverse)")
     print("Byte2 bit3: Brake; bits4..7: AliveCounter 0..15, increment each frame")
-    print("Byte3: reserved for Gateway Body command candidates; this script sends zero")
-    print("Byte4..5: signed Intel SteeringAngle, raw=degrees*10; -45 left..+45 right")
-    print("Byte6..7: unused; zero")
+    print("Byte3 bits4..5: DoorLockRequest; bits6..7: WindowCommand (Motor ignores both)")
+    print("Byte4..7: reserved; zero")
     print("Byte2 = (Alive<<4) | (Brake<<3) | Gear")
-    print("Single logical angle; no separate SG90 commands or measured angle feedback.")
-    print("Motor_Status Byte5..6: validated steering target echo; Byte7 low=FaultFlags, high=FW revision")
-    print("LightStatus LEFT_TURN/RIGHT_TURN are indicators, not steering commands.")
+    print("Motor_Status bytes 5..7 are reserved and sent as zero.")
     print("Vehicle_Status 0x120.Gear is Gateway feedback, not the Motor ECU command.")
 
 
@@ -447,18 +383,12 @@ def main():
                 else:
                     controller.set_command(parsed)
                     if parsed[0] == "auto":
-                        print("AUTO armed: repeating forward/reverse and steering steps; enter s to stop")
-                        continue
-                    if parsed[0] == "steering":
-                        print(f"SteeringAngle request={parsed[1]:g} deg, "
-                              f"duration={parsed[2]:g}s; two SG90 PWM outputs")
+                        print("AUTO armed: repeating forward/reverse steps; enter s to stop")
                         continue
                     print(f"Order: Gear={GEAR_NAMES[parsed[2]]}({parsed[2]}) "
                           f"TorqueRequest={parsed[1] * 40:.1f} Nm "
                           f"demo PWM={parsed[1]:g}% Brake={parsed[3]} "
                           f"duration={parsed[4]:g}s")
-                    if len(parsed) == 6:
-                        print(f"Simultaneous steering target={parsed[5]:g} deg")
             except ValueError as exc:
                 controller.stop_drive()
                 print("Stopped:", exc)

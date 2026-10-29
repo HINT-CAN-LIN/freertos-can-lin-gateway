@@ -1,11 +1,9 @@
 > 최신 RTOS 구성: [RTOS2_ARCHITECTURE.md](RTOS2_ARCHITECTURE.md). CAN RX/TX, 제어, 출력, 상태 감시를 5개 task로 분리하고 공유 상태는 mutex로 보호한다.
 
-> 조향각 추가 업데이트: `cangaroo/motor_ecu.dbc` 로컬 v0.7와
-> `cangaroo/motor_control.py` v1.4를 사용한다.
-> Byte4..5에 단일 SteeringAngle(0.1도, signed, -45..45)을 추가했다.
-> 펌웨어 revision 4에서 PA0/PA1의 SG90 PWM을 활성화했다. 최신 진단/동시명령은 README를 따른다.
+> 2026-10-29 정합화: Motor ECU는 저장소의 승인 DBC를 기준으로 한다.
+> VCU_Command에 SteeringAngle이 없으므로 CAN으로 조향 명령을 받지 않고,
+> reserved bytes는 무시한다. `cangaroo/motor_ecu.dbc`는 기준 DBC의 동일 복사본이다.
 > 최신 명령과 인터페이스 설명은 [cangaroo/README.md](cangaroo/README.md)를 참조한다.
-> 아래 원본 해시는 확장 전 사용자 DBC의 해시이다.
 
 # CANable / cangaroo DC 모터 시험
 
@@ -15,10 +13,8 @@ NUCLEO-F446RE 한 대, MDD3A 두 대, DC 모터 네 개를 사용한다.
 SG90의 TIM2/PA0/PA1 출력은 50Hz로 구동한다. 부팅/실패 시 중앙 펄스 1500us가 적용된다.
 네 모터에는 같은 크기의 출력이 적용된다. DBC에는 모터별 명령이 없다.
 
-기준: 사용자가 제공한 `CAN_DB_펌웨어 전 최종본_v0.1.dbc`.
-파일 내부 VERSION은 `0.4 - review-ready interface proposal`이다.
-제공 파일 SHA256: `D982916F61245E96518E422BC84FC59E0C9A121EA25CB19F227E901700E4FFF4`.
-저장소 network/can의 유사한 이름 파일과 해시가 다르므로 시험에는 사용자가 제공한 DBC를 불러온다.
+기준: `network/can/CAN__DB_펌웨어 전 최종본_v0.1.dbc`.
+Motor ECU와 CANgaroo는 이 저장소 DBC의 동일 복사본을 사용한다.
 
 | 메시지 | 표준 CAN ID | DLC | 주기 | 동작 |
 |---|---|---|---|---|
@@ -91,7 +87,7 @@ CAN 버스 양 끝에만 120옴 종단을 둔다. 모듈 내장 종단도 포함
 
 `TorqueRequest_raw = TorqueRequest_Nm * 10`이며 Byte0=하위, Byte1=상위 바이트이다.
 Byte2는 `(AliveCounter << 4) | (Brake << 3) | Gear`이다.
-Gear는 0=P, 1=N, 2=D, 3=R이다. Byte4..5는 확장 SteeringAngle 요청, Byte3와 Byte6..7은 0으로 송신한다.
+Gear는 0=P, 1=N, 2=D, 3=R이다. Byte3 bits4..5=DoorLockRequest, bits6..7=WindowCommand이며 Motor는 이를 무시한다. Byte4..7은 reserved이고 송신 시 0이다.
 
 ## Alive 벤치 옵션
 
@@ -131,7 +127,7 @@ Alive를 변경한다면 정상 증가는 +1 modulo 16을 사용한다.
   Gateway 생존 여부는 이 단독 시험의 운전 조건이 아니다.
 
 0x110 Byte0..1=가상 RPM, Byte2..3=TorqueApplied raw, Byte4 bits0..1=MotorState,
-bits2..5=AliveCounter이다. Byte5..6=검증된 조향 목표 echo, Byte7 하위니블=고장 flags, 상위니블=firmware revision이다. State 0=OFF, 1=READY, 2=RUN, 3=FAIL_SAFE.
+bits2..5=AliveCounter이다. Byte5..7은 reserved이고 0으로 송신한다. State 0=OFF, 1=READY, 2=RUN, 3=FAIL_SAFE.
 400 Nm 명령의 정상 응답에서 TorqueApplied는 `A0 0F`, RPM은 점차 1200으로 접근한다.
 
 디버거에서 `g_motorDuty`(0..4200), `g_motorDirection`(-1/0/+1),

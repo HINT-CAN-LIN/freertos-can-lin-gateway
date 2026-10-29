@@ -152,7 +152,7 @@ int main(void)
     run_task(MotorControlTask);
     assert(scheduled_tick == 31);
     run_task(ActuatorTask);
-    assert(drive.duty == 420 && servo_request == -200 && applied == 1);
+    assert(drive.duty == 420 && servo_request == 0 && applied == 1);
     run_task(CanTxTask);
     assert(hw_sent == 1); /* Queue transport, outside the model state lock. */
 
