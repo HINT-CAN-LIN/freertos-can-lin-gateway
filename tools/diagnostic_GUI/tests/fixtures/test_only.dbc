@@ -1,0 +1,25 @@
+VERSION "TEST ONLY - synthetic fixture, not a Gateway interface or production default"
+
+NS_ :
+    CM_
+    VAL_
+
+BS_:
+
+BU_: TestOnlyNode
+
+BO_ 1617 TestOnlySample: 4 TestOnlyNode
+ SG_ Measurement : 0|16@1- (0.25,-20) [-100|100] "test_unit" TestOnlyNode
+ SG_ Mode : 16|8@1+ (1,0) [0|2] "" TestOnlyNode
+ SG_ Counter : 24|8@1+ (1,0) [0|255] "" TestOnlyNode
+
+BO_ 2147485265 TestOnlyExtended: 2 TestOnlyNode
+ SG_ Reading : 7|16@0+ (2,1) [1|131071] "test_unit" TestOnlyNode
+
+BO_ 1618 TestOnlyMux: 2 TestOnlyNode
+ SG_ Selector M : 0|8@1+ (1,0) [0|1] "" TestOnlyNode
+ SG_ BranchZero m0 : 8|8@1+ (1,0) [0|255] "" TestOnlyNode
+ SG_ BranchOne m1 : 8|8@1+ (1,0) [0|255] "" TestOnlyNode
+
+CM_ "TEST ONLY. IDs and signals are synthetic; no project definitions copied. Never use as production DBC.";
+VAL_ 1617 Mode 0 "ZERO" 1 "ONE" 2 "TWO";
