@@ -87,9 +87,9 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
+						<entry excluding="STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can 2.c|STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex 2.c|STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex 3.c|STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex 2.c|STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex 2.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
-						<entry excluding="STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
+						<entry excluding="Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2 2.c|Third_Party/FreeRTOS/Source/event_groups 2.c|Third_Party/FreeRTOS/Source/portable/MemMang/heap_4 2.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -177,9 +177,9 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
+						<entry excluding="STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can 2.c|STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex 2.c|STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex 3.c|STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex 2.c|STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex 2.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
-						<entry excluding="STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
+						<entry excluding="Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2 2.c|Third_Party/FreeRTOS/Source/event_groups 2.c|Third_Party/FreeRTOS/Source/portable/MemMang/heap_4 2.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

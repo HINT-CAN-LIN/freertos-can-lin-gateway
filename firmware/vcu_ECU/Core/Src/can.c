@@ -39,7 +39,7 @@ void MX_CAN1_Init(void)
   /* USER CODE END CAN1_Init 1 */
   hcan1.Instance = CAN1;
   hcan1.Init.Prescaler = 5;
-  hcan1.Init.Mode = CAN_MODE_LOOPBACK;
+  hcan1.Init.Mode = CAN_MODE_NORMAL;
   hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
   hcan1.Init.TimeSeg1 = CAN_BS1_15TQ;
   hcan1.Init.TimeSeg2 = CAN_BS2_2TQ;
@@ -124,7 +124,7 @@ HAL_StatusTypeDef VCU_CAN_Start(void)
     CAN_FilterTypeDef filter = {0};
 
     // CAN1 FIFO0으로 Standard ID 0x100만 수신
-    // 현재는 Loopback 검증을 위한 필터
+    // Standard-ID 0x100 receive filter; normal-mode TX goes to the CAN bus.
     filter.FilterBank = 0;
     filter.FilterMode = CAN_FILTERMODE_IDMASK;
     filter.FilterScale = CAN_FILTERSCALE_32BIT;

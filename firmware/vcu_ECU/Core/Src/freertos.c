@@ -25,6 +25,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "vcu_task.h"
+#include "vcu_serial.h"
 
 /* USER CODE END Includes */
 
@@ -198,11 +200,8 @@ void StartDefaultTask(void *argument)
 void StartVCUCtrlTask(void *argument)
 {
   /* USER CODE BEGIN StartVCUCtrlTask */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
+  (void)argument;
+  vcu_serial_task_run();
   /* USER CODE END StartVCUCtrlTask */
 }
 
@@ -216,11 +215,8 @@ void StartVCUCtrlTask(void *argument)
 void StartVCUTxTask(void *argument)
 {
   /* USER CODE BEGIN StartVCUTxTask */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
+  (void)argument;
+  vcu_task_run();
   /* USER CODE END StartVCUTxTask */
 }
 

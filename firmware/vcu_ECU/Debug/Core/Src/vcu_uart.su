@@ -1,0 +1,6 @@
+../Core/Src/vcu_uart.c:15:6:vcu_uart2_start_rx	16	static
+../Core/Src/vcu_uart.c:32:6:vcu_uart2_irq_handler	24	static
+../Core/Src/vcu_uart.c:57:6:vcu_uart2_read_byte	24	static
+../Core/Src/vcu_uart.c:75:6:vcu_uart2_write	24	static
+../Core/Src/vcu_uart.c:101:10:vcu_uart2_rx_overrun_count	16	static
+../Core/Src/vcu_uart.c:110:10:vcu_uart2_error_count	16	static
