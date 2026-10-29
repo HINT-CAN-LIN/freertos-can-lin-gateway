@@ -1,4 +1,4 @@
-VERSION "0.7 - SteeringAngle Byte4..5; firmware revision 4"
+VERSION "0.4 - review-ready interface proposal"
 
 NS_ :
     NS_DESC_
@@ -17,16 +17,14 @@ BO_ 256 VCU_Command: 8 VCU
  SG_ Gear : 16|3@1+ (1,0) [0|3] "enum" MOTOR,GATEWAY,CLUSTER
  SG_ Brake : 19|1@1+ (1,0) [0|1] "bool" MOTOR,GATEWAY,CLUSTER
  SG_ AliveCounter : 20|4@1+ (1,0) [0|15] "count" MOTOR,GATEWAY,CLUSTER
- SG_ SteeringAngle : 32|16@1- (0.1,0) [-45|45] "deg" MOTOR
+ SG_ DoorLockRequest : 28|2@1+ (1,0) [0|2] "enum" GATEWAY
+ SG_ WindowCommand : 30|2@1+ (1,0) [0|2] "enum" GATEWAY
 
 BO_ 272 Motor_Status: 8 MOTOR
  SG_ RPM : 0|16@1+ (1,0) [0|12000] "rpm" VCU,GATEWAY,CLUSTER
  SG_ TorqueApplied : 16|16@1+ (0.1,0) [0|4000] "Nm" VCU,GATEWAY,CLUSTER
  SG_ MotorState : 32|2@1+ (1,0) [0|3] "state" VCU,GATEWAY,CLUSTER
  SG_ AliveCounter : 34|4@1+ (1,0) [0|15] "count" VCU,GATEWAY,CLUSTER
- SG_ SteeringTargetEcho : 40|16@1- (0.1,0) [-45|45] "deg" PC_TOOL
- SG_ LocalFaultFlags : 56|4@1+ (1,0) [0|15] "bitmask" PC_TOOL
- SG_ FirmwareRevision : 60|4@1+ (1,0) [0|15] "revision" PC_TOOL
 
 BO_ 288 Vehicle_Status: 8 GATEWAY
  SG_ Speed : 0|16@1+ (0.1,0) [0|250] "km/h" CLUSTER,PC_TOOL
@@ -63,6 +61,8 @@ CM_ SG_ 256 TorqueRequest "Source: CAN_Signal_Definition row 6. Invalid raw: 0xF
 CM_ SG_ 256 Gear "Normal values: 0=P, 1=N, 2=D, 3=R. Raw 4..6 are RESERVED; raw 7 is INVALID. Normal physical range is therefore 0..3.";
 CM_ SG_ 256 Brake "Source: CAN_Signal_Definition row 8. Invalid raw: N/A. Requirements: SYS_REQ_003.";
 CM_ SG_ 256 AliveCounter "Source: CAN_Signal_Definition row 9. Invalid raw: N/A. Requirements: SYS_REQ_022-023. Valid counter 0..15, wraps 15 to 0. Expected next value = (previous + 1) modulo 16; sequence checking is application logic.";
+CM_ SG_ 256 DoorLockRequest "VCU CAN request consumed by Gateway; 0=NO_ACTION, 1=LOCK, 2=UNLOCK, 3=INVALID. Gateway owns LIN Door_Command routing.";
+CM_ SG_ 256 WindowCommand "VCU CAN request consumed by Gateway; 0=STOP, 1=UP, 2=DOWN, 3=INVALID. Gateway owns LIN Window_Command routing.";
 CM_ SG_ 272 RPM "Source: CAN_Signal_Definition row 10. Invalid raw: 0xFFFF (hex). Requirements: SYS_REQ_004.";
 CM_ SG_ 272 TorqueApplied "Source: CAN_Signal_Definition row 11. Invalid raw: 0xFFFF (hex). Requirements: SYS_REQ_004, SYS_REQ_024.";
 CM_ SG_ 272 MotorState "Source: CAN_Signal_Definition row 12. Invalid raw: N/A. Requirements: SYS_REQ_004.";
@@ -107,6 +107,10 @@ BA_ "GenSigStartValue" SG_ 256 Gear 0;
 BA_ "GenSigInvalidValue" SG_ 256 Gear 7;
 BA_ "GenSigStartValue" SG_ 256 Brake 0;
 BA_ "GenSigStartValue" SG_ 256 AliveCounter 0;
+BA_ "GenSigStartValue" SG_ 256 DoorLockRequest 0;
+BA_ "GenSigInvalidValue" SG_ 256 DoorLockRequest 3;
+BA_ "GenSigStartValue" SG_ 256 WindowCommand 0;
+BA_ "GenSigInvalidValue" SG_ 256 WindowCommand 3;
 BA_ "GenSigStartValue" SG_ 272 RPM 0;
 BA_ "GenSigInvalidValue" SG_ 272 RPM 65535;
 BA_ "GenSigStartValue" SG_ 272 TorqueApplied 0;
@@ -142,6 +146,8 @@ BA_ "GenSigStartValue" SG_ 784 SystemState 0;
 VAL_ 256 Gear 0 "P" 1 "N" 2 "D" 3 "R" 4 "RESERVED" 5 "RESERVED" 6 "RESERVED" 7 "INVALID";
 VAL_ 256 Brake 0 "FALSE" 1 "TRUE";
 VAL_ 256 AliveCounter 0 "SEQUENCE" 1 "SEQUENCE" 2 "SEQUENCE" 3 "SEQUENCE" 4 "SEQUENCE" 5 "SEQUENCE" 6 "SEQUENCE" 7 "SEQUENCE" 8 "SEQUENCE" 9 "SEQUENCE" 10 "SEQUENCE" 11 "SEQUENCE" 12 "SEQUENCE" 13 "SEQUENCE" 14 "SEQUENCE" 15 "SEQUENCE";
+VAL_ 256 DoorLockRequest 0 "NO_ACTION" 1 "LOCK" 2 "UNLOCK" 3 "INVALID";
+VAL_ 256 WindowCommand 0 "STOP" 1 "UP" 2 "DOWN" 3 "INVALID";
 VAL_ 272 MotorState 0 "OFF" 1 "READY" 2 "RUN" 3 "FAIL_SAFE";
 VAL_ 272 AliveCounter 0 "SEQUENCE" 1 "SEQUENCE" 2 "SEQUENCE" 3 "SEQUENCE" 4 "SEQUENCE" 5 "SEQUENCE" 6 "SEQUENCE" 7 "SEQUENCE" 8 "SEQUENCE" 9 "SEQUENCE" 10 "SEQUENCE" 11 "SEQUENCE" 12 "SEQUENCE" 13 "SEQUENCE" 14 "SEQUENCE" 15 "SEQUENCE";
 VAL_ 288 Gear 0 "P" 1 "N" 2 "D" 3 "R" 4 "RESERVED" 5 "RESERVED" 6 "RESERVED" 7 "INVALID";
@@ -157,11 +163,3 @@ VAL_ 784 FaultCode 0 "NONE" 1 "VCU_TIMEOUT" 2 "DOOR_ECU_OFFLINE" 3 "ALIVE_ERROR"
 VAL_ 784 ECUOffline 0 "NONE" 1 "VCU" 2 "MOTOR" 3 "GATEWAY" 4 "CLUSTER" 5 "DOOR" 6 "LIGHT" 7 "WINDOW" 8 "RESERVED" 9 "RESERVED" 10 "RESERVED" 11 "RESERVED" 12 "RESERVED" 13 "RESERVED" 14 "RESERVED" 15 "INVALID";
 VAL_ 784 RecoveryState 0 "ACTIVE" 1 "CLEARED";
 VAL_ 784 SystemState 0 "NORMAL" 1 "DEGRADED" 2 "OFFLINE" 3 "FAIL_SAFE";
-
-CM_ SG_ 256 SteeringAngle "Steering interface v0.7: Byte4..5, bit32 signed16. Byte3 is excluded and reserved for Gateway Body command candidates. Single logical steering angle request. 0=center, negative=left, positive=right. Raw signed Intel 0.1 degree, normal -450..450; raw 32767=INVALID. Motor ECU validates the request and drives two SG90 PWM outputs at 50Hz. Default same-direction mapping, center 1500us, nominal 500us per 90 degrees. Actual linkage calibration must be measured. Not the LightStatus LEFT_TURN/RIGHT_TURN indicator flags. No measured-angle feedback is defined.";
-BA_ "GenSigStartValue" SG_ 256 SteeringAngle 0;
-BA_ "GenSigInvalidValue" SG_ 256 SteeringAngle 32767;
-
-CM_ SG_ 272 SteeringTargetEcho "Validated logical steering target, zero during inhibit/timeout. Not measured servo shaft angle. Firmware revision 4 drives PA0/PA1 from this target.";
-CM_ SG_ 272 LocalFaultFlags "Local diagnostic bitmask: bit0=VCU command timeout, bit1=Alive sequence error, bit2=invalid Torque/Gear/Steering input, bit3=receive queue/mutex loss. Zero=no active local flag. Original base DBC bytes were zero.";
-CM_ SG_ 272 FirmwareRevision "Firmware handshake: 4=SteeringAngle at Byte4..5 with DC plus two SG90 outputs; revision 3 used Byte3..4 and is incompatible. Zero indicates a pre-extension firmware without this handshake.";
