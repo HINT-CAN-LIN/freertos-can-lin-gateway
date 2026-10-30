@@ -1,6 +1,5 @@
 #include "vcu_can.h"
 #include <stddef.h>
-
 HAL_StatusTypeDef vcu_can_send(const uint8_t data[VCU_COMMAND_DLC])
 {
     CAN_TxHeaderTypeDef header = {0};
