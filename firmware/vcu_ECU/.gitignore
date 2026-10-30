@@ -1,0 +1,13 @@
+Debug/
+Release/
+.settings/
+**/Backup/
+*.bak
+*.elf
+*.bin
+*.o
+*.exe
+*.pyc
+__pycache__/
+.DS_Store
+* [2-9].*
