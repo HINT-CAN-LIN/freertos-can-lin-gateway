@@ -1,0 +1,73 @@
+{
+  "phases": [
+    {
+      "phase": "safe_ready",
+      "passed": true,
+      "vcu": {
+        "torque": 0.0,
+        "gear": "P",
+        "brake": true,
+        "alive": 12
+      },
+      "motor": {
+        "rpm": 0,
+        "torque": 0.0,
+        "state": "READY",
+        "alive": 4
+      },
+      "samples": 35
+    },
+    {
+      "phase": "forward_10_percent",
+      "passed": true,
+      "vcu": {
+        "torque": 400.0,
+        "gear": "D",
+        "brake": false,
+        "alive": 7
+      },
+      "motor": {
+        "rpm": 1200,
+        "torque": 400.0,
+        "state": "RUN",
+        "alive": 0
+      },
+      "samples": 46
+    },
+    {
+      "phase": "brake",
+      "passed": true,
+      "vcu": {
+        "torque": 0.0,
+        "gear": "D",
+        "brake": true,
+        "alive": 13
+      },
+      "motor": {
+        "rpm": 0,
+        "torque": 0.0,
+        "state": "READY",
+        "alive": 6
+      },
+      "samples": 34
+    },
+    {
+      "phase": "park_off",
+      "passed": true,
+      "vcu": {
+        "torque": 0.0,
+        "gear": "P",
+        "brake": true,
+        "alive": 7
+      },
+      "motor": {
+        "rpm": 0,
+        "torque": 0.0,
+        "state": "READY",
+        "alive": 0
+      },
+      "samples": 35
+    }
+  ],
+  "ui_drops": 0
+}

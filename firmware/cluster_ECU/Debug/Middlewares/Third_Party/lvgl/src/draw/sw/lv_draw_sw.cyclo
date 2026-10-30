@@ -1,0 +1,9 @@
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw.c:74:6:lv_draw_sw_init	1
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw.c:130:6:lv_draw_sw_deinit	1
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw.c:141:16:lv_draw_sw_delete	1
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw.c:166:6:lv_draw_sw_register_blend_handler	6
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw.c:191:6:lv_draw_sw_unregister_blend_handler	3
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw.c:206:28:lv_draw_sw_get_blend_handler	3
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw.c:223:16:evaluate	9
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw.c:265:16:dispatch	4
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw.c:411:13:execute_drawing	13

@@ -1,0 +1,3 @@
+../Core/Src/motor_watchdog.c:4:6:motor_watchdog_init	2
+../Core/Src/motor_watchdog.c:12:6:motor_watchdog_poll	3
+../Core/Src/motor_watchdog.c:23:6:motor_watchdog_receive	11

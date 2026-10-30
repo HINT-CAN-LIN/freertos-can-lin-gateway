@@ -2297,9 +2297,9 @@ static void MX_CAN1_Init(void)
 
   hcan1.Init.AutoBusOff =
  800123a:	4b0c      	ldr	r3, [pc, #48]	@ (800126c <MX_CAN1_Init+0x64>)
- 800123c:	2200      	movs	r2, #0
+ 800123c:	2201      	movs	r2, #1
  800123e:	765a      	strb	r2, [r3, #25]
-      DISABLE;
+      ENABLE;
 
   hcan1.Init.AutoWakeUp =
  8001240:	4b0a      	ldr	r3, [pc, #40]	@ (800126c <MX_CAN1_Init+0x64>)
@@ -2309,9 +2309,9 @@ static void MX_CAN1_Init(void)
 
   hcan1.Init.AutoRetransmission =
  8001246:	4b09      	ldr	r3, [pc, #36]	@ (800126c <MX_CAN1_Init+0x64>)
- 8001248:	2200      	movs	r2, #0
+ 8001248:	2201      	movs	r2, #1
  800124a:	76da      	strb	r2, [r3, #27]
-      DISABLE;
+      ENABLE;
 
   hcan1.Init.ReceiveFifoLocked =
  800124c:	4b07      	ldr	r3, [pc, #28]	@ (800126c <MX_CAN1_Init+0x64>)

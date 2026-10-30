@@ -1,0 +1,4 @@
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_transform.c:134:6:lv_draw_sw_transform	488	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_transform.c:1344:13:transform_a8	120	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_transform.c:1588:13:transform_safe_interval	352	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/lv_draw_sw_transform.c:1629:13:transform_safe_range	72	static

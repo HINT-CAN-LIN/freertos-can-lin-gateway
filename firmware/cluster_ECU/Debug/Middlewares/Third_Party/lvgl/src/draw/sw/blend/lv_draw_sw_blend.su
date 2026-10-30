@@ -1,0 +1,3 @@
+../Middlewares/Third_Party/lvgl/src/draw/sw/blend/lv_draw_sw_blend.c:72:6:lv_draw_sw_blend	128	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/blend/lv_draw_sw_blend.c:176:42:lv_draw_sw_blend_color	16	static
+../Middlewares/Third_Party/lvgl/src/draw/sw/blend/lv_draw_sw_blend.c:235:42:lv_draw_sw_blend_image	16	static

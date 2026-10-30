@@ -1,0 +1,6 @@
+../Core/Src/vcu_serial.c:16:6:vcu_serial_start	8	static
+../Core/Src/vcu_serial.c:26:28:process_frame	32	static
+../Core/Src/vcu_serial.c:51:13:is_frame_header_valid	4	static
+../Core/Src/vcu_serial.c:57:13:parser_resync	16	static
+../Core/Src/vcu_serial.c:75:13:parser_feed	16	static
+../Core/Src/vcu_serial.c:112:6:vcu_serial_task_run	24	static,ignoring_inline_asm

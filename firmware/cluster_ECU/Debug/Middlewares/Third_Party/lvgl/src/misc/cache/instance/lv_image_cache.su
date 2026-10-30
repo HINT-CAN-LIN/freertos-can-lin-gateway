@@ -1,0 +1,10 @@
+../Middlewares/Third_Party/lvgl/src/misc/cache/instance/lv_image_cache.c:56:13:lv_image_cache_init	40	static
+../Middlewares/Third_Party/lvgl/src/misc/cache/instance/lv_image_cache.c:73:6:lv_image_cache_resize	16	static
+../Middlewares/Third_Party/lvgl/src/misc/cache/instance/lv_image_cache.c:81:6:lv_image_cache_drop	40	static
+../Middlewares/Third_Party/lvgl/src/misc/cache/instance/lv_image_cache.c:102:6:lv_image_cache_is_enabled	8	static
+../Middlewares/Third_Party/lvgl/src/misc/cache/instance/lv_image_cache.c:107:13:lv_image_cache_iter_create	8	static
+../Middlewares/Third_Party/lvgl/src/misc/cache/instance/lv_image_cache.c:112:6:lv_image_cache_dump	16	static
+../Middlewares/Third_Party/lvgl/src/misc/cache/instance/lv_image_cache.c:127:38:image_cache_common_compare	32	static
+../Middlewares/Third_Party/lvgl/src/misc/cache/instance/lv_image_cache.c:147:31:image_cache_compare_cb	16	static
+../Middlewares/Third_Party/lvgl/src/misc/cache/instance/lv_image_cache.c:154:13:image_cache_free_cb	24	static
+../Middlewares/Third_Party/lvgl/src/misc/cache/instance/lv_image_cache.c:168:13:iter_inspect_cb	32	static

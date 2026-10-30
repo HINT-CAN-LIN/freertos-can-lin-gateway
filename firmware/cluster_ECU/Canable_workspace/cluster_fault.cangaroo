@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<cangaroo-workspace workspace-version="1" cangaroo-version="0.7.0">
+  <tabs>
+    <tab type="TraceWindow" title="Fault - select one row and Send" mode="aggregated" TimestampMode="0" ActiveTab="0">
+      <AggregatedTraceView SortColumn="1" />
+      <TraceFilter showTx="1" showRx="1" />
+      <txgeneratorwindow type="TxGeneratorWindow">
+        <frame interface="Cluster CAN: COM7" dlc="8" interval="100" id="0x310" brs="0" fd="0" name="1 VCU timeout ACTIVE - count 1" extended="0" data="01 61 00 00 00 00 00 00" />
+        <frame interface="Cluster CAN: COM7" dlc="8" interval="100" id="0x310" brs="0" fd="0" name="2 Door offline ACTIVE - count 2" extended="0" data="02 65 00 00 00 00 00 00" />
+        <frame interface="Cluster CAN: COM7" dlc="8" interval="100" id="0x310" brs="0" fd="0" name="3 VCU timeout CLEARED - count 1" extended="0" data="01 51 00 00 00 00 00 00" />
+        <frame interface="Cluster CAN: COM7" dlc="8" interval="100" id="0x310" brs="0" fd="0" name="4 Door offline CLEARED - count 0" extended="0" data="02 15 00 00 00 00 00 00" />
+      </txgeneratorwindow>
+    </tab>
+  </tabs>
+  <setup>
+    <network name="Cluster CAN">
+      <interfaces>
+        <interface driver="SLCAN" name="COM7" bus-type="can" type="can" configure="1" bitrate="500000" sample-point="875" can-fd="0" listen-only="0" one-shot="0" enabled="1" />
+      </interfaces>
+      <databases>
+      </databases>
+    </network>
+  </setup>
+</cangaroo-workspace>

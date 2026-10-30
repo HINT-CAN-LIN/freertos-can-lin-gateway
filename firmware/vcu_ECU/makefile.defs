@@ -1,0 +1,6 @@
+# Supplement the checked-in CubeIDE Debug makefiles without editing generated
+# files. CubeIDE regeneration discovers these Core/Src files itself; filter out
+# objects it already lists to avoid duplicate linkage.
+VCU_APP_OBJS := $(addprefix ./Core/Src/,usart.o vcu_uart.o vcu_serial_protocol.o vcu_serial.o vcu_app.o vcu_driver_input_mock.o vcu_command_codec.o vcu_can.o vcu_task.o)
+USER_OBJS += $(filter-out $(OBJS),$(VCU_APP_OBJS))
+-include $(VCU_APP_OBJS:.o=.d)

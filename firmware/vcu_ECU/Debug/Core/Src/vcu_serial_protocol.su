@@ -1,0 +1,5 @@
+../Core/Src/vcu_serial_protocol.c:26:9:vcu_serial_crc8	32	static
+../Core/Src/vcu_serial_protocol.c:44:13:input_fields_valid	24	static
+../Core/Src/vcu_serial_protocol.c:77:21:vcu_serial_decode_input	40	static
+../Core/Src/vcu_serial_protocol.c:137:6:vcu_serial_encode_input	24	static
+../Core/Src/vcu_serial_protocol.c:164:6:vcu_serial_encode_ack	24	static

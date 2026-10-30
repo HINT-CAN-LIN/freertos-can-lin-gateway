@@ -1,0 +1,3 @@
+../Core/Src/vcu_app.c:7:13:vcu_gear_is_valid	16	static
+../Core/Src/vcu_app.c:12:19:vcu_app_process_inputs	40	static
+../Core/Src/vcu_app.c:91:19:vcu_app_get_command	40	static

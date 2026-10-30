@@ -1,0 +1,7 @@
+../Middlewares/Third_Party/lvgl/src/themes/mono/lv_theme_mono.c:105:13:style_init	104	static
+../Middlewares/Third_Party/lvgl/src/themes/mono/lv_theme_mono.c:209:14:lv_theme_mono_init	40	static
+../Middlewares/Third_Party/lvgl/src/themes/mono/lv_theme_mono.c:244:6:lv_theme_mono_is_inited	16	static
+../Middlewares/Third_Party/lvgl/src/themes/mono/lv_theme_mono.c:251:14:lv_theme_mono_get	8	static
+../Middlewares/Third_Party/lvgl/src/themes/mono/lv_theme_mono.c:260:6:lv_theme_mono_deinit	24	static
+../Middlewares/Third_Party/lvgl/src/themes/mono/lv_theme_mono.c:286:13:theme_apply	32	static
+../Middlewares/Third_Party/lvgl/src/themes/mono/lv_theme_mono.c:580:13:style_init_reset	16	static

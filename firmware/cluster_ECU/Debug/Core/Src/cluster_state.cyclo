@@ -1,0 +1,16 @@
+../Core/Src/cluster_state.c:5:17:le16	1
+../Core/Src/cluster_state.c:6:26:received	1
+../Core/Src/cluster_state.c:7:18:cluster_sample_freshness	3
+../Core/Src/cluster_state.c:12:9:cluster_display_system	5
+../Core/Src/cluster_state.c:25:21:cluster_drive_display	7
+../Core/Src/cluster_state.c:47:6:cluster_fault_display_changed	8
+../Core/Src/cluster_state.c:56:13:cluster_system_name	2
+../Core/Src/cluster_state.c:61:13:cluster_fault_name	2
+../Core/Src/cluster_state.c:67:13:cluster_node_name	2
+../Core/Src/cluster_state.c:72:6:cluster_receive_frame	39
+../Core/Src/cluster_state.c:136:9:cluster_active_fault_count	4
+../Core/Src/cluster_state.c:143:9:cluster_major_fault	6
+../Core/Src/cluster_state.c:157:13:cluster_window_name	3
+../Core/Src/cluster_state.c:164:13:demo_frame	3
+../Core/Src/cluster_state.c:169:6:cluster_demo_generate	28
+../Core/Src/cluster_state.c:207:6:cluster_demo_update	1

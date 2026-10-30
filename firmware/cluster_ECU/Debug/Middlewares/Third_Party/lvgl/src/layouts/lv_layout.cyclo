@@ -1,0 +1,7 @@
+../Middlewares/Third_Party/lvgl/src/layouts/../core/lv_obj_style_internal_gen.h:1707:24:lv_obj_get_style_layout_internal	2
+../Middlewares/Third_Party/lvgl/src/layouts/lv_layout.c:40:6:lv_layout_init	1
+../Middlewares/Third_Party/lvgl/src/layouts/lv_layout.c:54:6:lv_layout_deinit	1
+../Middlewares/Third_Party/lvgl/src/layouts/lv_layout.c:59:10:lv_layout_create	2
+../Middlewares/Third_Party/lvgl/src/layouts/lv_layout.c:70:10:lv_layout_register	2
+../Middlewares/Third_Party/lvgl/src/layouts/lv_layout.c:79:6:lv_layout_get_min_size	6
+../Middlewares/Third_Party/lvgl/src/layouts/lv_layout.c:93:6:lv_layout_apply	4

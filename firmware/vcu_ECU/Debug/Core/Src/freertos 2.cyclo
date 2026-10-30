@@ -1,0 +1,6 @@
+../Core/Src/freertos.c:88:6:vApplicationStackOverflowHook	1
+../Core/Src/freertos.c:106:6:vApplicationMallocFailedHook	1
+../Core/Src/freertos.c:132:6:MX_FREERTOS_Init	1
+../Core/Src/freertos.c:180:6:StartDefaultTask	1
+../Core/Src/freertos.c:198:6:StartVCUCtrlTask	1
+../Core/Src/freertos.c:216:6:StartVCUTxTask	1
