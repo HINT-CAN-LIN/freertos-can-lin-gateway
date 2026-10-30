@@ -123,8 +123,8 @@ HAL_StatusTypeDef VCU_CAN_Start(void)
 {
     CAN_FilterTypeDef filter = {0};
 
-    // Standard ID filter for loopback diagnostics; input is USB UART.
-    // This VCU alone generates the Motor command 0x100.
+    // CAN1 FIFO0으로 Standard ID 0x100만 수신
+    // Standard-ID 0x100 receive filter; normal-mode TX goes to the CAN bus.
     filter.FilterBank = 0;
     filter.FilterMode = CAN_FILTERMODE_IDMASK;
     filter.FilterScale = CAN_FILTERSCALE_32BIT;
@@ -133,7 +133,7 @@ HAL_StatusTypeDef VCU_CAN_Start(void)
     filter.FilterIdLow = 0;
 
     filter.FilterMaskIdHigh = (0x7FFU << 5);
-    filter.FilterMaskIdLow = (1U << 2) | (1U << 1); /* standard data only */
+    filter.FilterMaskIdLow = (1U << 2);
 
     filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
     filter.FilterActivation = ENABLE;
