@@ -453,13 +453,13 @@ static void MX_CAN1_Init(void)
       DISABLE;
 
   hcan1.Init.AutoBusOff =
-      DISABLE;
+      ENABLE;
 
   hcan1.Init.AutoWakeUp =
       DISABLE;
 
   hcan1.Init.AutoRetransmission =
-      DISABLE;
+      ENABLE;
 
   hcan1.Init.ReceiveFifoLocked =
       DISABLE;

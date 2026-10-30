@@ -1,0 +1,31 @@
+<cangaroo-workspace cangaroo-version="0.7.0" workspace-version="1">
+ <tabs>
+  <tab ActiveTab="0" TimestampMode="0" dockstate="AAAA/wAAAAD9AAAAAQAAAAMAAAVPAAACWPwBAAAAAvwAAAAAAAACBAAAAVQA////+gAAAAABAAAAAvsAAAAWAGQAbwBjAGsAXwBzAHQAYQB0AHUAcwEAAAAA/////wAAAFAA////+wAAABAAZABvAGMAawBfAGwAbwBnAQAAAAD/////AAABVAD////8AAACCAAAA0cAAANHAP////oAAAACAQAAAAT7AAAAHABkAG8AYwBrAF8AZwBlAG4AZQByAGEAdABvAHIBAAAAAP////8AAAMgAP////sAAAAUAGQAbwBjAGsAXwBnAHIAYQBwAGgBAAAAAP////8AAANHAP////sAAAAWAGQAbwBjAGsAXwBzAGMAcgBpAHAAdAEAAAAA/////wAAAgcA////+wAAABYAZABvAGMAawBfAHIAZQBwAGwAYQB5AQAAAAD/////AAACMgD///8AAAVPAAAAsQAAAAQAAAAEAAAACAAAAAj8AAAAAA==" mode="aggregated" modeJ1939="aggregated" modeUds="unified" title="VCU - Motor | 500 kbps" type="TraceWindow">
+   <AggregatedTraceView SortColumn="-1"/>
+   <TraceFilter showRx="1" showTx="1"/>
+   <txgeneratorwindow splitterState="AAAA/wAAAAEAAAACAAABYQAAAccB/////wEAAAABAA==" type="TxGeneratorWindow"/>
+   <scriptwindow autorun="0" file="tools/cangaroo/vcu_motor_control.py"/>
+   <graphwindow duration="1" tabWidgetWidth="684" type="GraphWindow" viewType="0"/>
+  </tab>
+ </tabs>
+ <setup>
+  <network name="Network 1">
+   <interfaces>
+    <interface auto-restart="0" auto-restart-time="100" bitrate="500000" bitrate-fd="2000000" bus-type="can" can-fd="1" configure="1" custom-bitrate="144391" custom-fdbitrate="70920" driver="SLCAN" enabled="1" is-custom-bitrate="0" is-custom-fdbitrate="0" lin-baudrate="19200" lin-checksum-classic="0" lin-jitter-us="0" lin-ldf-path="" lin-listen-only="0" lin-node-mode="1" lin-protocol="4" lin-schedule-table="" lin-slave-node="" lin-timebase-ms="5" lin-wakeup-on-bus="0" listen-only="0" name="COM4" one-shot="0" sample-point="875" sample-point-fd="750" triple-sampling="0" type="can"/>
+   </interfaces>
+   <databases/>
+  </network>
+  <network name="Network 2">
+   <interfaces>
+    <interface auto-restart="0" auto-restart-time="100" bitrate="500000" bitrate-fd="2000000" bus-type="can" can-fd="0" configure="1" custom-bitrate="144391" custom-fdbitrate="70920" driver="zscanfd" enabled="0" is-custom-bitrate="0" is-custom-fdbitrate="0" lin-baudrate="19200" lin-checksum-classic="0" lin-jitter-us="0" lin-ldf-path="" lin-listen-only="0" lin-node-mode="1" lin-protocol="4" lin-schedule-table="" lin-slave-node="" lin-timebase-ms="5" lin-wakeup-on-bus="0" listen-only="0" name=" (ch 0)" one-shot="0" sample-point="875" sample-point-fd="875" triple-sampling="0" type="can"/>
+   </interfaces>
+   <databases/>
+  </network>
+  <network name="Network 3">
+   <interfaces>
+    <interface auto-restart="0" auto-restart-time="100" bitrate="500000" bitrate-fd="2000000" bus-type="can" can-fd="0" configure="1" custom-bitrate="144391" custom-fdbitrate="70920" driver="zscanfd" enabled="0" is-custom-bitrate="0" is-custom-fdbitrate="0" lin-baudrate="19200" lin-checksum-classic="0" lin-jitter-us="0" lin-ldf-path="" lin-listen-only="0" lin-node-mode="1" lin-protocol="4" lin-schedule-table="" lin-slave-node="" lin-timebase-ms="5" lin-wakeup-on-bus="0" listen-only="0" name=" (ch 1)" one-shot="0" sample-point="875" sample-point-fd="875" triple-sampling="0" type="can"/>
+   </interfaces>
+   <databases/>
+  </network>
+ </setup>
+</cangaroo-workspace>
